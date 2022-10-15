@@ -1,0 +1,4 @@
+1. Change version in __version__.py
+build: python3 -m build
+install-local: python3 -m pip install -e .
+upload: python3 -m twine upload dist/arris_dcx960-0.1.9.tar.gz

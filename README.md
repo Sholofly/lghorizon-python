@@ -1,2 +1,3 @@
-# lghorizon-python
-Api for controlling LG Horizon settop boxes
+# LG Horizon Api
+
+Python library to control multiple LG Horizon boxes
