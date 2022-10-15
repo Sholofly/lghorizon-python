@@ -1,13 +1,11 @@
-"""Python client for Arrix DCX960."""
+"""Exceptions for the LGHorizon API."""
 
+class LGHorizonApiError(Exception):
+    """Generic GeocachingApi exception."""
 
-class LGHorizonConnectionError(Exception):
-    """Exception when no connection could be made."""
+class LGHorizonApiConnectionError(LGHorizonApiError):
+    """Generic GeocachingApi exception."""
 
-    pass
-
-
-class LGHorizonAuthenticationError(Exception):
-    """Exception when authentication fails."""
-
-    pass
+class LGHorizonApiUnauthorizedError(Exception):
+    """Generic GeocachingApi exception."""
+        

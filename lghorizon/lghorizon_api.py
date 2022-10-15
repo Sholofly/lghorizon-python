@@ -1,15 +1,15 @@
 """Python client for LGHorizon."""
 import logging
-from .models.exceptions import LGHorizonApiUnauthorizedError, LGHorizonApiConnectionError
+from .exceptions import LGHorizonApiUnauthorizedError, LGHorizonApiConnectionError
 import backoff
 from requests import Session
-from .models.lghorizon_auth import LGHorizonAuth
-from .models.lghorizon_box import LGHorizonBox
-from .models.lghorizon_mqtt_client import LGHorizonMqttClient
-from .models.lghorizon_customer import LGHorizonCustomer
-from .models.lghorizon_channel import LGHorizonChannel
-from .models.lghorizon_recording_single import LGHorizonRecordingSingle
-from .models.lghorizon_recording_show import LGHorizonRecordingShow
+from .models import LGHorizonAuth
+from .models import LGHorizonBox
+from .models import LGHorizonMqttClient
+from .models import LGHorizonCustomer
+from .models import LGHorizonChannel
+from .models import LGHorizonRecordingSingle
+from .models import LGHorizonRecordingShow
 from typing import Dict
 
 # from .const import (

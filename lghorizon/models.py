@@ -1,12 +1,9 @@
-from typing import Callable, Dict
-from urllib import request
+from datetime import datetime
+from typing import Callable, Dict, List
 from requests import Session
+import paho.mqtt.client as mqtt
 import requests
-from .lghorizon_mqtt_client import LGHorizonMqttClient
-from .lghorizon_auth import LGHorizonAuth
-from .lghorizon_channel import LGHorizonChannel
-from .lghorizon_playing_info import LGHorizonPlayingInfo
-from ..const import (
+from .const import (
     BOX_PLAY_STATE_BUFFER,
     BOX_PLAY_STATE_CHANNEL,
     BOX_PLAY_STATE_DVR,
@@ -29,10 +26,232 @@ from ..const import (
 )
 
 import json
-from ..helpers import make_id
+from .helpers import make_id
 import logging
 
 _logger = logging.getLogger(__name__)
+DEFAULT_PORT = 443
+
+class LGHorizonAuth:
+    householdId: str
+    accessToken: str
+    refreshToken: str
+    refreshTokenExpiry: datetime
+    username: str
+    mqttToken: str = None
+
+    def __init__(self, auth_json:str):
+        """Initialize a session."""
+        self.householdId = auth_json["householdId"]
+        self.accessToken = auth_json["accessToken"]
+        self.refreshToken = auth_json["refreshToken"]
+        self.refreshTokenExpiry = datetime.fromtimestamp(auth_json["refreshTokenExpiry"])
+        self.username = auth_json["username"]
+    
+    def is_expired(self) -> bool:
+        return self.refreshTokenExpiry
+
+class LGHorizonPlayingInfo:
+    """Represent current state of a box."""
+
+    channel_id: str = None
+    title: str = None
+    image: str = None
+    source_type: str = None
+    paused: bool = False
+    channel_title: str = None
+
+    def __init__(self):
+        """Initialize the playing info."""
+        pass
+
+    def set_paused(self, paused: bool):
+        """Set pause state."""
+        self.paused = paused
+
+    def set_channel(self, channel_id):
+        """Set channel."""
+        self.channel_id = channel_id
+
+    def set_title(self, title):
+        """Set title."""
+        self.title = title
+
+    def set_channel_title(self, title):
+        """Set channel title."""
+        self.channel_title = title
+
+    def set_image(self, image):
+        """Set image."""
+        self.image = image
+
+    def set_source_type(self, source_type):
+        """Set sourfce type."""
+        self.source_type = source_type
+
+    def reset(self):
+        self.channel_id = None
+        self.title = None
+        self.image = None
+        self.source_type = None
+        self.paused = False
+        self.channel_title = None
+
+class LGHorizonChannel:
+    """Represent a channel."""
+
+    id: str
+    title: str
+    stream_image: str
+    logo_image: str
+    channel_number: str
+
+    def __init__(self, channel_json):
+        """Initialize a channel."""
+        self.id = channel_json["id"]
+        self.title = channel_json["name"]
+        self.stream_image = self.get_stream_image(channel_json)
+        self.logo_image = channel_json["logo"]["focused"]
+        self.channel_number = channel_json["logicalChannelNumber"]
+    
+    def get_stream_image(self, channel_json)->str:
+        image_stream = channel_json["imageStream"]
+        if "full" in image_stream:
+            return image_stream["full"]
+        if "small" in image_stream:
+            return image_stream["small"]
+        logo = channel_json["logo"]
+        if "focus" in logo:
+            return logo["focus"]
+        return ""
+
+class LGHorizonRecordingSingle:
+    """Represents a single recording."""
+
+    recording_id: str
+    title: str
+    image: str
+    season: int = None
+    episode: int = None
+
+    def __init__(self, recording_json):
+        """Init the single recording."""
+        self.recording_id = recording_json["id"]
+        self.title = recording_json["title"]
+        self.image = recording_json["poster"]["url"]
+        if "season" in recording_json:
+            self.season = recording_json["season"]
+        if "episode" in recording_json:
+            self.episode = recording_json["episode"]
+
+class LGHorizonRecordingShow:
+    """Represent a recorderd show."""
+
+    title: str
+    showId: str
+    channelId: str
+    image: str
+    children: List[LGHorizonRecordingSingle] = []
+    episode_count: int
+
+    def __init__(self, recording_json):
+        """Init recorder show."""
+        self.showId = recording_json["showId"]
+        self.title = recording_json["title"]
+        self.image = recording_json["poster"]["url"]
+        self.episode_count = recording_json["noOfEpisodes"]
+        
+
+    def append_child(self, season_recording: LGHorizonRecordingSingle):
+        """Append child."""
+        self.children.append(season_recording)
+
+class LGHorizonRecordingSeason:
+    """Represent a recorderd show."""
+
+    title: str
+    Id: str
+    channelId: str
+    image: str
+    children: List[LGHorizonRecordingSingle] = []
+    episode_count: int
+
+    def __init__(self, recording_json):
+        """Init recorder show."""
+        self.showId = recording_json["Id"]
+        self.title = recording_json["title"]
+        self.image = recording_json["poster"]["url"]
+        self.episode_count = recording_json["noOfEpisodes"]
+        
+
+    def append_child(self, season_recording: LGHorizonRecordingSingle):
+        """Append child."""
+        self.children.append(season_recording)       
+
+class LGHorizonMqttClient:
+    _brokerUrl:str = None
+    _mqtt_client :mqtt.Client
+    _auth: LGHorizonAuth
+    clientId: str = None
+    _on_connected_callback: Callable = None
+    _on_message_callback: Callable[[str],None] = None
+
+    @property
+    def is_connected(self):
+        return self._mqtt_client.is_connected
+
+    def __init__(self, auth:LGHorizonAuth, on_connected_callback:Callable = None, on_message_callback:Callable[[str],None] = None):
+        self._auth = auth
+        self._brokerUrl = "obomsg.prod.nl.horizon.tv"
+        self.clientId = make_id()
+        self._mqtt_client = mqtt.Client(self.clientId, transport="websockets")
+        self._mqtt_client.username_pw_set(self._auth.householdId, self._auth.mqttToken)
+        self._mqtt_client.tls_set()
+        self._mqtt_client.enable_logger(_logger)
+        self._mqtt_client.on_connect = self._on_mqtt_connect
+        self._on_connected_callback = on_connected_callback
+        self._on_message_callback = on_message_callback
+    
+    def _on_mqtt_connect(self, client, userdata, flags, resultCode):
+        if resultCode == 0:
+            self._mqtt_client.on_message = self._on_client_message
+            self._mqtt_client.subscribe(self._auth.householdId)
+            self._mqtt_client.subscribe(self._auth.householdId + "/#")
+            self._mqtt_client.subscribe(self._auth.householdId + "/" + self.clientId)
+            self._mqtt_client.subscribe(self._auth.householdId + "/+/status")
+            self._mqtt_client.subscribe(self._auth.householdId + "/+/networkRecordings")
+            self._mqtt_client.subscribe(self._auth.householdId + "/+/networkRecordings/capacity")
+            self._mqtt_client.subscribe(self._auth.householdId + "/watchlistService")
+            self._mqtt_client.subscribe(self._auth.householdId + "/purchaseService")
+            self._mqtt_client.subscribe(self._auth.householdId + "/personalizationService")
+            self._mqtt_client.subscribe(self._auth.householdId + "/recordingStatus")
+            self._mqtt_client.subscribe(self._auth.householdId + "/recordingStatus/lastUserAction")
+            if self._on_connected_callback:
+                self._on_connected_callback()
+        elif resultCode == 5:
+            client.username_pw_set(self._auth.householdId, self._auth.mqttToken)
+            client.connect(self._brokerUrl, DEFAULT_PORT)
+            client.loop_start()
+        else:
+            raise Exception("Could not connect to Mqtt server")
+    
+    def connect(self) -> None:
+        self._mqtt_client.connect(self._brokerUrl, DEFAULT_PORT)
+        self._mqtt_client.loop_start()
+    
+    def _on_client_message(self, client, userdata, message):
+        """Handle messages received by mqtt client."""
+        jsonPayload = json.loads(message.payload)
+        if self._on_message_callback:
+            self._on_message_callback(jsonPayload)
+
+    def publish_message(self, topic:str, json_payload:str) -> None:
+        self._mqtt_client.publish(topic, json_payload)
+        
+    def disconnect(self) -> None:
+        if self._mqtt_client.is_connected:
+            self._mqtt_client.disconnect()
+
 class LGHorizonBox:
 
     deviceId:str
@@ -332,4 +551,20 @@ class LGHorizonBox:
             "source": self._mqtt_client.clientId,
         }
         self._mqtt_client.publish_message(topic, json.dumps(payload))
-    
+
+class LGHorizonCustomer:
+    customerId:str = None
+    hashedCustomerId:str = None 
+    countryId: str = None
+    cityId: int = 0
+    settop_boxes: Dict[str, LGHorizonBox] = None
+
+    def __init__(self, json_payload):
+        self.customerId = json_payload["customerId"]
+        self.hashedCustomerId = json_payload["hashedCustomerId"]
+        self.countryId = json_payload["countryId"]
+        self.cityId = json_payload["cityId"]
+        if not "assignedDevices" in json_payload:
+            return
+
+
