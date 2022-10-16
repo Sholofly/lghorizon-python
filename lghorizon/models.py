@@ -1,6 +1,5 @@
 from datetime import datetime
-from typing import Callable, Dict, List
-from requests import Session
+from typing import Any, Callable, Dict, List
 import paho.mqtt.client as mqtt
 import requests
 from .const import (
@@ -10,8 +9,6 @@ from .const import (
     BOX_PLAY_STATE_REPLAY,
     BOX_PLAY_STATE_APP,
     BOX_PLAY_STATE_VOD,
-    UNKNOWN,
-    COUNTRY_SETTINGS,
     ONLINE_STANDBY,
     ONLINE_RUNNING,
     MEDIA_KEY_POWER,
@@ -30,7 +27,6 @@ from .helpers import make_id
 import logging
 
 _logger = logging.getLogger(__name__)
-DEFAULT_PORT = 443
 
 class LGHorizonAuth:
     householdId: str
@@ -200,7 +196,7 @@ class LGHorizonMqttClient:
     def is_connected(self):
         return self._mqtt_client.is_connected
 
-    def __init__(self, auth:LGHorizonAuth, on_connected_callback:Callable = None, on_message_callback:Callable[[str],None] = None):
+    def __init__(self, auth:LGHorizonAuth, country_settings:Dict[str,Any], on_connected_callback:Callable = None, on_message_callback:Callable[[str],None] = None):
         self._auth = auth
         self._brokerUrl = "obomsg.prod.nl.horizon.tv"
         self.clientId = make_id()
@@ -229,19 +225,19 @@ class LGHorizonMqttClient:
             if self._on_connected_callback:
                 self._on_connected_callback()
         elif resultCode == 5:
-            client.username_pw_set(self._auth.householdId, self._auth.mqttToken)
-            client.connect(self._brokerUrl, DEFAULT_PORT)
-            client.loop_start()
-        else:
+            self._mqtt_client.username_pw_set(self._auth.householdId, self._auth.mqttToken)
+            self.connect()
             raise Exception("Could not connect to Mqtt server")
     
     def connect(self) -> None:
-        self._mqtt_client.connect(self._brokerUrl, DEFAULT_PORT)
+        self._mqtt_client.connect(self._brokerUrl, 443)
         self._mqtt_client.loop_start()
     
     def _on_client_message(self, client, userdata, message):
         """Handle messages received by mqtt client."""
+        _logger.debug(f"Received MQTT message. Topic: {message.topic}")
         jsonPayload = json.loads(message.payload)
+        _logger.debug(f"Message: {jsonPayload}")
         if self._on_message_callback:
             self._on_message_callback(jsonPayload)
 
@@ -265,16 +261,14 @@ class LGHorizonBox:
     _auth: LGHorizonAuth = None
     _channels:Dict[str, LGHorizonChannel] = None
     _message_stamp = None
-    _session:Session = None
     
-    def __init__(self, box_json:str, mqtt_client:LGHorizonMqttClient, auth:LGHorizonAuth, channels:Dict[str, LGHorizonChannel], session:requests.Session):
+    def __init__(self, box_json:str, mqtt_client:LGHorizonMqttClient, auth:LGHorizonAuth, channels:Dict[str, LGHorizonChannel]):
         self.deviceId = box_json["deviceId"]
         self.hashedCPEId = box_json["hashedCPEId"]
         self.deviceFriendlyName = box_json["settings"]["deviceFriendlyName"]
         self._mqtt_client = mqtt_client
         self._auth = auth
         self._channels = channels
-        self._session = session
         
     def register_mqtt(self)->None:
         if not self._mqtt_client.is_connected:
@@ -429,58 +423,58 @@ class LGHorizonBox:
         """Turn the settop box on."""
         
         if self.state == ONLINE_STANDBY:
-            self._send_key_to_box(MEDIA_KEY_POWER)
+            self.send_key_to_box(MEDIA_KEY_POWER)
 
     def turn_off(self) -> None:
         """Turn the settop box off."""
         if self.state == ONLINE_RUNNING:
-            self._send_key_to_box(MEDIA_KEY_POWER)
+            self.send_key_to_box(MEDIA_KEY_POWER)
             self.playing_info.reset()
 
     def pause(self) -> None:
         """Pause the given settopbox."""
         if self.state == ONLINE_RUNNING and not self.playing_info.paused:
-            self._send_key_to_box(MEDIA_KEY_PLAY_PAUSE)
+            self.send_key_to_box(MEDIA_KEY_PLAY_PAUSE)
     
     def play(self) -> None:
         """Resume the settopbox."""
         if self.state == ONLINE_RUNNING and self.playing_info.paused:
-            self._send_key_to_box(MEDIA_KEY_PLAY_PAUSE)
+            self.send_key_to_box(MEDIA_KEY_PLAY_PAUSE)
 
     def stop(self) -> None:
         """Stop the settopbox."""
         if self.state == ONLINE_RUNNING:
-            self._send_key_to_box(MEDIA_KEY_STOP)
+            self.send_key_to_box(MEDIA_KEY_STOP)
 
     def next_channel(self):
         """Select the next channel for given settop box."""
         if self.state == ONLINE_RUNNING:
-            self._send_key_to_box(MEDIA_KEY_CHANNEL_UP)
+            self.send_key_to_box(MEDIA_KEY_CHANNEL_UP)
 
     def previous_channel(self) -> None:
         """Select the previous channel for given settop box."""
         if self.state == ONLINE_RUNNING:
-            self._send_key_to_box(MEDIA_KEY_CHANNEL_DOWN)
+            self.send_key_to_box(MEDIA_KEY_CHANNEL_DOWN)
 
     def press_enter(self) -> None:
         """Press enter on the settop box."""
         if self.state == ONLINE_RUNNING:
-            self._send_key_to_box(MEDIA_KEY_ENTER)
+            self.send_key_to_box(MEDIA_KEY_ENTER)
 
     def rewind(self) -> None:
         """Rewind the settop box."""
         if self.state == ONLINE_RUNNING:
-            self._send_key_to_box(MEDIA_KEY_REWIND)
+            self.send_key_to_box(MEDIA_KEY_REWIND)
 
     def fast_forward(self) -> None:
         """Fast forward the settop box."""
         if self.state == ONLINE_RUNNING:
-            self._send_key_to_box(MEDIA_KEY_FAST_FORWARD)
+            self.send_key_to_box(MEDIA_KEY_FAST_FORWARD)
 
     def record(self):
         """Record on the settop box."""
         if self.state == ONLINE_RUNNING:
-            self._send_key_to_box(MEDIA_KEY_RECORD)
+            self.send_key_to_box(MEDIA_KEY_RECORD)
 
     def is_available(self) -> bool:
         """Return the availability of the settop box."""
@@ -516,7 +510,7 @@ class LGHorizonBox:
         )
         self._mqtt_client.publish_message(f"{self._auth.householdId}/{self.deviceId}", payload)
 
-    def _send_key_to_box(self, key: str) -> None:
+    def send_key_to_box(self, key: str) -> None:
         """Send emulated (remote) key press to settopbox."""
         payload = (
             '{"type":"CPE.KeyEvent","status":{"w3cKey":"'

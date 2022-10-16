@@ -1,4 +1,7 @@
-1. Change version in __version__.py
-build: python3 -m build
 install-local: python3 -m pip install -e .
-upload: python3 -m twine upload dist/arris_dcx960-0.1.9.tar.gz
+
+tag:    git tag -a v0.1.2 -m "v0.1.2"
+        git push origin v0.1.2
+
+create sdist: python3 setup.py sdist
+upload: python3 -m twine upload dist/lghorizon-0.1.2.tar.gz
