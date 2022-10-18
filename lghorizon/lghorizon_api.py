@@ -10,6 +10,7 @@ from .models import LGHorizonCustomer
 from .models import LGHorizonChannel
 from .const import COUNTRY_SETTINGS
 from typing import Dict
+import json
 
 _logger = logging.getLogger(__name__)
 _supported_platforms = ["EOS", "EOS2", "HORIZON", "APOLLO"]
@@ -34,6 +35,12 @@ class LGHorizonApi:
 
     @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger)
     def _authorize(self) -> None:
+        if self._country_settings["use_oauth"]:
+            self.authorize_sso()
+        else:
+            self._authorize_default()
+
+    def _authorize_default(self) -> None:
         _logger.debug("Authorizing")
         auth_url = f"{self._country_settings['api_url']}/auth-service/v1/authorization"
         auth_headers = {
@@ -58,6 +65,62 @@ class LGHorizonApi:
             raise LGHorizonApiConnectionError("Unknown connection error")
 
         self._auth = LGHorizonAuth(auth_response.json())
+
+    def authorize_sso(self):
+
+        try:
+            login_session = Session()
+            #Step 1 - Get Authorization data
+            _logger.debug("Step 1 - Get Authorization data")
+            auth_url = f"{self._country_settings['api_url']}/auth-service/v1/sso/authorization"
+            auth_headers = {
+                "x-device-code": "web"
+            }
+            auth_response = login_session.get(auth_url)
+            if not auth_response.ok:
+                raise LGHorizonApiConnectionError("Can't connect to authorization URL")
+            auth_response_json = auth_response.json();
+            authorizationUri = auth_response_json["authorizationUri"]
+            authState = auth_response_json["state"]
+            authValidtyToken = auth_response_json["validityToken"]
+
+            #Step 2 - Get Authorization cookie
+            _logger.debug("Step 2 - Get Authorization cookie")
+            auth_cookie_headers = {
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br"
+            }
+            auth_cookie_response = login_session.get(authorizationUri, headers=auth_cookie_headers)
+            if not auth_cookie_response.ok:
+                raise LGHorizonApiConnectionError("Can't connect to authorization URL")
+            
+            username_fieldname = self._country_settings["oauth_username_fieldname"]
+            pasword_fieldname = self._country_settings["oauth_password_fieldname"]
+
+            payload = {
+                username_fieldname: self.username,
+                pasword_fieldname: self.password,
+                "rememberme": 'true'
+            }
+
+            headers = {
+                "Content-Type":"application/x-www-form-urlencoded",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
+                "Accept-Encoding": "gzip, deflate, br",
+                "Accept-Language":"nl-NL,nl;q=0.9",
+                "Upgrade-Insecure-Request":1
+            }
+            
+            login_response = login_session.post(
+                self._country_settings["oauth_url"], data=json.dumps(payload), allow_redirects=False, headers=headers
+            )
+            if not login_response.ok:
+                raise LGHorizonApiConnectionError("Can't connect to authorization URL")
+            redirect_url = login_response.headers[self._country_settings["oauth_redirect_header"]]
+            pass
+        except Exception as ex:
+            pass 
+
 
     def _obtain_mqtt_token(self):
         _logger.debug("Obtain mqtt token...")
