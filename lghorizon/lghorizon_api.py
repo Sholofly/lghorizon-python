@@ -62,9 +62,11 @@ class LGHorizonApi:
                 raise LGHorizonApiUnauthorizedError("Invalid credentials")
             elif error:
                 raise LGHorizonApiConnectionError(error["message"])
-            raise LGHorizonApiConnectionError("Unknown connection error")
+            else:
+                raise LGHorizonApiConnectionError("Unknown connection error")
 
         self._auth = LGHorizonAuth(auth_response.json())
+        _logger.debug("Authorization succeeded")
 
     def authorize_sso(self):
 
@@ -125,7 +127,8 @@ class LGHorizonApi:
     def _obtain_mqtt_token(self):
         _logger.debug("Obtain mqtt token...")
         mqtt_response = self._do_api_call(f"{self._country_settings['api_url']}/auth-service/v1/mqtt/token")
-        self._auth.mqttToken = mqtt_response["token"]  
+        self._auth.mqttToken = mqtt_response["token"]
+        _logger.debug(f"MQTT token: {self._auth.mqttToken}")
 
     def connect(self) -> None:
         _logger.debug("Connect to API")
@@ -179,8 +182,9 @@ class LGHorizonApi:
             raise LGHorizonApiConnectionError(f"Unable to call {url}. API response:{api_response.status_code} - {api_response.json()}")
 
     def _register_customer_and_boxes(self):
-        _logger.debug("Get personalisation info")
+        _logger.debug("Get personalisation info:")
         personalisation_result = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/personalization-service/v1/customer/{self._auth.householdId}?with=profiles%2Cdevices")
+        _logger.debug(personalisation_result)
         self._customer = LGHorizonCustomer(personalisation_result)
         self._get_channels()
         _logger.debug("Registering boxes")
@@ -199,6 +203,7 @@ class LGHorizonApi:
         for channel in channels_result:
             channel_id = channel["id"]
             self._channels[channel_id] = LGHorizonChannel(channel)
+        _logger.debug(f"{len(self._channels)} retrieved.")
 
     def get_recording_capacity(self) -> int:
         """Returns remaining recording capacity"""
