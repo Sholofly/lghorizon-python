@@ -70,7 +70,7 @@ COUNTRY_SETTINGS = {
         "channels": [],
     },
     "be-nl": {
-        "api_url": "https://web-api-prod-obo.horizon.tv/oesp/v4/BE/nld/web",
+        "api_url": "https://prod.spark.telenet.tv",
         "personalization_url_format": "https://prod.spark.telenettv.be/nld/web/personalization-service/v1/customer/{household_id}/devices",
         "mqtt_url": "obomsg.prod.be.horizon.tv",
         "use_oauth": True,

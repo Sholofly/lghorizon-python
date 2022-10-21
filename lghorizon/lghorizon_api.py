@@ -11,6 +11,7 @@ from .models import LGHorizonChannel
 from .const import COUNTRY_SETTINGS
 from typing import Dict
 import json
+import re
 
 _logger = logging.getLogger(__name__)
 _supported_platforms = ["EOS", "EOS2", "HORIZON", "APOLLO"]
@@ -88,14 +89,13 @@ class LGHorizonApi:
 
             #Step 2 - Get Authorization cookie
             _logger.debug("Step 2 - Get Authorization cookie")
-            auth_cookie_headers = {
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br"
-            }
-            auth_cookie_response = login_session.get(authorizationUri, headers=auth_cookie_headers)
+
+            auth_cookie_response = login_session.get(authorizationUri)
             if not auth_cookie_response.ok:
                 raise LGHorizonApiConnectionError("Can't connect to authorization URL")
             
+            _logger.debug("Step 3 - Login")
+
             username_fieldname = self._country_settings["oauth_username_fieldname"]
             pasword_fieldname = self._country_settings["oauth_password_fieldname"]
 
@@ -105,21 +105,32 @@ class LGHorizonApi:
                 "rememberme": 'true'
             }
 
-            headers = {
-                "Content-Type":"application/x-www-form-urlencoded",
-                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-                "Accept-Encoding": "gzip, deflate, br",
-                "Accept-Language":"nl-NL,nl;q=0.9",
-                "Upgrade-Insecure-Request":1
-            }
             
             login_response = login_session.post(
-                self._country_settings["oauth_url"], data=json.dumps(payload), allow_redirects=False, headers=headers
+                self._country_settings["oauth_url"], payload, allow_redirects=False
             )
             if not login_response.ok:
                 raise LGHorizonApiConnectionError("Can't connect to authorization URL")
             redirect_url = login_response.headers[self._country_settings["oauth_redirect_header"]]
-            pass
+            
+            redirect_response = login_session.get(redirect_url, allow_redirects=False)
+            success_url = redirect_response.headers[self._country_settings["oauth_redirect_header"]]
+            codeMatches = re.findall(r"code=(.*)&", success_url)
+            
+            authorizationCode = codeMatches[0]
+
+            new_payload = {
+                "authorizationGrant":{
+                    "authorizationCode":authorizationCode,
+                    "validityToken":authValidtyToken
+                }
+            }
+            headers = {
+                "content-type":"application/json",
+            }
+            post_result = login_session.post(auth_url, json.dumps(new_payload), headers = headers)
+            self._auth = LGHorizonAuth(post_result.json())
+            self._session.cookies["ACCESSTOKEN"] = self._auth.accessToken
         except Exception as ex:
             pass 
 
@@ -193,7 +204,7 @@ class LGHorizonApi:
         for device in personalisation_result["assignedDevices"]:
             if not device["platformType"] in _supported_platforms:
                 continue
-            box = LGHorizonBox(device, self._mqttClient,self._auth, self._channels)
+            box = LGHorizonBox(device, self._mqttClient,self._auth, self._channels, self._country_settings)
             self.settop_boxes[box.deviceId] = box
             _logger.debug(f"Box {box.deviceId} registered...")
             

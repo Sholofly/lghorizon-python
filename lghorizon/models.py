@@ -262,14 +262,16 @@ class LGHorizonBox:
     _auth: LGHorizonAuth = None
     _channels:Dict[str, LGHorizonChannel] = None
     _message_stamp = None
+    _country_settings:Dict[str, Any] = None
     
-    def __init__(self, box_json:str, mqtt_client:LGHorizonMqttClient, auth:LGHorizonAuth, channels:Dict[str, LGHorizonChannel]):
+    def __init__(self, box_json:str, mqtt_client:LGHorizonMqttClient, auth:LGHorizonAuth, channels:Dict[str, LGHorizonChannel], country_settings:Dict[str, Any]):
         self.deviceId = box_json["deviceId"]
         self.hashedCPEId = box_json["hashedCPEId"]
         self.deviceFriendlyName = box_json["settings"]["deviceFriendlyName"]
         self._mqtt_client = mqtt_client
         self._auth = auth
         self._channels = channels
+        self._country_settings = country_settings
         
     def register_mqtt(self)->None:
         if not self._mqtt_client.is_connected:
@@ -531,7 +533,7 @@ class LGHorizonBox:
 
     def _get_listing(self, listing_id):
         """Get listing."""
-        url = "https://prod.spark.ziggogo.tv/eng/web/linear-service/v2/replayEvent/"+ listing_id + "?returnLinearContent=true&language=nl"
+        url = f"{self._country_settings['api_url']}/eng/web/linear-service/v2/replayEvent/{listing_id}?returnLinearContent=true&language=nl"
         response = requests.get(url)
         if response.ok:
             return response.json()
