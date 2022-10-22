@@ -131,12 +131,15 @@ class LGHorizonReplayEvent:
     episodeName:str = None
 
     def __init__(self, raw_json:str):
-        self.episodeNumber = raw_json["episodeNumber"]
         self.channelId = raw_json["channelId"]
-        self.eventId = raw_json["episodeNumber"]
-        self.seasonNumber = raw_json["seasonNumber"]
+        self.eventId = raw_json["eventId"]
         self.title = raw_json["title"]
-        self.episodeName = raw_json["episodeName"]
+        if "episodeName" in raw_json:
+            self.episodeName = raw_json["episodeName"]
+        if "episodeNumber" in raw_json:
+            self.episodeNumber = raw_json["episodeNumber"]
+        if "seasonNumber" in raw_json:
+            self.seasonNumber = raw_json["seasonNumber"]
 
 class LGHorizonRecordingSingle:
     """Represents a single recording."""
@@ -144,18 +147,20 @@ class LGHorizonRecordingSingle:
     recording_id: str = None
     title: str = None
     image: str = None
-    season: int = None
-    episode: int = None
+    seasonNumber: int = None
+    episodeNumber: int = None
+    channelId: str = None
 
     def __init__(self, recording_json):
         """Init the single recording."""
         self.recording_id = recording_json["id"]
         self.title = recording_json["title"]
         self.image = recording_json["poster"]["url"]
-        if "season" in recording_json:
-            self.season = recording_json["season"]
-        if "episode" in recording_json:
-            self.episode = recording_json["episode"]
+        self.channelId = recording_json["channelId"]
+        if "seasonNumber" in recording_json:
+            self.seasonNumber = recording_json["seasonNumber"]
+        if "episodeNumber" in recording_json:
+            self.episodeNumber = recording_json["episodeNumber"]
 
 class LGHorizonRecordingShow:
     """Represent a recorderd show."""
@@ -200,6 +205,21 @@ class LGHorizonRecordingSeason:
     def append_child(self, season_recording: LGHorizonRecordingSingle):
         """Append child."""
         self.children.append(season_recording)       
+
+class LGHorizonVod:
+    title:str = None
+    image: str = None
+    def __init__(self, vod_json) -> None:
+        self.title = vod_json['title']
+
+class LGHorizonApp:
+    title:str = None
+    image:str = None
+    def __init__(self, app_state_json:str)->None:
+        self.title = app_state_json["appName"]
+        self.image = app_state_json["logoPath"]
+        if not self.image.startswith("http:"):
+                self.image = "https:" + self.image
 
 class LGHorizonMqttClient:
     _brokerUrl:str = None
@@ -267,11 +287,13 @@ class LGHorizonMqttClient:
 
 class LGHorizonBox:
 
-    deviceId:str
-    hashedCPEId:str
-    deviceFriendlyName:str
+    deviceId:str = None
+    hashedCPEId:str = None
+    deviceFriendlyName:str = None
     state: str = None
     playing_info: LGHorizonPlayingInfo = LGHorizonPlayingInfo()
+    manufacturer:str = None
+    model: str = None
     
     _mqtt_client:LGHorizonMqttClient
     _change_callback: Callable = None
@@ -279,13 +301,15 @@ class LGHorizonBox:
     _channels:Dict[str, LGHorizonChannel] = None
     _message_stamp = None
     
-    def __init__(self, box_json:str, mqtt_client:LGHorizonMqttClient, auth:LGHorizonAuth, channels:Dict[str, LGHorizonChannel]):
+    def __init__(self, box_json:str, platform_type:Dict[str,str], mqtt_client:LGHorizonMqttClient, auth:LGHorizonAuth, channels:Dict[str, LGHorizonChannel]):
         self.deviceId = box_json["deviceId"]
         self.hashedCPEId = box_json["hashedCPEId"]
         self.deviceFriendlyName = box_json["settings"]["deviceFriendlyName"]
         self._mqtt_client = mqtt_client
         self._auth = auth
         self._channels = channels
+        self.manufacturer = platform_type["manufacturer"]
+        self.model = platform_type["model"]
         
     def register_mqtt(self)->None:
         if not self._mqtt_client.is_connected:
@@ -318,8 +342,35 @@ class LGHorizonBox:
         self.playing_info.set_source_type(source_type)
         self.playing_info.set_channel(channel.id)
         self.playing_info.set_channel_title(channel.title)
-        self.playing_info.set_title(f"{event.title}: {event.episodeName}")
+        title = event.title
+        if event.episodeName:
+            title += f": {event.episodeName}"
+        self.playing_info.set_title(title)
         self.playing_info.set_image(channel.stream_image)
+        self._trigger_callback()
+
+    def update_with_recording(self, source_type: str, recording:LGHorizonRecordingSingle, channel: LGHorizonChannel) -> None:
+        self.playing_info.set_source_type(source_type)
+        self.playing_info.set_channel(channel.id)
+        self.playing_info.set_channel_title(channel.title)
+        self.playing_info.set_title(f"{recording.title}")
+        self.playing_info.set_image(recording.image)
+        self._trigger_callback()
+    
+    def update_with_vod(self, source_type: str, vod:LGHorizonVod) -> None:
+        self.playing_info.set_source_type(source_type)
+        self.playing_info.set_channel(None)
+        self.playing_info.set_channel_title(None)
+        self.playing_info.set_title(vod.title)
+        self.playing_info.set_image(None)
+        self._trigger_callback()
+    
+    def update_with_app(self, source_type: str, app:LGHorizonApp) -> None:
+        self.playing_info.set_source_type(source_type)
+        self.playing_info.set_channel(None)
+        self.playing_info.set_channel_title(None)
+        self.playing_info.set_title(app.title)
+        self.playing_info.set_image(app.image)
         self._trigger_callback()
 
 

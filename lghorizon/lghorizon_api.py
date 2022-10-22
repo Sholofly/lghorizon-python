@@ -10,8 +10,10 @@ from .models import (
     LGHorizonMqttClient,
     LGHorizonCustomer,
     LGHorizonChannel,
-    LGHorizonPlayingInfo,
-    LGHorizonReplayEvent)
+    LGHorizonReplayEvent,
+    LGHorizonRecordingSingle,
+    LGHorizonVod,
+    LGHorizonApp)
 
 from .const import (
     COUNTRY_SETTINGS,
@@ -113,32 +115,45 @@ class LGHorizonApi:
             except Exception as ex:
                 _logger.error("Could not handle status message")
                 _logger.error(str(ex))
+                self.settop_boxes[deviceId].playing_info.reset()
+                self.settop_boxes[deviceId].playing_info.set_paused(False)
 
     def _handle_box_update(self, deviceId:str, raw_message:Any) -> None:
         statusPayload = raw_message["status"]
         if "uiStatus" not in statusPayload:
             return
-        if statusPayload["uiStatus"] == "mainUI":
+        uiStatus = statusPayload["uiStatus"]
+        if uiStatus == "mainUI":
             playerState = statusPayload["playerState"]
             if "sourceType" not in playerState or "source" not in playerState:
                 return
             source_type = playerState["sourceType"]
             state_source = playerState["source"]
+            self.settop_boxes[deviceId].playing_info.set_paused(playerState["speed"] == 0)
             if source_type in (
                 BOX_PLAY_STATE_CHANNEL,
                 BOX_PLAY_STATE_BUFFER,
                 BOX_PLAY_STATE_REPLAY
                 ):
                 eventId = state_source["eventId"]
-                raw_replay_event = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/replayEvent/{eventId}?returnLinearContent=true&language=nl")
+                raw_replay_event = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/replayEvent/{eventId}?returnLinearContent=true&language=en")
                 replayEvent = LGHorizonReplayEvent(raw_replay_event)
                 channel = self._channels[replayEvent.channelId]
                 self.settop_boxes[deviceId].update_with_replay_event(source_type, replayEvent, channel)
             elif source_type == BOX_PLAY_STATE_DVR:
                 recordingId = state_source["recordingId"]
-                raw_recording = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/details/single/{recordingId}?profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&language=nl")
-            self.settop_boxes[deviceId].playing_info.set_paused(playerState["speed"] == 0)
-                    
+                raw_recording = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/details/single/{recordingId}?profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&language=en")
+                recording = LGHorizonRecordingSingle(raw_recording)
+                channel = self._channels[recording.channelId]
+                self.settop_boxes[deviceId].update_with_recording(source_type, recording, channel)
+            elif source_type == BOX_PLAY_STATE_VOD:
+                titleId = state_source["titleId"]
+                raw_vod = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/vod-service/v2/detailscreen/{titleId}?language=en&profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&cityId={self._customer.cityId}")
+                vod = LGHorizonVod(raw_vod)
+                self.settop_boxes[deviceId].update_with_vod(source_type, vod)
+        elif uiStatus == "apps":
+            app = LGHorizonApp(statusPayload["appsState"])
+            self.settop_boxes[deviceId].update_with_app('app', app)     
 
     @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger)
     def _do_api_call(self, url:str, tries:int = 0) -> str:
@@ -166,15 +181,20 @@ class LGHorizonApi:
         if not "assignedDevices" in personalisation_result:
             return
         for device in personalisation_result["assignedDevices"]:
-            if not device["platformType"] in _supported_platforms:
+            platform_type = device["platformType"]
+            if not platform_type in _supported_platforms:
                 continue
-            box = LGHorizonBox(device, self._mqttClient,self._auth, self._channels)
+            if "platform_types" in self._country_settings and platform_type in self._country_settings["platform_types"]:
+                platformType = self._country_settings["platform_types"][platform_type]
+            else:
+                platformType = None
+            box = LGHorizonBox(device, platformType, self._mqttClient,self._auth, self._channels)
             self.settop_boxes[box.deviceId] = box
             _logger.debug(f"Box {box.deviceId} registered...")
             
     def _get_channels(self):
         _logger.debug("Retrieving channels...")
-        channels_result = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/channels?cityId={self._customer.cityId}&language={self._customer.countryId}&productClass=Orion-DASH")
+        channels_result = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/channels?cityId={self._customer.cityId}&language=en&productClass=Orion-DASH")
         for channel in channels_result:
             channel_id = channel["id"]
             self._channels[channel_id] = LGHorizonChannel(channel)
@@ -182,7 +202,7 @@ class LGHorizonApi:
 
     def _get_replay_event(self, listingId) -> Any: 
         """Get listing."""
-        response = self._do_api_call("https://prod.spark.ziggogo.tv/eng/web/linear-service/v2/replayEvent/"+ listingId + "?returnLinearContent=true&language=nl")
+        response = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/replayEvent/{listingId}?returnLinearContent=true&language=en")
         return response
 
     def get_recording_capacity(self) -> int:
