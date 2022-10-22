@@ -1,15 +1,27 @@
 """Python client for LGHorizon."""
 import logging
+import json
 from .exceptions import LGHorizonApiUnauthorizedError, LGHorizonApiConnectionError
 import backoff
 from requests import Session
-from .models import LGHorizonAuth
-from .models import LGHorizonBox
-from .models import LGHorizonMqttClient
-from .models import LGHorizonCustomer
-from .models import LGHorizonChannel
-from .const import COUNTRY_SETTINGS
-from typing import Dict
+from .models import (
+    LGHorizonAuth, 
+    LGHorizonBox,
+    LGHorizonMqttClient,
+    LGHorizonCustomer,
+    LGHorizonChannel,
+    LGHorizonPlayingInfo,
+    LGHorizonReplayEvent)
+
+from .const import (
+    COUNTRY_SETTINGS,
+    BOX_PLAY_STATE_BUFFER,
+    BOX_PLAY_STATE_CHANNEL,
+    BOX_PLAY_STATE_DVR,
+    BOX_PLAY_STATE_REPLAY,
+    BOX_PLAY_STATE_APP,
+    BOX_PLAY_STATE_VOD)
+from typing import Any, Dict
 
 _logger = logging.getLogger(__name__)
 _supported_platforms = ["EOS", "EOS2", "HORIZON", "APOLLO"]
@@ -97,10 +109,36 @@ class LGHorizonApi:
                 if "deviceType" in message and message["deviceType"] == "STB":
                     self.settop_boxes[deviceId].update_state(message)
                 if "status" in message:
-                    self.settop_boxes[deviceId].update(message)
+                    self._handle_box_update(deviceId, message)
             except Exception as ex:
                 _logger.error("Could not handle status message")
                 _logger.error(str(ex))
+
+    def _handle_box_update(self, deviceId:str, raw_message:Any) -> None:
+        statusPayload = raw_message["status"]
+        if "uiStatus" not in statusPayload:
+            return
+        if statusPayload["uiStatus"] == "mainUI":
+            playerState = statusPayload["playerState"]
+            if "sourceType" not in playerState or "source" not in playerState:
+                return
+            source_type = playerState["sourceType"]
+            state_source = playerState["source"]
+            if source_type in (
+                BOX_PLAY_STATE_CHANNEL,
+                BOX_PLAY_STATE_BUFFER,
+                BOX_PLAY_STATE_REPLAY
+                ):
+                eventId = state_source["eventId"]
+                raw_replay_event = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/replayEvent/{eventId}?returnLinearContent=true&language=nl")
+                replayEvent = LGHorizonReplayEvent(raw_replay_event)
+                channel = self._channels[replayEvent.channelId]
+                self.settop_boxes[deviceId].update_with_replay_event(source_type, replayEvent, channel)
+            elif source_type == BOX_PLAY_STATE_DVR:
+                recordingId = state_source["recordingId"]
+                raw_recording = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/details/single/{recordingId}?profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&language=nl")
+            self.settop_boxes[deviceId].playing_info.set_paused(playerState["speed"] == 0)
+                    
 
     @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger)
     def _do_api_call(self, url:str, tries:int = 0) -> str:
@@ -141,6 +179,11 @@ class LGHorizonApi:
             channel_id = channel["id"]
             self._channels[channel_id] = LGHorizonChannel(channel)
         _logger.debug(f"{len(self._channels)} retrieved.")
+
+    def _get_replay_event(self, listingId) -> Any: 
+        """Get listing."""
+        response = self._do_api_call("https://prod.spark.ziggogo.tv/eng/web/linear-service/v2/replayEvent/"+ listingId + "?returnLinearContent=true&language=nl")
+        return response
 
     def get_recording_capacity(self) -> int:
         """Returns remaining recording capacity"""
