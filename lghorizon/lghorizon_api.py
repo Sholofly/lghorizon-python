@@ -143,7 +143,6 @@ class LGHorizonApi:
         except Exception as ex:
             pass 
 
-
     def _obtain_mqtt_token(self):
         _logger.debug("Obtain mqtt token...")
         mqtt_response = self._do_api_call(f"{self._country_settings['api_url']}/auth-service/v1/mqtt/token")
@@ -274,11 +273,10 @@ class LGHorizonApi:
         response = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/replayEvent/{listingId}?returnLinearContent=true&language=en")
         return response
 
-    def get_recording_capacity(self) -> int:
+    def  get_recording_capacity(self) -> int:
         """Returns remaining recording capacity"""
         try:
-            url = f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/recordings"
-            content = self._do_api_call(url)
+            content = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/quota")
             if not "quota" in content:
                 return None
             quota = content["quota"]
