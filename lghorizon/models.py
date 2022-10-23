@@ -264,7 +264,8 @@ class LGHorizonMqttClient:
         elif resultCode == 5:
             self._mqtt_client.username_pw_set(self._auth.householdId, self._auth.mqttToken)
             self.connect()
-            raise Exception("Could not connect to Mqtt server")
+        else:
+            _logger.error(f"Cannot connect to MQTT server with resultCode: {resultCode}")
     
     def connect(self) -> None:
         self._mqtt_client.connect(self._brokerUrl, 443)
@@ -308,8 +309,9 @@ class LGHorizonBox:
         self._mqtt_client = mqtt_client
         self._auth = auth
         self._channels = channels
-        self.manufacturer = platform_type["manufacturer"]
-        self.model = platform_type["model"]
+        if platform_type:
+            self.manufacturer = platform_type["manufacturer"]
+            self.model = platform_type["model"]
         
     def register_mqtt(self)->None:
         if not self._mqtt_client.is_connected:
