@@ -1,7 +1,7 @@
 install-local: python3 -m pip install --upgrade -e .
 
-tag:    git tag -a v0.3.0 -m "v0.3.0"
-        git push origin v0.3.0
+tag:    git tag -a v0.4.0 -m "v0.4.0"
+        git push origin v0.4.0
 
 create sdist: python3 setup.py sdist
-upload: python3 -m twine upload dist/lghorizon-0.3.0.tar.gz
+upload: python3 -m twine upload dist/lghorizon-0.4.0.tar.gz
