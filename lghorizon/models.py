@@ -121,24 +121,46 @@ class LGHorizonChannel:
             return logo["focus"]
         return ""
 
+class LGHorizonReplayEvent:
+
+    episodeNumber: int = None
+    channelId: str = None
+    eventId: str = None
+    seasonNumber:int = None
+    title:str = None
+    episodeName:str = None
+
+    def __init__(self, raw_json:str):
+        self.channelId = raw_json["channelId"]
+        self.eventId = raw_json["eventId"]
+        self.title = raw_json["title"]
+        if "episodeName" in raw_json:
+            self.episodeName = raw_json["episodeName"]
+        if "episodeNumber" in raw_json:
+            self.episodeNumber = raw_json["episodeNumber"]
+        if "seasonNumber" in raw_json:
+            self.seasonNumber = raw_json["seasonNumber"]
+
 class LGHorizonRecordingSingle:
     """Represents a single recording."""
 
-    recording_id: str
-    title: str
-    image: str
-    season: int = None
-    episode: int = None
+    recording_id: str = None
+    title: str = None
+    image: str = None
+    seasonNumber: int = None
+    episodeNumber: int = None
+    channelId: str = None
 
     def __init__(self, recording_json):
         """Init the single recording."""
         self.recording_id = recording_json["id"]
         self.title = recording_json["title"]
         self.image = recording_json["poster"]["url"]
-        if "season" in recording_json:
-            self.season = recording_json["season"]
-        if "episode" in recording_json:
-            self.episode = recording_json["episode"]
+        self.channelId = recording_json["channelId"]
+        if "seasonNumber" in recording_json:
+            self.seasonNumber = recording_json["seasonNumber"]
+        if "episodeNumber" in recording_json:
+            self.episodeNumber = recording_json["episodeNumber"]
 
 class LGHorizonRecordingShow:
     """Represent a recorderd show."""
@@ -183,6 +205,21 @@ class LGHorizonRecordingSeason:
     def append_child(self, season_recording: LGHorizonRecordingSingle):
         """Append child."""
         self.children.append(season_recording)       
+
+class LGHorizonVod:
+    title:str = None
+    image: str = None
+    def __init__(self, vod_json) -> None:
+        self.title = vod_json['title']
+
+class LGHorizonApp:
+    title:str = None
+    image:str = None
+    def __init__(self, app_state_json:str)->None:
+        self.title = app_state_json["appName"]
+        self.image = app_state_json["logoPath"]
+        if not self.image.startswith("http:"):
+                self.image = "https:" + self.image
 
 class LGHorizonMqttClient:
     _brokerUrl:str = None
@@ -250,11 +287,13 @@ class LGHorizonMqttClient:
 
 class LGHorizonBox:
 
-    deviceId:str
-    hashedCPEId:str
-    deviceFriendlyName:str
+    deviceId:str = None
+    hashedCPEId:str = None
+    deviceFriendlyName:str = None
     state: str = None
     playing_info: LGHorizonPlayingInfo = LGHorizonPlayingInfo()
+    manufacturer:str = None
+    model: str = None
     
     _mqtt_client:LGHorizonMqttClient
     _change_callback: Callable = None
@@ -262,13 +301,15 @@ class LGHorizonBox:
     _channels:Dict[str, LGHorizonChannel] = None
     _message_stamp = None
     
-    def __init__(self, box_json:str, mqtt_client:LGHorizonMqttClient, auth:LGHorizonAuth, channels:Dict[str, LGHorizonChannel]):
+    def __init__(self, box_json:str, platform_type:Dict[str,str], mqtt_client:LGHorizonMqttClient, auth:LGHorizonAuth, channels:Dict[str, LGHorizonChannel]):
         self.deviceId = box_json["deviceId"]
         self.hashedCPEId = box_json["hashedCPEId"]
         self.deviceFriendlyName = box_json["settings"]["deviceFriendlyName"]
         self._mqtt_client = mqtt_client
         self._auth = auth
         self._channels = channels
+        self.manufacturer = platform_type["manufacturer"]
+        self.model = platform_type["model"]
         
     def register_mqtt(self)->None:
         if not self._mqtt_client.is_connected:
@@ -297,128 +338,167 @@ class LGHorizonBox:
         else:
             self._request_settop_box_state()
     
-    def update(self, payload):
-        deviceId = payload["source"]
-        if deviceId != self.deviceId:
-            return
-        statusPayload = payload["status"]
-        if "uiStatus" not in statusPayload:
-            return
-        message_stamp = payload["messageTimeStamp"]
-        if self._message_stamp and self._message_stamp > message_stamp:
-            return
-        self._message_stamp = message_stamp
-        uiStatus = statusPayload["uiStatus"]
-        if uiStatus == "mainUI":
-            playerState = statusPayload["playerState"]
-            if "sourceType" not in playerState or "source" not in playerState:
-                return
-            source_type = playerState["sourceType"]
-            state_source = playerState["source"]
-            speed = playerState["speed"]
-            if source_type == BOX_PLAY_STATE_REPLAY:
-                self.playing_info.set_source_type(BOX_PLAY_STATE_REPLAY)
-                if state_source is None or "eventId" not in state_source:
-                    _logger.warning("No eventId in stateSource")
-                    _logger.warning("State update was skipped ")
-                    return
-                eventId = state_source["eventId"]
-                listing = self._get_listing(eventId)
-                channel_id = listing["channelId"]
-                if channel_id is not None and channel_id in self._channels.keys():
-                    self.playing_info.set_channel(channel_id)
-                    channel:LGHorizonChannel = self._channels[channel_id]
-                    self.playing_info.set_channel_title(channel.title)
-                    self.playing_info.set_title("ReplayTV: " + listing["title"])
-                    self.playing_info.set_image(channel.stream_image)
-                else:
-                    self._set_unknown_channel_info()
-            elif source_type == BOX_PLAY_STATE_DVR:
-                self.playing_info.set_source_type(BOX_PLAY_STATE_DVR)
-                if state_source is None or "recordingId" not in state_source:
-                    _logger.warning(
-                        "No recordingId in stateSource,State update was skipped."
-                    )
-                    return
-                recordingId = state_source["recordingId"]
-                listing = self._get_listing(recordingId)
-                channel_id = listing["channelId"]
-                if channel_id is not None and channel_id in self._channels.keys():
-                    self.playing_info.set_channel(channel_id)
-                    channel:LGHorizonChannel = self._channels[channel_id]
-                    self.playing_info.set_title(
-                        "Recording: " + listing["title"]
-                    )
-                    self.playing_info.set_image(channel.stream_image)
-                else:
-                    self._set_unknown_channel_info()
-            elif source_type == BOX_PLAY_STATE_BUFFER:
-                self.playing_info.set_source_type(BOX_PLAY_STATE_BUFFER)
-                if state_source is None or "channelId" not in state_source:
-                    _logger.warning(
-                        "No channelId in stateSource. State update was skipped."
-                    )
-                    return
-                channel_id = state_source["channelId"]
-                if channel_id is not None and channel_id in self._channels.keys():
-                    self.playing_info.set_channel(channel_id)
-                    channel:LGHorizonChannel = self._channels[channel_id]
-                    self.playing_info.set_channel_title(channel.title)
-                    eventId = state_source["eventId"]
-                    listing = self._get_listing(eventId)
-                    self.playing_info.set_title("Delayed: " + listing["title"])
-                    self.playing_info.set_image(channel.stream_image)
-                else:
-                    self._set_unknown_channel_info()
-            elif source_type == BOX_PLAY_STATE_CHANNEL:
-                self.playing_info.set_source_type(BOX_PLAY_STATE_CHANNEL)
-                if state_source is None or "channelId" not in state_source:
-                    _logger.warning(
-                        "No channelId in state_source. State update was skipped."
-                    )
-                    return
-                channel_id = state_source["channelId"]
-                eventId = state_source["eventId"]
-                if channel_id is not None and channel_id in self._channels.keys():
-                    channel = self._channels[channel_id]
-                    listing = self._get_listing(eventId)
-                    self.playing_info.set_channel(channel_id)
-                    self.playing_info.set_channel_title(channel.title)
-                    self.playing_info.set_title(listing["title"])
-                    self.playing_info.set_image(channel.stream_image)
-                else:
-                    _logger.debug(
-                        f"channelId {channel_id} not in channelsList: {self._channels.keys()}"
-                    )
-                    self._set_unknown_channel_info()                
-            elif source_type == BOX_PLAY_STATE_VOD:
-                self.playing_info.set_source_type(BOX_PLAY_STATE_VOD)
-                title_id = state_source["titleId"]
-                # mediagroup_content = self._get_mediagroup(title_id)
-                self.playing_info.set_channel(None)
-                self.playing_info.set_channel_title("VOD")
-                # self.playing_info.set_title(self._get_mediagroup_title(mediagroup_content))
-                # self.playing_info.set_image(self._get_mediagroup_image(mediagroup_content))
-                pass
-            else:
-                self._set_unknown_channel_info()
-            self.playing_info.set_paused(speed == 0)
-        elif uiStatus == "apps":
-            appsState = statusPayload["appsState"]
-            logoPath = appsState["logoPath"]
-            if not logoPath.startswith("http:"):
-                logoPath = "https:" + logoPath
-            self.playing_info.set_source_type(BOX_PLAY_STATE_APP)
-            self.playing_info.set_channel(None)
-            self.playing_info.set_channel_title(appsState["appName"])
-            self.playing_info.set_title(appsState["appName"])
-            self.playing_info.set_image(logoPath)
-            self.playing_info.set_paused(False)
+    def update_with_replay_event(self, source_type: str, event:LGHorizonReplayEvent, channel: LGHorizonChannel) -> None:
+        self.playing_info.set_source_type(source_type)
+        self.playing_info.set_channel(channel.id)
+        self.playing_info.set_channel_title(channel.title)
+        title = event.title
+        if event.episodeName:
+            title += f": {event.episodeName}"
+        self.playing_info.set_title(title)
+        self.playing_info.set_image(channel.stream_image)
+        self._trigger_callback()
 
+    def update_with_recording(self, source_type: str, recording:LGHorizonRecordingSingle, channel: LGHorizonChannel) -> None:
+        self.playing_info.set_source_type(source_type)
+        self.playing_info.set_channel(channel.id)
+        self.playing_info.set_channel_title(channel.title)
+        self.playing_info.set_title(f"{recording.title}")
+        self.playing_info.set_image(recording.image)
+        self._trigger_callback()
+    
+    def update_with_vod(self, source_type: str, vod:LGHorizonVod) -> None:
+        self.playing_info.set_source_type(source_type)
+        self.playing_info.set_channel(None)
+        self.playing_info.set_channel_title(None)
+        self.playing_info.set_title(vod.title)
+        self.playing_info.set_image(None)
+        self._trigger_callback()
+    
+    def update_with_app(self, source_type: str, app:LGHorizonApp) -> None:
+        self.playing_info.set_source_type(source_type)
+        self.playing_info.set_channel(None)
+        self.playing_info.set_channel_title(None)
+        self.playing_info.set_title(app.title)
+        self.playing_info.set_image(app.image)
+        self._trigger_callback()
+
+
+    # # def update(self, payload):
+    #     deviceId = payload["source"]
+    #     if deviceId != self.deviceId:
+    #         return
+    #     statusPayload = payload["status"]
+    #     if "uiStatus" not in statusPayload:
+    #         return
+    #     message_stamp = payload["messageTimeStamp"]
+    #     if self._message_stamp and self._message_stamp > message_stamp:
+    #         return
+    #     self._message_stamp = message_stamp
+    #     uiStatus = statusPayload["uiStatus"]
+    #     if uiStatus == "mainUI":
+    #         playerState = statusPayload["playerState"]
+    #         if "sourceType" not in playerState or "source" not in playerState:
+    #             return
+    #         source_type = playerState["sourceType"]
+    #         state_source = playerState["source"]
+    #         speed = playerState["speed"]
+    #         if source_type == BOX_PLAY_STATE_REPLAY:
+    #             self.playing_info.set_source_type(BOX_PLAY_STATE_REPLAY)
+    #             if state_source is None or "eventId" not in state_source:
+    #                 _logger.warning("No eventId in stateSource")
+    #                 _logger.warning("State update was skipped ")
+    #                 return
+    #             eventId = state_source["eventId"]
+    #             listing = self._get_listing(eventId)
+    #             channel_id = listing["channelId"]
+    #             if channel_id is not None and channel_id in self._channels.keys():
+    #                 self.playing_info.set_channel(channel_id)
+    #                 channel:LGHorizonChannel = self._channels[channel_id]
+    #                 self.playing_info.set_channel_title(channel.title)
+    #                 self.playing_info.set_title("ReplayTV: " + listing["title"])
+    #                 self.playing_info.set_image(channel.stream_image)
+    #             else:
+    #                 self._set_unknown_channel_info()
+    #         elif source_type == BOX_PLAY_STATE_DVR:
+    #             self.playing_info.set_source_type(BOX_PLAY_STATE_DVR)
+    #             if state_source is None or "recordingId" not in state_source:
+    #                 _logger.warning(
+    #                     "No recordingId in stateSource,State update was skipped."
+    #                 )
+    #                 return
+    #             recordingId = state_source["recordingId"]
+    #             listing = self._get_listing(recordingId)
+    #             channel_id = listing["channelId"]
+    #             if channel_id is not None and channel_id in self._channels.keys():
+    #                 self.playing_info.set_channel(channel_id)
+    #                 channel:LGHorizonChannel = self._channels[channel_id]
+    #                 self.playing_info.set_title(
+    #                     "Recording: " + listing["title"]
+    #                 )
+    #                 self.playing_info.set_channel_title(channel.title)
+    #                 self.playing_info.set_image(channel.stream_image)
+    #             else:
+    #                 self._set_unknown_channel_info()
+    #         elif source_type == BOX_PLAY_STATE_BUFFER:
+    #             self.playing_info.set_source_type(BOX_PLAY_STATE_BUFFER)
+    #             if state_source is None or "channelId" not in state_source:
+    #                 _logger.warning(
+    #                     "No channelId in stateSource. State update was skipped."
+    #                 )
+    #                 return
+    #             channel_id = state_source["channelId"]
+    #             if channel_id is not None and channel_id in self._channels.keys():
+    #                 self.playing_info.set_channel(channel_id)
+    #                 channel:LGHorizonChannel = self._channels[channel_id]
+    #                 self.playing_info.set_channel_title(channel.title)
+    #                 eventId = state_source["eventId"]
+    #                 listing = self._get_listing(eventId)
+    #                 self.playing_info.set_title("Delayed: " + listing["title"])
+    #                 self.playing_info.set_image(channel.stream_image)
+    #             else:
+    #                 self._set_unknown_channel_info()
+    #         elif source_type == BOX_PLAY_STATE_CHANNEL:
+    #             self.playing_info.set_source_type(BOX_PLAY_STATE_CHANNEL)
+    #             if state_source is None or "channelId" not in state_source:
+    #                 _logger.warning(
+    #                     "No channelId in state_source. State update was skipped."
+    #                 )
+    #                 return
+    #             channel_id = state_source["channelId"]
+    #             eventId = state_source["eventId"]
+    #             if channel_id is not None and channel_id in self._channels.keys():
+    #                 channel = self._channels[channel_id]
+    #                 listing = self._get_listing(eventId)
+    #                 self.playing_info.set_channel(channel_id)
+    #                 self.playing_info.set_channel_title(channel.title)
+    #                 self.playing_info.set_title(listing["title"])
+    #                 self.playing_info.set_image(channel.stream_image)
+    #             else:
+    #                 _logger.debug(
+    #                     f"channelId {channel_id} not in channelsList: {self._channels.keys()}"
+    #                 )
+    #                 self._set_unknown_channel_info()                
+    #         elif source_type == BOX_PLAY_STATE_VOD:
+    #             self.playing_info.set_source_type(BOX_PLAY_STATE_VOD)
+    #             title_id = state_source["titleId"]
+    #             # mediagroup_content = self._get_mediagroup(title_id)
+    #             self.playing_info.set_channel(None)
+    #             self.playing_info.set_channel_title("VOD")
+    #             # self.playing_info.set_title(self._get_mediagroup_title(mediagroup_content))
+    #             # self.playing_info.set_image(self._get_mediagroup_image(mediagroup_content))
+    #             pass
+    #         else:
+    #             self._set_unknown_channel_info()
+    #         self.playing_info.set_paused(speed == 0)
+    #     elif uiStatus == "apps":
+    #         appsState = statusPayload["appsState"]
+    #         logoPath = appsState["logoPath"]
+    #         if not logoPath.startswith("http:"):
+    #             logoPath = "https:" + logoPath
+    #         self.playing_info.set_source_type(BOX_PLAY_STATE_APP)
+    #         self.playing_info.set_channel(None)
+    #         self.playing_info.set_channel_title(appsState["appName"])
+    #         self.playing_info.set_title(appsState["appName"])
+    #         self.playing_info.set_image(logoPath)
+    #         self.playing_info.set_paused(False)
+
+        
+    def _trigger_callback(self):
         if self._change_callback:
             _logger.debug(f"Callback called from box {self.deviceId}")
             self._change_callback(self.deviceId)
-    
+
     def turn_on(self) -> None:
         """Turn the settop box on."""
         
@@ -527,14 +607,6 @@ class LGHorizonBox:
         self.playing_info.set_title("No information available")
         self.playing_info.set_image(None)
         self.playing_info.set_paused(False)
-
-    def _get_listing(self, listing_id):
-        """Get listing."""
-        url = "https://prod.spark.ziggogo.tv/eng/web/linear-service/v2/replayEvent/"+ listing_id + "?returnLinearContent=true&language=nl"
-        response = requests.get(url)
-        if response.ok:
-            return response.json()
-        return None
 
     def _request_settop_box_state(self) -> None:
         """Send mqtt message to receive state from settop box."""

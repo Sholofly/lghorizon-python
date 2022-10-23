@@ -61,6 +61,16 @@ COUNTRY_SETTINGS = {
                 "channelNumber": "153"
             }
         ],
+        "platform_types":{
+            "EOS":{
+                "manufacturer": "Arris",
+                "model": "DCX960"
+            },
+            "APOLLO":{
+                "manufacturer": "Arris",
+                "model": "Vip5002W"
+            }
+        }
     },
     "ch": {
         "api_url": "https://prod.spark.sunrisetv.ch",
