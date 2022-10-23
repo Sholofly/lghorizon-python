@@ -101,13 +101,13 @@ COUNTRY_SETTINGS = {
             {"channelId": "youtube", "channelName": "Youtube", "channelNumber": "-1"},
         ],
         "platform_types":{
-            "EOS2":{
+            "EOS":{
                 "manufacturer": "Arris",
                 "model": "DCX960"
             },
-            "APOLLO":{
-                "manufacturer": "Arris",
-                "model": "VIP5002W"
+            "EOS2":{
+                "manufacturer": "HUMAX",
+                "model": "2008C-STB-TN"
             }
         },
         "language":"nl"
