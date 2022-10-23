@@ -68,7 +68,7 @@ COUNTRY_SETTINGS = {
             },
             "APOLLO":{
                 "manufacturer": "Arris",
-                "model": "Vip5002W"
+                "model": "VIP5002W"
             }
         }
     },
@@ -94,6 +94,16 @@ COUNTRY_SETTINGS = {
             {"channelId": "netflix", "channelName": "Netflix", "channelNumber": "600"},
             {"channelId": "youtube", "channelName": "Youtube", "channelNumber": "-1"},
         ],
+        "platform_types":{
+            "EOS2":{
+                "manufacturer": "Arris",
+                "model": "DCX960"
+            },
+            "APOLLO":{
+                "manufacturer": "Arris",
+                "model": "VIP5002W"
+            }
+        },
     },
     # "be-nl-preprod": {
     #     "api_url": "https://web-api-preprod-obo.horizon.tv/oesp/v4/BE/nld/web",
