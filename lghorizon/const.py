@@ -31,6 +31,10 @@ MEDIA_KEY_STOP = "MediaStop"
 MEDIA_KEY_REWIND = "MediaRewind"
 MEDIA_KEY_FAST_FORWARD = "MediaFastForward"
 
+RECORDING_TYPE_SINGLE = "single"
+RECORDING_TYPE_SHOW = "show"
+RECORDING_TYPE_SEASON = "season"
+
 BE_AUTH_URL = "https://login.prd.telenet.be/openid/login.do"
 
 COUNTRY_SETTINGS = {
@@ -70,7 +74,8 @@ COUNTRY_SETTINGS = {
                 "manufacturer": "Arris",
                 "model": "VIP5002W"
             }
-        }
+        },
+        "language":"nl"
     },
     "ch": {
         "api_url": "https://prod.spark.sunrisetv.ch",
@@ -78,6 +83,7 @@ COUNTRY_SETTINGS = {
         "mqtt_url": "obomsg.prod.ch.horizon.tv",
         "use_oauth": False,
         "channels": [],
+        "language":"de"
     },
     "be-nl": {
         "api_url": "https://prod.spark.telenet.tv",
@@ -104,6 +110,7 @@ COUNTRY_SETTINGS = {
                 "model": "VIP5002W"
             }
         },
+        "language":"nl"
     },
     # "be-nl-preprod": {
     #     "api_url": "https://web-api-preprod-obo.horizon.tv/oesp/v4/BE/nld/web",
@@ -140,6 +147,7 @@ COUNTRY_SETTINGS = {
         "mqtt_url": "obomsg.prod.at.horizon.tv/mqtt",
         "use_oauth": False,
         "channels": [],
+        "language":"de"
     },
     # "gb": {
     #     "api_url": "https://web-api-prod-obo.horizon.tv/oesp/v4/GB/eng/web/",
@@ -173,6 +181,7 @@ COUNTRY_SETTINGS = {
         "mqtt_url": "obomsg.prod.ie.horizon.tv/mqtt",
         "use_oauth": False,
         "channels": [],
+        "language":"en"
     },
     # "pl": {
     #     "api_url": "https://web-api-pepper.horizon.tv/oesp/v4/PL/pol/web",
