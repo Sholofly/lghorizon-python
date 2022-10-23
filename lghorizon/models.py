@@ -19,7 +19,9 @@ from .const import (
     MEDIA_KEY_ENTER,
     MEDIA_KEY_REWIND,
     MEDIA_KEY_FAST_FORWARD,
-    MEDIA_KEY_RECORD
+    MEDIA_KEY_RECORD,
+    RECORDING_TYPE_SEASON,
+    RECORDING_TYPE_SHOW
 )
 
 import json
@@ -141,70 +143,98 @@ class LGHorizonReplayEvent:
         if "seasonNumber" in raw_json:
             self.seasonNumber = raw_json["seasonNumber"]
 
-class LGHorizonRecordingSingle:
-    """Represents a single recording."""
 
-    recording_id: str = None
-    title: str = None
-    image: str = None
+class LGHorizonBaseRecording:
+    
+    id:str = None
+    title:str = None
+    image:str = None
+    type:str = None
+    channelId: str = None
+    def __init__(self, id:str, title:str, image:str, channelId: str, type:str) -> None:
+        self.id = id
+        self.title = title
+        self.image = image
+        self.channelId = channelId
+        self.type = type
+
+class LGHorizonRecordingSingle(LGHorizonBaseRecording):
+    """Represents a single recording."""
     seasonNumber: int = None
     episodeNumber: int = None
-    channelId: str = None
 
     def __init__(self, recording_json):
         """Init the single recording."""
-        self.recording_id = recording_json["id"]
-        self.title = recording_json["title"]
-        self.image = recording_json["poster"]["url"]
-        self.channelId = recording_json["channelId"]
+        LGHorizonBaseRecording.__init__(
+            self,
+            recording_json["id"],
+            recording_json["title"],
+            recording_json["poster"]["url"],
+            recording_json["channelId"],
+            recording_json["type"]  
+            )
+        if "seasonNumber" in recording_json:
+            self.seasonNumber = recording_json["seasonNumber"]
+        if "episodeNumber" in recording_json:
+            self.episodeNumber = recording_json["episodeNumber"]
+
+class LGHorizonRecordingEpisode:
+    """Represents a single recording."""
+    
+    episodeId: str = None
+    episodeTitle:str = None
+    seasonNumber: int = None
+    episodeNumber: int = None
+    showTitle:str = None
+    recordingState:str = None
+
+    def __init__(self, recording_json):
+        """Init the single recording."""
+        self.episodeId = recording_json["episodeId"]
+        self.episodeTitle = recording_json["episodeTitle"]
+        self.showTitle = recording_json["showTitle"]
+        self.recordingState = recording_json["recordingState"]
         if "seasonNumber" in recording_json:
             self.seasonNumber = recording_json["seasonNumber"]
         if "episodeNumber" in recording_json:
             self.episodeNumber = recording_json["episodeNumber"]
 
 class LGHorizonRecordingShow:
-    """Represent a recorderd show."""
-
-    title: str
-    showId: str
-    channelId: str
-    image: str
-    children: List[LGHorizonRecordingSingle] = []
-    episode_count: int
-
-    def __init__(self, recording_json):
-        """Init recorder show."""
-        self.showId = recording_json["showId"]
-        self.title = recording_json["title"]
-        self.image = recording_json["poster"]["url"]
-        self.episode_count = recording_json["noOfEpisodes"]
-        
-
-    def append_child(self, season_recording: LGHorizonRecordingSingle):
-        """Append child."""
-        self.children.append(season_recording)
-
-class LGHorizonRecordingSeason:
-    """Represent a recorderd show."""
-
-    title: str
-    Id: str
-    channelId: str
-    image: str
-    children: List[LGHorizonRecordingSingle] = []
-    episode_count: int
+    """Represents a single recording."""
+    
+    episodeId: str = None
+    showTitle:str = None
+    seasonNumber: int = None
+    episodeNumber: int = None
+    recordingState:str = None
 
     def __init__(self, recording_json):
-        """Init recorder show."""
-        self.showId = recording_json["Id"]
-        self.title = recording_json["title"]
-        self.image = recording_json["poster"]["url"]
-        self.episode_count = recording_json["noOfEpisodes"]
-        
+        """Init the single recording."""
+        self.episodeId = recording_json["episodeId"]
+        self.showTitle = recording_json["showTitle"]
+        self.recordingState = recording_json["recordingState"]
+        if "seasonNumber" in recording_json:
+            self.seasonNumber = recording_json["seasonNumber"]
+        if "episodeNumber" in recording_json:
+            self.episodeNumber = recording_json["episodeNumber"]
 
-    def append_child(self, season_recording: LGHorizonRecordingSingle):
-        """Append child."""
-        self.children.append(season_recording)       
+class LGHorizonRecordingListSeasonShow(LGHorizonBaseRecording):
+    showId:str = None
+    def __init__(self, recording_season_json):
+        """Init the single recording."""
+        
+        LGHorizonBaseRecording.__init__(
+            self,
+            recording_season_json["id"],
+            recording_season_json["title"],
+            recording_season_json["poster"]["url"],
+            recording_season_json["channelId"],
+            recording_season_json["type"]
+            )
+        if self.type == RECORDING_TYPE_SEASON:
+            self.showId = recording_season_json["showId"]
+        else:
+            self.showId = recording_season_json["id"]
 
 class LGHorizonVod:
     title:str = None

@@ -14,7 +14,12 @@ from .models import (
     LGHorizonReplayEvent,
     LGHorizonRecordingSingle,
     LGHorizonVod,
-    LGHorizonApp)
+    LGHorizonApp,
+    LGHorizonBaseRecording,
+    LGHorizonRecordingListSeasonShow,
+    LGHorizonRecordingEpisode,
+    LGHorizonRecordingShow
+    )
 
 from .const import (
     COUNTRY_SETTINGS,
@@ -22,9 +27,11 @@ from .const import (
     BOX_PLAY_STATE_CHANNEL,
     BOX_PLAY_STATE_DVR,
     BOX_PLAY_STATE_REPLAY,
-    BOX_PLAY_STATE_APP,
-    BOX_PLAY_STATE_VOD)
-from typing import Any, Dict
+    BOX_PLAY_STATE_VOD,
+    RECORDING_TYPE_SINGLE,
+    RECORDING_TYPE_SEASON,
+    RECORDING_TYPE_SHOW)
+from typing import Any, Dict, List
 
 _logger = logging.getLogger(__name__)
 _supported_platforms = ["EOS", "EOS2", "HORIZON", "APOLLO"]
@@ -204,19 +211,19 @@ class LGHorizonApi:
                 BOX_PLAY_STATE_REPLAY
                 ):
                 eventId = state_source["eventId"]
-                raw_replay_event = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/replayEvent/{eventId}?returnLinearContent=true&language=en")
+                raw_replay_event = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/replayEvent/{eventId}?returnLinearContent=true&language={self._country_settings['language']}")
                 replayEvent = LGHorizonReplayEvent(raw_replay_event)
                 channel = self._channels[replayEvent.channelId]
                 self.settop_boxes[deviceId].update_with_replay_event(source_type, replayEvent, channel)
             elif source_type == BOX_PLAY_STATE_DVR:
                 recordingId = state_source["recordingId"]
-                raw_recording = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/details/single/{recordingId}?profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&language=en")
+                raw_recording = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/details/single/{recordingId}?profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&language={self._country_settings['language']}")
                 recording = LGHorizonRecordingSingle(raw_recording)
                 channel = self._channels[recording.channelId]
                 self.settop_boxes[deviceId].update_with_recording(source_type, recording, channel)
             elif source_type == BOX_PLAY_STATE_VOD:
                 titleId = state_source["titleId"]
-                raw_vod = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/vod-service/v2/detailscreen/{titleId}?language=en&profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&cityId={self._customer.cityId}")
+                raw_vod = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/vod-service/v2/detailscreen/{titleId}?language={self._country_settings['language']}&profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&cityId={self._customer.cityId}")
                 vod = LGHorizonVod(raw_vod)
                 self.settop_boxes[deviceId].update_with_vod(source_type, vod)
         elif uiStatus == "apps":
@@ -262,7 +269,7 @@ class LGHorizonApi:
             
     def _get_channels(self):
         _logger.debug("Retrieving channels...")
-        channels_result = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/channels?cityId={self._customer.cityId}&language=en&productClass=Orion-DASH")
+        channels_result = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/channels?cityId={self._customer.cityId}&language={self._country_settings['language']}&productClass=Orion-DASH")
         for channel in channels_result:
             channel_id = channel["id"]
             self._channels[channel_id] = LGHorizonChannel(channel)
@@ -270,7 +277,7 @@ class LGHorizonApi:
 
     def _get_replay_event(self, listingId) -> Any: 
         """Get listing."""
-        response = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/replayEvent/{listingId}?returnLinearContent=true&language=en")
+        response = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/replayEvent/{listingId}?returnLinearContent=true&language={self._country_settings['language']}")
         return response
 
     def  get_recording_capacity(self) -> int:
@@ -284,4 +291,25 @@ class LGHorizonApi:
             self.recording_capacity = round(capacity)
             return self.recording_capacity
         except:
-            return None   
+            return None
+    
+    def get_recordings(self) -> List[LGHorizonBaseRecording]:
+        recording_content = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/recordings?sort=time&sortOrder=desc&language={self._country_settings['language']}")
+        recordings= []
+        for recording_data_item in recording_content['data']:
+            type = recording_data_item['type']
+            if type == RECORDING_TYPE_SINGLE:
+                recordings.append(LGHorizonRecordingSingle(recording_data_item))
+            elif type in (RECORDING_TYPE_SEASON, RECORDING_TYPE_SHOW):
+                recordings.append(LGHorizonRecordingListSeasonShow(recording_data_item))
+        return recordings
+
+    def get_recording_show(self, showId:str) -> list[LGHorizonRecordingSingle]:
+        show_recording_content = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/episodes/shows/{showId}?source=recording&language=nl&sort=time&sortOrder=asc")
+        recordings = []
+        for item in show_recording_content["data"]:
+            if item['source'] == 'show':
+                recordings.append(LGHorizonRecordingShow(item))
+            else:
+                recordings.append(LGHorizonRecordingEpisode(item))
+        return recordings
