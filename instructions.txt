@@ -1,4 +1,4 @@
-install-local: python3 -m pip install -e .
+install-local: python3 -m pip install --upgrade -e .
 
 tag:    git tag -a v0.1.4 -m "v0.1.4"
         git push origin v0.1.4

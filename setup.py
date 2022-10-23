@@ -41,7 +41,7 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "Topic :: Software Development :: Libraries :: Python Modules",
     ],
-    python_requires=">=3.6",
+    python_requires=">=3.9",
     zip_safe=False,
     use_scm_version=True,
     setup_requires=['setuptools_scm']
