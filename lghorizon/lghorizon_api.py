@@ -46,7 +46,7 @@ class LGHorizonApi:
     _mqttClient: LGHorizonMqttClient = None
     _channels: Dict[str, LGHorizonChannel] = {}
     _country_settings = None
-    recording_capacity:int = 0
+    recording_capacity:int = None
 
     def __init__(self, username: str, password: str, country_code: str = "nl") -> None:
         """Create LGHorizon API."""
@@ -284,14 +284,15 @@ class LGHorizonApi:
     def  get_recording_capacity(self) -> int:
         """Returns remaining recording capacity"""
         try:
-            content = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/quota")
-            if not "quota" in content:
+            quota_content = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/quota")
+            if not "quota" in quota_content and not "occupied" in quota_content:
+                _logger.error("Unable to fetch recording capacity...")
                 return None
-            quota = content["quota"]
-            capacity =  (quota["occupied"] / quota["quota"]) * 100
+            capacity =  (quota_content["occupied"] / quota_content["quota"]) * 100
             self.recording_capacity = round(capacity)
             return self.recording_capacity
         except:
+            _logger.error("Unable to fetch recording capacity...")
             return None
     
     def get_recordings(self) -> List[LGHorizonBaseRecording]:
