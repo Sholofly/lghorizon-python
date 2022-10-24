@@ -46,6 +46,7 @@ class LGHorizonApi:
     _mqttClient: LGHorizonMqttClient = None
     _channels: Dict[str, LGHorizonChannel] = {}
     _country_settings = None
+    recording_capacity:int = 0
 
     def __init__(self, username: str, password: str, country_code: str = "nl") -> None:
         """Create LGHorizon API."""
