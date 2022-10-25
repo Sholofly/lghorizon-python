@@ -3,7 +3,7 @@ import logging
 import json
 from .exceptions import LGHorizonApiUnauthorizedError, LGHorizonApiConnectionError
 import backoff
-from requests import Session
+from requests import Session, exceptions as request_exceptions
 import re
 from .models import (
     LGHorizonAuth, 
@@ -39,7 +39,7 @@ _supported_platforms = ["EOS", "EOS2", "HORIZON", "APOLLO"]
 class LGHorizonApi:
     """Main class for handling connections with LGHorizon Settop boxes."""
 
-    _auth: LGHorizonAuth = None
+    _auth: LGHorizonAuth = LGHorizonAuth()
     _session: Session = None
     settop_boxes: Dict[str, LGHorizonBox] = {}
     _customer: LGHorizonCustomer = None
@@ -87,7 +87,7 @@ class LGHorizonApi:
             else:
                 raise LGHorizonApiConnectionError("Unknown connection error")
 
-        self._auth = LGHorizonAuth(auth_response.json())
+        self._auth.fill(auth_response.json())
         _logger.debug("Authorization succeeded")
 
     def authorize_sso(self):
@@ -146,7 +146,7 @@ class LGHorizonApi:
                 "content-type":"application/json",
             }
             post_result = login_session.post(auth_url, json.dumps(new_payload), headers = headers)
-            self._auth = LGHorizonAuth(post_result.json())
+            self._auth.fill(post_result.json())
             self._session.cookies["ACCESSTOKEN"] = self._auth.accessToken
         except Exception as ex:
             pass 
@@ -234,18 +234,17 @@ class LGHorizonApi:
     @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger)
     def _do_api_call(self, url:str, tries:int = 0) -> str:
         _logger.debug(f"Executing API call to {url}")
-        if tries > 3:
-            raise LGHorizonApiConnectionError("Max retries reached.")
-        api_response = self._session.get(url)
-        if api_response.ok:
-            tries = 0
-            return api_response.json()
-        elif api_response.status_code == 403:
+        try:
+            api_response = self._session.get(url)
+            api_response.raise_for_status()
+        except request_exceptions.HTTPError as httpEx:
             self._authorize()
-            tries += 1
-            self._do_api_call(url, tries)
-        else:
-            raise LGHorizonApiConnectionError(f"Unable to call {url}. API response:{api_response.status_code} - {api_response.json()}")
+            raise LGHorizonApiConnectionError(f"Unable to call {url}. Error:{str(httpEx)}")
+        except Exception as ex:
+            self._authorize()
+            raise LGHorizonApiConnectionError(f"Unable to call {url}. Error:{str(ex)}")
+        return api_response.json()
+       
 
     def _register_customer_and_boxes(self):
         _logger.debug("Get personalisation info:")

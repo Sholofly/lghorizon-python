@@ -38,8 +38,11 @@ class LGHorizonAuth:
     username: str
     mqttToken: str = None
 
-    def __init__(self, auth_json:str):
+    def __init__(self):
         """Initialize a session."""
+        pass
+    
+    def fill(self, auth_json:str)-> None:
         self.householdId = auth_json["householdId"]
         self.accessToken = auth_json["accessToken"]
         self.refreshToken = auth_json["refreshToken"]
@@ -272,7 +275,7 @@ class LGHorizonMqttClient:
 
     def __init__(self, auth:LGHorizonAuth, country_settings:Dict[str,Any], on_connected_callback:Callable = None, on_message_callback:Callable[[str],None] = None):
         self._auth = auth
-        self._brokerUrl = "obomsg.prod.nl.horizon.tv"
+        self._brokerUrl = country_settings["mqtt_url"]
         self.clientId = make_id()
         self._mqtt_client = mqtt.Client(self.clientId, transport="websockets")
         self._mqtt_client.username_pw_set(self._auth.householdId, self._auth.mqttToken)

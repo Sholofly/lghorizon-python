@@ -41,7 +41,7 @@ COUNTRY_SETTINGS = {
     "nl": {
         "api_url": "https://prod.spark.ziggogo.tv",
         "personalization_url_format": "https://prod.spark.ziggogo.tv/nld/web/personalization-service/v1/customer/{household_id}/devices",
-        "mqtt_url": "wss://obomsg.prod.nl.horizon.tv/mqtt",
+        "mqtt_url": "obomsg.prod.nl.horizon.tv",
         "use_oauth": False,
         "channels": [
             {
@@ -144,7 +144,7 @@ COUNTRY_SETTINGS = {
     "at": {
         "api_url": "https://prod.spark.magentatv.at",
         "personalization_url_format": "https://prod.spark.magentatv.at/deu/web/personalization-service/v1/customer/{householdId}/devices",
-        "mqtt_url": "obomsg.prod.at.horizon.tv/mqtt",
+        "mqtt_url": "obomsg.prod.at.horizon.tv",
         "use_oauth": False,
         "channels": [],
         "language":"de"
@@ -178,7 +178,7 @@ COUNTRY_SETTINGS = {
     "ie": {
         "api_url": "https://prod.spark.virginmediatv.ie",
         "personalization_url_format": "https://prod.spark.virginmediatv.ie/eng/web/personalization-service/v1/customer/{householdId}/devices",
-        "mqtt_url": "obomsg.prod.ie.horizon.tv/mqtt",
+        "mqtt_url": "obomsg.prod.ie.horizon.tv",
         "use_oauth": False,
         "channels": [],
         "language":"en"
