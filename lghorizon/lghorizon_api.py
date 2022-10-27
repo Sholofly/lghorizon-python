@@ -1,6 +1,7 @@
 """Python client for LGHorizon."""
 import logging
 import json
+import sys, traceback
 from .exceptions import LGHorizonApiUnauthorizedError, LGHorizonApiConnectionError
 import backoff
 from requests import Session, exceptions as request_exceptions
@@ -190,7 +191,9 @@ class LGHorizonApi:
                     self._handle_box_update(deviceId, message)
             except Exception as ex:
                 _logger.error("Could not handle status message")
-                _logger.error(str(ex))
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                _logger.error(f"Full message: {str(message)}")
+                _logger.error(repr(traceback.format_exception(exc_value)))
                 self.settop_boxes[deviceId].playing_info.reset()
                 self.settop_boxes[deviceId].playing_info.set_paused(False)
 
@@ -233,7 +236,7 @@ class LGHorizonApi:
 
     @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger)
     def _do_api_call(self, url:str, tries:int = 0) -> str:
-        _logger.debug(f"Executing API call to {url}")
+        _logger.info(f"Executing API call to {url}")
         try:
             api_response = self._session.get(url)
             api_response.raise_for_status()
@@ -243,18 +246,21 @@ class LGHorizonApi:
         except Exception as ex:
             self._authorize()
             raise LGHorizonApiConnectionError(f"Unable to call {url}. Error:{str(ex)}")
-        return api_response.json()
+        json_response = api_response.json()
+        _logger.debug(f"Result API call: {json_response}")
+        return json_response
        
 
     def _register_customer_and_boxes(self):
-        _logger.debug("Get personalisation info:")
+        _logger.info("Get personalisation info...")
         personalisation_result = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/personalization-service/v1/customer/{self._auth.householdId}?with=profiles%2Cdevices")
-        _logger.debug(personalisation_result)
+        _logger.debug(f"Personalisation result: {personalisation_result}")
         self._customer = LGHorizonCustomer(personalisation_result)
         self._get_channels()
-        _logger.debug("Registering boxes")
         if not "assignedDevices" in personalisation_result:
+            _logger.warning("No boxes found.")
             return
+        _logger.info("Registering boxes")
         for device in personalisation_result["assignedDevices"]:
             platform_type = device["platformType"]
             if not platform_type in _supported_platforms:
@@ -265,36 +271,41 @@ class LGHorizonApi:
                 platformType = None
             box = LGHorizonBox(device, platformType, self._mqttClient,self._auth, self._channels)
             self.settop_boxes[box.deviceId] = box
-            _logger.debug(f"Box {box.deviceId} registered...")
+            _logger.info(f"Box {box.deviceId} registered...")
             
     def _get_channels(self):
-        _logger.debug("Retrieving channels...")
+        _logger.info("Retrieving channels...")
         channels_result = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/channels?cityId={self._customer.cityId}&language={self._country_settings['language']}&productClass=Orion-DASH")
         for channel in channels_result:
             channel_id = channel["id"]
             self._channels[channel_id] = LGHorizonChannel(channel)
-        _logger.debug(f"{len(self._channels)} retrieved.")
+        _logger.info(f"{len(self._channels)} retrieved.")
 
     def _get_replay_event(self, listingId) -> Any: 
         """Get listing."""
+        _logger.info("Retrieving replay event details...")
         response = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/replayEvent/{listingId}?returnLinearContent=true&language={self._country_settings['language']}")
+        _logger.info("Replay event details retrieved")
         return response
 
     def  get_recording_capacity(self) -> int:
         """Returns remaining recording capacity"""
         try:
+            _logger.info("Retrieving recordingcapacity...")
             quota_content = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/quota")
             if not "quota" in quota_content and not "occupied" in quota_content:
                 _logger.error("Unable to fetch recording capacity...")
                 return None
             capacity =  (quota_content["occupied"] / quota_content["quota"]) * 100
             self.recording_capacity = round(capacity)
+            _logger.debug(f"Remaining recordingcapacity {self.recording_capacity}%")
             return self.recording_capacity
         except:
             _logger.error("Unable to fetch recording capacity...")
             return None
     
     def get_recordings(self) -> List[LGHorizonBaseRecording]:
+        _logger.info("Retrieving recordings...")
         recording_content = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/recordings?sort=time&sortOrder=desc&language={self._country_settings['language']}")
         recordings= []
         for recording_data_item in recording_content['data']:
@@ -303,9 +314,11 @@ class LGHorizonApi:
                 recordings.append(LGHorizonRecordingSingle(recording_data_item))
             elif type in (RECORDING_TYPE_SEASON, RECORDING_TYPE_SHOW):
                 recordings.append(LGHorizonRecordingListSeasonShow(recording_data_item))
+        _logger.info(F"{len(recordings)} recordings retrieved...")
         return recordings
 
     def get_recording_show(self, showId:str) -> list[LGHorizonRecordingSingle]:
+        _logger.info("Retrieving show recordings...")
         show_recording_content = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/episodes/shows/{showId}?source=recording&language=nl&sort=time&sortOrder=asc")
         recordings = []
         for item in show_recording_content["data"]:
@@ -313,4 +326,5 @@ class LGHorizonApi:
                 recordings.append(LGHorizonRecordingShow(item))
             else:
                 recordings.append(LGHorizonRecordingEpisode(item))
+        _logger.info(F"{len(recordings)} showrecordings retrieved...")
         return recordings
