@@ -332,7 +332,7 @@ class LGHorizonBox:
     hashedCPEId:str = None
     deviceFriendlyName:str = None
     state: str = None
-    playing_info: LGHorizonPlayingInfo = LGHorizonPlayingInfo()
+    playing_info: LGHorizonPlayingInfo = None
     manufacturer:str = None
     model: str = None
     
@@ -349,6 +349,7 @@ class LGHorizonBox:
         self._mqtt_client = mqtt_client
         self._auth = auth
         self._channels = channels
+        self.playing_info = LGHorizonPlayingInfo()
         if platform_type:
             self.manufacturer = platform_type["manufacturer"]
             self.model = platform_type["model"]
