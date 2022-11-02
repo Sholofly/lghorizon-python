@@ -411,7 +411,7 @@ class LGHorizonBox:
     def update_with_app(self, source_type: str, app:LGHorizonApp) -> None:
         self.playing_info.set_source_type(source_type)
         self.playing_info.set_channel(None)
-        self.playing_info.set_channel_title(None)
+        self.playing_info.set_channel_title(app.title)
         self.playing_info.set_title(app.title)
         self.playing_info.set_image(app.image)
         self._trigger_callback()
