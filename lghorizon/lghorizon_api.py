@@ -47,6 +47,7 @@ class LGHorizonApi:
     _mqttClient: LGHorizonMqttClient = None
     _channels: Dict[str, LGHorizonChannel] = {}
     _country_settings = None
+    _country_code:str = None
     recording_capacity:int = None
 
     def __init__(self, username: str, password: str, country_code: str = "nl") -> None:
@@ -55,11 +56,14 @@ class LGHorizonApi:
         self.password = password
         self._session = Session()
         self._country_settings = COUNTRY_SETTINGS[country_code]
+        self._country_code = country_code
 
     @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger)
     def _authorize(self) -> None:
-        if self._country_settings["use_oauth"]:
-            self.authorize_sso()
+        if self._country_code == 'be-nl':
+            self.authorize_telenet()
+        elif self._country_code == 'gb':
+            self.authorize_gb()
         else:
             self._authorize_default()
 
@@ -91,7 +95,80 @@ class LGHorizonApi:
         self._auth.fill(auth_response.json())
         _logger.debug("Authorization succeeded")
 
-    def authorize_sso(self):
+    def authorize_gb(self):
+
+        try:
+            login_session = Session()
+####################################
+            _logger.debug("Step 1 - Get Authorization data")
+            auth_url = f"{self._country_settings['api_url']}/authorization"
+            auth_response = login_session.get(auth_url)
+            if not auth_response.ok:
+                raise LGHorizonApiConnectionError("Can't connect to authorization URL")
+            auth_response_json = auth_response.json()
+            auth_session = auth_response_json["session"]
+            auth_state = auth_session["state"]
+            authorizationUri = auth_session["authorizationUri"]
+            authValidtyToken = auth_session["validityToken"]
+
+####################################
+            _logger.debug("Step 2 - Get Authorization cookie")
+
+            auth_cookie_response = login_session.get(authorizationUri)
+            if not auth_cookie_response.ok:
+                raise LGHorizonApiConnectionError("Can't connect to authorization URL")
+####################################       
+            _logger.debug("Step 3 - Login")
+            payload = {
+                "username": self.username,
+                "credential": self.password
+            }
+            headers = {
+                "accept": "application/json; charset=UTF-8, */*",
+            },
+            
+            login_response = login_session.post(
+                self._country_settings["oauth_url"], json.dumps(payload), headers="headers", allow_redirects=False
+            )
+            if not login_response.ok:
+                raise LGHorizonApiConnectionError("Can't connect to authorization URL")
+            
+            if not "x-redirect-location" in login_response.headers:
+                raise LGHorizonApiConnectionError("No redirect location in headers.")
+            
+            redirect_url = login_response.headers["x-redirect-location"]
+####################################
+            _logger.debug("Step 4 - Follow redirect")
+            redirect_response = login_session.get(redirect_url, allow_redirects=False)
+            if not "location" in success_url:
+                raise LGHorizonApiConnectionError("No success url in redirect.")
+ ####################################           
+            _logger.debug("Step 5 - Extrect auth code")
+            success_url = redirect_response.headers["location"]
+            codeMatches = re.findall(r"code=(.*)&", success_url)
+            if len(codeMatches) == 0:
+                raise LGHorizonApiConnectionError("No code in redirect headers")
+            authorizationCode = codeMatches[0]
+####################################
+            _logger.debug("Step 6 - Post auth data with valid code")
+            new_payload = {
+                "authorizationGrant":{
+                    "authorizationCode":authorizationCode,
+                    "validityToken":authValidtyToken,
+                    "state": auth_state
+                }
+            }
+            headers = {
+                "content-type":"application/json",
+            }
+            post_result = login_session.post(auth_url, json.dumps(new_payload), headers = headers)
+            self._auth.fill(post_result.json())
+            self._session.cookies["ACCESSTOKEN"] = self._auth.accessToken
+####################################          
+        except Exception as ex:
+            pass 
+
+    def authorize_telenet(self):
 
         try:
             login_session = Session()
@@ -250,7 +327,6 @@ class LGHorizonApi:
         _logger.debug(f"Result API call: {json_response}")
         return json_response
        
-
     def _register_customer_and_boxes(self):
         _logger.info("Get personalisation info...")
         personalisation_result = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/personalization-service/v1/customer/{self._auth.householdId}?with=profiles%2Cdevices")

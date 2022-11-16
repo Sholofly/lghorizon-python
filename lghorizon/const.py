@@ -149,19 +149,13 @@ COUNTRY_SETTINGS = {
         "channels": [],
         "language":"de"
     },
-    # "gb": {
-    #     "api_url": "https://web-api-prod-obo.horizon.tv/oesp/v4/GB/eng/web/",
-    #     "personalization_url_format": "https://prod.spark.virginmedia.com/eng/web/personalization-service/v1/customer/{household_id}/devices",
-    #     "mqtt_url": "obomsg.prod.gb.horizon.tv",
-    #     "use_oauth": True,
-    #     "oauth_username_fieldname": "username",
-    #     "oauth_password_fieldname": "credential",
-    #     "oauth_add_accept_header": True,
-    #     "oauth_url": "https://id.virginmedia.com/rest/v40/session/start?protocol=oidc&rememberMe=true",
-    #     "oauth_quote_login": True,
-    #     "oauth_redirect_header": "x-redirect-location",
-    #     "channels": [],
-    # },
+    "gb": {
+        "api_url": "https://web-api-prod-obo.horizon.tv/oesp/v4/GB/eng/web",
+        "personalization_url_format": "https://prod.spark.virginmedia.com/eng/web/personalization-service/v1/customer/{household_id}/devices",
+        "mqtt_url": "obomsg.prod.gb.horizon.tv",
+        "oauth_url": "https://id.virginmedia.com/rest/v40/session/start?protocol=oidc&rememberMe=true",
+        "channels": [],
+    },
     # "gb-preprod": {
     #     "api_url": "https://web-api-preprod-obo.horizon.tv/oesp/v4/GB/eng/web/",
     #     "personalization_url_format": "https://preprod.spark.virginmedia.com/eng/web/personalization-service/v1/customer/{household_id}/devices",
