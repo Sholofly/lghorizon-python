@@ -49,6 +49,7 @@ class LGHorizonApi:
     _country_settings = None
     _country_code:str = None
     recording_capacity:int = None
+    _entitlements:List[str] = []
 
     def __init__(self, username: str, password: str, country_code: str = "nl") -> None:
         """Create LGHorizon API."""
@@ -350,9 +351,15 @@ class LGHorizonApi:
             _logger.info(f"Box {box.deviceId} registered...")
             
     def _get_channels(self):
+        self._update_entitlements()
         _logger.info("Retrieving channels...")
         channels_result = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/channels?cityId={self._customer.cityId}&language={self._country_settings['language']}&productClass=Orion-DASH")
         for channel in channels_result:
+            if "isHidden" in channel and channel["isHidden"]:
+                continue
+            common_entitlements = list(set(self._entitlements) & set(channel["linearProducts"]))
+            if len(common_entitlements) == 0:
+                continue
             channel_id = channel["id"]
             self._channels[channel_id] = LGHorizonChannel(channel)
         _logger.info(f"{len(self._channels)} retrieved.")
@@ -404,3 +411,10 @@ class LGHorizonApi:
                 recordings.append(LGHorizonRecordingEpisode(item))
         _logger.info(F"{len(recordings)} showrecordings retrieved...")
         return recordings
+    
+    def _update_entitlements(self) -> None:
+        _logger.info("Retrieving entitlements...")
+        entitlements_json = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/purchase-service/v2/customers/{self._auth.householdId}/entitlements?enableDaypass=true")
+        self._entitlements.clear()
+        for entitlement in entitlements_json["entitlements"]:
+            self._entitlements.append(entitlement["id"])
