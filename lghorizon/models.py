@@ -112,7 +112,10 @@ class LGHorizonChannel:
         self.id = channel_json["id"]
         self.title = channel_json["name"]
         self.stream_image = self.get_stream_image(channel_json)
-        self.logo_image = channel_json["logo"]["focused"]
+        if "logo" in channel_json and "focused" in channel_json["logo"]:
+            self.logo_image = channel_json["logo"]["focused"]
+        else:
+             self.logo_image = ""
         self.channel_number = channel_json["logicalChannelNumber"]
     
     def get_stream_image(self, channel_json)->str:
@@ -121,9 +124,8 @@ class LGHorizonChannel:
             return image_stream["full"]
         if "small" in image_stream:
             return image_stream["small"]
-        logo = channel_json["logo"]
-        if "focus" in logo:
-            return logo["focus"]
+        if "logo" in channel_json and "focused" in channel_json["logo"]:
+            return channel_json["logo"]["focused"]
         return ""
 
 class LGHorizonReplayEvent:
