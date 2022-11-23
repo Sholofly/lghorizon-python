@@ -146,7 +146,6 @@ class LGHorizonReplayEvent:
         if "seasonNumber" in raw_json:
             self.seasonNumber = raw_json["seasonNumber"]
 
-
 class LGHorizonBaseRecording:
     
     id:str = None
@@ -320,7 +319,7 @@ class LGHorizonMqttClient:
             self._on_message_callback(jsonPayload)
 
     def publish_message(self, topic:str, json_payload:str) -> None:
-        self._mqtt_client.publish(topic, json_payload)
+        self._mqtt_client.publish(topic, json_payload, qos = 2)
         
     def disconnect(self) -> None:
         if self._mqtt_client.is_connected:
