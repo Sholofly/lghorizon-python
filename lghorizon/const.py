@@ -150,7 +150,7 @@ COUNTRY_SETTINGS = {
         "language":"de"
     },
     "gb": {
-        "api_url": "https://web-api-prod-obo.horizon.tv/oesp/v4/GB/eng/web",
+        "api_url": "https://prod.spark.virginmedia.com",
         "personalization_url_format": "https://prod.spark.virginmedia.com/eng/web/personalization-service/v1/customer/{household_id}/devices",
         "mqtt_url": "obomsg.prod.gb.horizon.tv",
         "oauth_url": "https://id.virginmedia.com/rest/v40/session/start?protocol=oidc&rememberMe=true",
