@@ -271,7 +271,7 @@ class LGHorizonApi:
                 _logger.error("Could not handle status message")
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 _logger.error(f"Full message: {str(message)}")
-                _logger.error(repr(traceback.format_exception(exc_value)))
+                _logger.error(repr(traceback.format_exception(etype=exc_type, value = exc_value, tb=exc_traceback)))
                 self.settop_boxes[deviceId].playing_info.reset()
                 self.settop_boxes[deviceId].playing_info.set_paused(False)
 
@@ -355,7 +355,7 @@ class LGHorizonApi:
         _logger.info("Retrieving channels...")
         channels_result = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/linear-service/v2/channels?cityId={self._customer.cityId}&language={self._country_settings['language']}&productClass=Orion-DASH")
         for channel in channels_result:
-            if "isHidden" in channel and channel["isHidden"]:
+            if "isRadio" in channel and channel["isRadio"]:
                 continue
             common_entitlements = list(set(self._entitlements) & set(channel["linearProducts"]))
             if len(common_entitlements) == 0:
