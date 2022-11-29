@@ -269,9 +269,7 @@ class LGHorizonApi:
                     self._handle_box_update(deviceId, message)
             except Exception as ex:
                 _logger.error("Could not handle status message")
-                exc_type, exc_value, exc_traceback = sys.exc_info()
                 _logger.error(f"Full message: {str(message)}")
-                _logger.error(repr(traceback.format_exception(etype=exc_type, value = exc_value, tb=exc_traceback)))
                 self.settop_boxes[deviceId].playing_info.reset()
                 self.settop_boxes[deviceId].playing_info.set_paused(False)
 
