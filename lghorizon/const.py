@@ -177,13 +177,24 @@ COUNTRY_SETTINGS = {
         "channels": [],
         "language":"en"
     },
-    # "pl": {
-    #     "api_url": "https://web-api-pepper.horizon.tv/oesp/v4/PL/pol/web",
-    #     "personalization_url_format": "https://prod.spark.unknown.pl/pol/web/personalization-service/v1/customer/{householdId}/devices",
-    #     "mqtt_url": "obomsg.prod.pl.horizon.tv/mqtt",
-    #     "use_oauth": False,
-    #     "channels": [],
-    # },
+    "pl": {
+        "api_url": "https://prod.spark.upctv.pl/",
+        "personalization_url_format": "https://prod.spark.upctv.pl/pol/web/personalization-service/v1/customer/{householdId}/devices",
+        "mqtt_url": "obomsg.prod.pl.horizon.tv",
+        "use_oauth": False,
+        "channels": [],
+        "language":"pl",
+        "platform_types":{
+            "EOS":{
+                "manufacturer": "Arris",
+                "model": "DCX960"
+            },
+            "APOLLO":{
+                "manufacturer": "Arris",
+                "model": "VIP5002W"
+            }
+        },
+    },
     # "hu": {
     #     "api_url": "https://web-api-pepper.horizon.tv/oesp/v4/HU/HUN/web",
     #     "personalization_url_format": "https://prod.spark.upctv.hu/HUN/web/personalization-service/v1/customer/{householdId}/devices",  # guessed
