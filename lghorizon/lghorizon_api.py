@@ -40,16 +40,16 @@ _supported_platforms = ["EOS", "EOS2", "HORIZON", "APOLLO"]
 class LGHorizonApi:
     """Main class for handling connections with LGHorizon Settop boxes."""
 
-    _auth: LGHorizonAuth = LGHorizonAuth()
+    _auth: LGHorizonAuth = None
     _session: Session = None
-    settop_boxes: Dict[str, LGHorizonBox] = {}
+    settop_boxes: Dict[str, LGHorizonBox] = None
     _customer: LGHorizonCustomer = None
     _mqttClient: LGHorizonMqttClient = None
-    _channels: Dict[str, LGHorizonChannel] = {}
+    _channels: Dict[str, LGHorizonChannel] = None
     _country_settings = None
     _country_code:str = None
     recording_capacity:int = None
-    _entitlements:List[str] = []
+    _entitlements:List[str] = None
 
     def __init__(self, username: str, password: str, country_code: str = "nl") -> None:
         """Create LGHorizon API."""
@@ -58,6 +58,10 @@ class LGHorizonApi:
         self._session = Session()
         self._country_settings = COUNTRY_SETTINGS[country_code]
         self._country_code = country_code
+        self._auth = LGHorizonAuth()
+        self.settop_boxes = {}
+        self._channels = {}
+        self._entitlements = []
 
     @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger)
     def _authorize(self) -> None:
