@@ -343,10 +343,6 @@ class LGHorizonApi:
         except request_exceptions.HTTPError as httpEx:
             self._authorize()
             raise LGHorizonApiConnectionError(f"Unable to call {url}. Error:{str(httpEx)}")
-        except Exception as ex:
-            self._authorize()
-            raise LGHorizonApiConnectionError(f"Unable to call {url}. Error:{str(ex)}")
-            json_response = api_response.json()
         _logger.debug(f"Result API call: {json_response}")
         return json_response
        
