@@ -104,9 +104,9 @@ class LGHorizonApi:
 
         try:
             login_session = Session()
-####################################
+    ####################################
             _logger.debug("Step 1 - Get Authorization data")
-            auth_url = f"{self._country_settings['api_url']}/authorization"
+            auth_url = f"{self._country_settings['oesp_url']}/authorization"
             auth_response = login_session.get(auth_url)
             if not auth_response.ok:
                 raise LGHorizonApiConnectionError("Can't connect to authorization URL")
@@ -114,26 +114,25 @@ class LGHorizonApi:
             auth_session = auth_response_json["session"]
             auth_state = auth_session["state"]
             authorizationUri = auth_session["authorizationUri"]
-            authValidtyToken = auth_session["validityToken"]
-
-####################################
+            authValidityToken = auth_session["validityToken"]
+    ####################################
             _logger.debug("Step 2 - Get Authorization cookie")
 
             auth_cookie_response = login_session.get(authorizationUri)
             if not auth_cookie_response.ok:
                 raise LGHorizonApiConnectionError("Can't connect to authorization URL")
-####################################       
+    ####################################       
             _logger.debug("Step 3 - Login")
             payload = {
                 "username": self.username,
                 "credential": self.password
             }
             headers = {
-                "accept": "application/json; charset=UTF-8, */*",
-            },
+                "accept": "application/json; charset=UTF-8, */*"
+            }
             
             login_response = login_session.post(
-                self._country_settings["oauth_url"], json.dumps(payload), headers="headers", allow_redirects=False
+                self._country_settings["oauth_url"], json.dumps(payload), headers=headers, allow_redirects=False
             )
             if not login_response.ok:
                 raise LGHorizonApiConnectionError("Can't connect to authorization URL")
@@ -142,36 +141,44 @@ class LGHorizonApi:
                 raise LGHorizonApiConnectionError("No redirect location in headers.")
             
             redirect_url = login_response.headers["x-redirect-location"]
-####################################
+    ####################################
             _logger.debug("Step 4 - Follow redirect")
             redirect_response = login_session.get(redirect_url, allow_redirects=False)
-            if not "location" in success_url:
+            if not "Location" in redirect_response.headers:
                 raise LGHorizonApiConnectionError("No success url in redirect.")
- ####################################           
-            _logger.debug("Step 5 - Extrect auth code")
-            success_url = redirect_response.headers["location"]
+    ####################################           
+            _logger.debug("Step 5 - Extract auth code")
+            success_url = redirect_response.headers["Location"]
             codeMatches = re.findall(r"code=(.*)&", success_url)
             if len(codeMatches) == 0:
                 raise LGHorizonApiConnectionError("No code in redirect headers")
             authorizationCode = codeMatches[0]
-####################################
+            stateMatches = re.findall(r"state=(.*)", success_url)
+            if len(codeMatches) == 0:
+                raise LGHorizonApiConnectionError("No state in redirect headers")
+            authorizationState = stateMatches[0]
+            _logger.debug(f"Auth code: {authorizationCode}, Auth state: {authorizationState}")
+    ####################################
             _logger.debug("Step 6 - Post auth data with valid code")
-            new_payload = {
+            authorization_payload = {
                 "authorizationGrant":{
                     "authorizationCode":authorizationCode,
-                    "validityToken":authValidtyToken,
-                    "state": auth_state
+                    "validityToken":authValidityToken,
+                    "state": authorizationState
                 }
             }
             headers = {
                 "content-type":"application/json",
             }
-            post_result = login_session.post(auth_url, json.dumps(new_payload), headers = headers)
-            self._auth.fill(post_result.json())
+            # VM requires the client to pass the response from /authorization verbatim to /session?token=true 
+            post_authorization_result = login_session.post(self._country_settings["oesp_url"]+"/authorization", json.dumps(authorization_payload), headers=headers)
+            post_session_result = login_session.post(self._country_settings["oesp_url"]+"/session?token=true", json.dumps(post_authorization_result.json()), headers=headers)
+
+            self._auth.fill(post_session_result.json())
             self._session.cookies["ACCESSTOKEN"] = self._auth.accessToken
-####################################          
+    ####################################          
         except Exception as ex:
-            pass 
+            pass
 
     def authorize_telenet(self):
 
@@ -240,10 +247,22 @@ class LGHorizonApi:
         self._auth.mqttToken = mqtt_response["token"]
         _logger.debug(f"MQTT token: {self._auth.mqttToken}")
 
+    def _obtain_mqtt_token_gb(self):
+        _logger.debug("Obtain Virgin GB mqtt token...")
+        self._session.headers["x-oesp-token"] = self._auth.accessToken
+        self._session.headers["x-oesp-username"] = self._auth.username
+
+        mqtt_response = self._do_api_call(f"{self._country_settings['oesp_url']}/tokens/jwt")
+        self._auth.mqttToken = mqtt_response["token"]
+        _logger.debug(f"MQTT token: {self._auth.mqttToken}")
+
     def connect(self) -> None:
         _logger.debug("Connect to API")
         self._authorize()
-        self._obtain_mqtt_token()
+        if self._country_code == "gb":
+            self._obtain_mqtt_token_gb()
+        else:
+            self._obtain_mqtt_token()
         self._mqttClient = LGHorizonMqttClient(self._auth, self._country_settings, self._on_mqtt_connected, self._on_mqtt_message)
         self._register_customer_and_boxes()
         self._mqttClient.connect()
@@ -320,13 +339,10 @@ class LGHorizonApi:
         try:
             api_response = self._session.get(url)
             api_response.raise_for_status()
+            json_response = api_response.json()
         except request_exceptions.HTTPError as httpEx:
             self._authorize()
             raise LGHorizonApiConnectionError(f"Unable to call {url}. Error:{str(httpEx)}")
-        except Exception as ex:
-            self._authorize()
-            raise LGHorizonApiConnectionError(f"Unable to call {url}. Error:{str(ex)}")
-        json_response = api_response.json()
         _logger.debug(f"Result API call: {json_response}")
         return json_response
        

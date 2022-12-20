@@ -42,12 +42,17 @@ class LGHorizonAuth:
         """Initialize a session."""
         pass
     
-    def fill(self, auth_json:str)-> None:
+    def fill(self, auth_json)-> None:
         self.householdId = auth_json["householdId"]
         self.accessToken = auth_json["accessToken"]
         self.refreshToken = auth_json["refreshToken"]
-        self.refreshTokenExpiry = datetime.fromtimestamp(auth_json["refreshTokenExpiry"])
         self.username = auth_json["username"]
+        try:
+            self.refreshTokenExpiry = datetime.fromtimestamp(auth_json["refreshTokenExpiry"])
+        except ValueError:
+            # VM uses milliseconds for the expiry time; if the year is too high to be valid, it assumes it's milliseconds and divides it
+            self.refreshTokenExpiry = datetime.fromtimestamp(auth_json["refreshTokenExpiry"]//1000)
+
     
     def is_expired(self) -> bool:
         return self.refreshTokenExpiry
