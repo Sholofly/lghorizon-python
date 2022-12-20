@@ -170,6 +170,7 @@ class LGHorizonApi:
             headers = {
                 "content-type":"application/json",
             }
+            # VM requires the client to pass the response from /authorization verbatim to /session?token=true 
             post_authorization_result = login_session.post(self._country_settings["oesp_url"]+"/authorization", json.dumps(authorization_payload), headers=headers)
             post_session_result = login_session.post(self._country_settings["oesp_url"]+"/session?token=true", json.dumps(post_authorization_result.json()), headers=headers)
 

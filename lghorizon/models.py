@@ -50,6 +50,7 @@ class LGHorizonAuth:
         try:
             self.refreshTokenExpiry = datetime.fromtimestamp(auth_json["refreshTokenExpiry"])
         except ValueError:
+            # VM uses milliseconds for the expiry time; if the year is too high to be valid, it assumes it's milliseconds and divides it
             self.refreshTokenExpiry = datetime.fromtimestamp(auth_json["refreshTokenExpiry"]//1000)
 
     
