@@ -155,6 +155,8 @@ COUNTRY_SETTINGS = {
         "mqtt_url": "obomsg.prod.gb.horizon.tv",
         "oauth_url": "https://id.virginmedia.com/rest/v40/session/start?protocol=oidc&rememberMe=true",
         "channels": [],
+        "oesp_url": "https://prod.oesp.virginmedia.com/oesp/v4/GB/eng/web",
+        "language": "en"
     },
     # "gb-preprod": {
     #     "api_url": "https://web-api-preprod-obo.horizon.tv/oesp/v4/GB/eng/web/",
