@@ -389,6 +389,7 @@ class LGHorizonBox:
                 self._change_callback(self.deviceId)
         else:
             self._request_settop_box_state()
+        self._request_settop_box_recording_capacity()
 
     def update_recording_capacity(self, payload) -> None:
         if not "CPE.capacity" in payload or not "used" in payload:
@@ -553,6 +554,17 @@ class LGHorizonBox:
             "source": self._mqtt_client.clientId,
         }
         self._mqtt_client.publish_message(topic, json.dumps(payload))
+
+    def _request_settop_box_recording_capacity(self) -> None:
+        """Send mqtt message to receive state from settop box."""
+        topic = f"{self._auth.householdId}/{self.deviceId}"
+        payload = {
+            "id": make_id(8),
+            "type": "CPE.capacity",
+            "source": self._mqtt_client.clientId,
+        }
+        self._mqtt_client.publish_message(topic, json.dumps(payload))
+
 
 class LGHorizonCustomer:
     customerId:str = None
