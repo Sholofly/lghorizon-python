@@ -105,6 +105,10 @@ COUNTRY_SETTINGS = {
                 "manufacturer": "Arris",
                 "model": "DCX960"
             },
+            "HORIZON":{
+                "manufacturer": "Arris",
+                "model": "DCX960"
+            },
             "EOS2":{
                 "manufacturer": "HUMAX",
                 "model": "2008C-STB-TN"
