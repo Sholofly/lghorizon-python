@@ -273,7 +273,7 @@ class LGHorizonMqttClient:
     _auth: LGHorizonAuth
     clientId: str = None
     _on_connected_callback: Callable = None
-    _on_message_callback: Callable[[str],None] = None
+    _on_message_callback: Callable[[str, str],None] = None
 
     @property
     def is_connected(self):
@@ -323,7 +323,7 @@ class LGHorizonMqttClient:
         jsonPayload = json.loads(message.payload)
         _logger.debug(f"Message: {jsonPayload}")
         if self._on_message_callback:
-            self._on_message_callback(jsonPayload)
+            self._on_message_callback(jsonPayload, message.topic)
 
     def publish_message(self, topic:str, json_payload:str) -> None:
         self._mqtt_client.publish(topic, json_payload, qos = 2)
@@ -341,6 +341,7 @@ class LGHorizonBox:
     playing_info: LGHorizonPlayingInfo = None
     manufacturer:str = None
     model: str = None
+    recording_capacity: int = None
     
     _mqtt_client:LGHorizonMqttClient
     _change_callback: Callable = None
@@ -386,6 +387,11 @@ class LGHorizonBox:
                 self._change_callback(self.deviceId)
         else:
             self._request_settop_box_state()
+
+    def update_recording_capacity(self, payload) -> None:
+        if not "CPE.capacity" in payload or not "used" in payload:
+            return
+        self.recording_capacity = payload["used"]
     
     def update_with_replay_event(self, source_type: str, event:LGHorizonReplayEvent, channel: LGHorizonChannel) -> None:
         self.playing_info.set_source_type(source_type)
