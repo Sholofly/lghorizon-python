@@ -50,8 +50,9 @@ class LGHorizonApi:
     _country_code:str = None
     recording_capacity:int = None
     _entitlements:List[str] = None
+    _identifier:str = None
 
-    def __init__(self, username: str, password: str, country_code: str = "nl") -> None:
+    def __init__(self, username: str, password: str, country_code: str = "nl", identifier:str = None) -> None:
         """Create LGHorizon API."""
         self.username = username
         self.password = password
@@ -62,6 +63,7 @@ class LGHorizonApi:
         self.settop_boxes = {}
         self._channels = {}
         self._entitlements = []
+        self._identifier = identifier
 
     @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger)
     def _authorize(self) -> None:
@@ -220,6 +222,8 @@ class LGHorizonApi:
                 raise LGHorizonApiConnectionError("Can't connect to authorization URL")
             redirect_url = login_response.headers[self._country_settings["oauth_redirect_header"]]
             
+            if not self._identifier is None:
+                redirect_url += f"&dtv_identifier={self._identifier}"
             redirect_response = login_session.get(redirect_url, allow_redirects=False)
             success_url = redirect_response.headers[self._country_settings["oauth_redirect_header"]]
             codeMatches = re.findall(r"code=(.*)&", success_url)
