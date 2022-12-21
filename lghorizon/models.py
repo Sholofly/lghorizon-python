@@ -300,6 +300,8 @@ class LGHorizonMqttClient:
             self._mqtt_client.subscribe(self._auth.householdId + "/+/status")
             self._mqtt_client.subscribe(self._auth.householdId + "/+/networkRecordings")
             self._mqtt_client.subscribe(self._auth.householdId + "/+/networkRecordings/capacity")
+            self._mqtt_client.subscribe(self._auth.householdId + "/+/localRecordings")
+            self._mqtt_client.subscribe(self._auth.householdId + "/+/localRecordings/capacity")
             self._mqtt_client.subscribe(self._auth.householdId + "/watchlistService")
             self._mqtt_client.subscribe(self._auth.householdId + "/purchaseService")
             self._mqtt_client.subscribe(self._auth.householdId + "/personalizationService")
