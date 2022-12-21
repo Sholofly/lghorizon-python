@@ -284,7 +284,7 @@ class LGHorizonApi:
         for box in self.settop_boxes.values():
             box.register_mqtt()
 
-    def _on_mqtt_message(self, message:str)-> None:
+    def _on_mqtt_message(self, message:str, topic:str)-> None:
         if "source" in message:
             deviceId = message["source"]
             if not deviceId in self.settop_boxes.keys():
@@ -299,6 +299,14 @@ class LGHorizonApi:
                 _logger.error(f"Full message: {str(message)}")
                 self.settop_boxes[deviceId].playing_info.reset()
                 self.settop_boxes[deviceId].playing_info.set_paused(False)
+        elif "CPE.capacity" in message:
+            splitted_topic = topic.split('/')
+            if len(splitted_topic) != 4:
+                return
+            deviceId = splitted_topic[1]
+            if not deviceId in self.settop_boxes.keys():
+                return
+            self.settop_boxes[deviceId].update_recording_capacity(message)
 
     def _handle_box_update(self, deviceId:str, raw_message:Any) -> None:
         statusPayload = raw_message["status"]
