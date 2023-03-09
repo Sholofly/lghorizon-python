@@ -297,8 +297,8 @@ class LGHorizonApi:
                 if "status" in message:
                     self._handle_box_update(deviceId, message)
             except Exception as ex:
-                _logger.error("Could not handle status message")
-                _logger.error(f"Full message: {str(message)}")
+                _logger.exception("Could not handle status message")
+                _logger.warning(f"Full message: {str(message)}")
                 self.settop_boxes[deviceId].playing_info.reset()
                 self.settop_boxes[deviceId].playing_info.set_paused(False)
         elif "CPE.capacity" in message:
