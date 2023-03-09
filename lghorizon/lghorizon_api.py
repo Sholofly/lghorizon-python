@@ -5,6 +5,7 @@ import sys, traceback
 from .exceptions import LGHorizonApiUnauthorizedError, LGHorizonApiConnectionError
 import backoff
 from requests import Session, exceptions as request_exceptions
+from paho.mqtt.client import WebsocketConnectionError
 import re
 from .models import (
     LGHorizonAuth, 
@@ -260,6 +261,7 @@ class LGHorizonApi:
         self._auth.mqttToken = mqtt_response["token"]
         _logger.debug(f"MQTT token: {self._auth.mqttToken}")
 
+    @backoff.on_exception(backoff.expo, BaseException, jitter=None, max_time=600, logger=_logger)
     def connect(self) -> None:
         _logger.debug("Connect to API")
         self._authorize()
