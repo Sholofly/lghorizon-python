@@ -66,6 +66,9 @@ class LGHorizonPlayingInfo:
     source_type: str = None
     paused: bool = False
     channel_title: str = None
+    duration: float = None
+    position: float = None
+    last_position_update: datetime = None
 
     def __init__(self):
         """Initialize the playing info."""
@@ -92,8 +95,20 @@ class LGHorizonPlayingInfo:
         self.image = image
 
     def set_source_type(self, source_type):
-        """Set sourfce type."""
+        """Set source type."""
         self.source_type = source_type
+    
+    def set_duration(self, duration: float):
+        """Set duration."""
+        self.duration = duration
+    
+    def set_position(self, position: float):
+        """Set position."""
+        self.position = position
+
+    def set_last_position_update(self, last_position_update:datetime):
+        """Set last position update."""
+        self.last_position_update = last_position_update
 
     def reset(self):
         self.channel_id = None
@@ -102,6 +117,9 @@ class LGHorizonPlayingInfo:
         self.source_type = None
         self.paused = False
         self.channel_title = None
+        self.duration = None
+        self.last_position_update = None
+        self.position = None
 
 class LGHorizonChannel:
     """Represent a channel."""
@@ -255,8 +273,10 @@ class LGHorizonRecordingListSeasonShow(LGHorizonBaseRecording):
 class LGHorizonVod:
     title:str = None
     image: str = None
+    duration: float = None
     def __init__(self, vod_json) -> None:
         self.title = vod_json['title']
+        self.duration = vod_json['duration']
 
 class LGHorizonApp:
     title:str = None
@@ -407,20 +427,31 @@ class LGHorizonBox:
         self.playing_info.set_image(channel.stream_image)
         self._trigger_callback()
 
-    def update_with_recording(self, source_type: str, recording:LGHorizonRecordingSingle, channel: LGHorizonChannel) -> None:
+    def update_with_recording(self, source_type: str, recording:LGHorizonRecordingSingle, channel: LGHorizonChannel, start:float, end: float, last_speed_change:float, relative_position: float) -> None:
         self.playing_info.set_source_type(source_type)
         self.playing_info.set_channel(channel.id)
         self.playing_info.set_channel_title(channel.title)
         self.playing_info.set_title(f"{recording.title}")
         self.playing_info.set_image(recording.image)
+        start_dt = datetime.fromtimestamp(start / 1000.0)
+        end_dt = datetime.fromtimestamp(end / 1000.0)
+        duration = (end_dt - start_dt).total_seconds()
+        self.playing_info.set_duration(duration)
+        self.playing_info.set_position(relative_position)
+        last_update_dt = datetime.fromtimestamp(last_speed_change / 1000.0)
+        self.playing_info.set_last_position_update(last_update_dt)
         self._trigger_callback()
     
-    def update_with_vod(self, source_type: str, vod:LGHorizonVod) -> None:
+    def update_with_vod(self, source_type: str, vod:LGHorizonVod, last_speed_change:float, relative_position: float) -> None:
         self.playing_info.set_source_type(source_type)
         self.playing_info.set_channel(None)
         self.playing_info.set_channel_title(None)
         self.playing_info.set_title(vod.title)
         self.playing_info.set_image(None)
+        self.playing_info.set_duration(vod.duration)
+        self.playing_info.set_position(relative_position)
+        last_update_dt = datetime.fromtimestamp(last_speed_change / 1000.0)
+        self.playing_info.set_last_position_update(last_update_dt)
         self._trigger_callback()
     
     def update_with_app(self, source_type: str, app:LGHorizonApp) -> None:

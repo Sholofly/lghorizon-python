@@ -334,15 +334,21 @@ class LGHorizonApi:
                 self.settop_boxes[deviceId].update_with_replay_event(source_type, replayEvent, channel)
             elif source_type == BOX_PLAY_STATE_DVR:
                 recordingId = state_source["recordingId"]
+                session_start_time = state_source["sessionStartTime"]
+                session_end_time = state_source["sessionEndTime"]
+                last_speed_change_time = playerState["lastSpeedChangeTime"]
+                relative_position = playerState["relativePosition"]
                 raw_recording = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/recording-service/customers/{self._auth.householdId}/details/single/{recordingId}?profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&language={self._country_settings['language']}")
                 recording = LGHorizonRecordingSingle(raw_recording)
                 channel = self._channels[recording.channelId]
-                self.settop_boxes[deviceId].update_with_recording(source_type, recording, channel)
+                self.settop_boxes[deviceId].update_with_recording(source_type, recording, channel,session_start_time, session_end_time, last_speed_change_time, relative_position)
             elif source_type == BOX_PLAY_STATE_VOD:
                 titleId = state_source["titleId"]
+                last_speed_change_time = playerState["lastSpeedChangeTime"]
+                relative_position = playerState["relativePosition"]
                 raw_vod = self._do_api_call(f"{self._country_settings['api_url']}/eng/web/vod-service/v2/detailscreen/{titleId}?language={self._country_settings['language']}&profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&cityId={self._customer.cityId}")
                 vod = LGHorizonVod(raw_vod)
-                self.settop_boxes[deviceId].update_with_vod(source_type, vod)
+                self.settop_boxes[deviceId].update_with_vod(source_type, vod, last_speed_change_time, relative_position)
         elif uiStatus == "apps":
             app = LGHorizonApp(statusPayload["appsState"])
             self.settop_boxes[deviceId].update_with_app('app', app)     
