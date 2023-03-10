@@ -109,6 +109,11 @@ class LGHorizonPlayingInfo:
     def set_last_position_update(self, last_position_update:datetime):
         """Set last position update."""
         self.last_position_update = last_position_update
+    
+    def reset_progress(self):
+        self.last_position_update = None
+        self.duration = None
+        self.position = None
 
     def reset(self):
         self.channel_id = None
@@ -117,9 +122,7 @@ class LGHorizonPlayingInfo:
         self.source_type = None
         self.paused = False
         self.channel_title = None
-        self.duration = None
-        self.last_position_update = None
-        self.position = None
+        self.reset_progress()
 
 class LGHorizonChannel:
     """Represent a channel."""
@@ -425,6 +428,7 @@ class LGHorizonBox:
             title += f": {event.episodeName}"
         self.playing_info.set_title(title)
         self.playing_info.set_image(channel.stream_image)
+        self.playing_info.reset_progress()
         self._trigger_callback()
 
     def update_with_recording(self, source_type: str, recording:LGHorizonRecordingSingle, channel: LGHorizonChannel, start:float, end: float, last_speed_change:float, relative_position: float) -> None:
@@ -460,6 +464,7 @@ class LGHorizonBox:
         self.playing_info.set_channel_title(app.title)
         self.playing_info.set_title(app.title)
         self.playing_info.set_image(app.image)
+        self.playing_info.reset_progress()
         self._trigger_callback()
         
     def _trigger_callback(self):
