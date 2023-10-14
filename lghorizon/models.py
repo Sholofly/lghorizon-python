@@ -37,6 +37,7 @@ class LGHorizonAuth:
     refreshTokenExpiry: datetime
     username: str
     mqttToken: str = None
+    accessToken: str = None
 
     def __init__(self):
         """Initialize a session."""
