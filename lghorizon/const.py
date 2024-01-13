@@ -57,33 +57,27 @@ COUNTRY_SETTINGS = {
             {
                 "channelId": "NL_000194_019352",
                 "channelName": "NPO",
-                "channelNumber": "152"
+                "channelNumber": "152",
             },
             {
                 "channelId": "NL_000199_019356",
                 "channelName": "Prime Video",
-                "channelNumber": "153"
-            }
-        ],
-        "platform_types":{
-            "EOS":{
-                "manufacturer": "Arris",
-                "model": "DCX960"
+                "channelNumber": "153",
             },
-            "APOLLO":{
-                "manufacturer": "Arris",
-                "model": "VIP5002W"
-            }
+        ],
+        "platform_types": {
+            "EOS": {"manufacturer": "Arris", "model": "DCX960"},
+            "APOLLO": {"manufacturer": "Arris", "model": "VIP5002W"},
         },
-        "language":"nl"
+        "language": "nl",
     },
     "ch": {
         "api_url": "https://prod.spark.sunrisetv.ch",
         "personalization_url_format": "https://prod.spark.sunrisetv.ch/eng/web/personalization-service/v1/customer/{householdId}/devices",
-        "mqtt_url": "obomsg.prod.ch.horizon.tv",
+        "mqtt_url": "messagebroker-prod-ch.gnp.cloud.dmdsdp.com",
         "use_oauth": False,
         "channels": [],
-        "language":"de"
+        "language": "de",
     },
     "be-nl": {
         "api_url": "https://prod.spark.telenet.tv",
@@ -100,21 +94,12 @@ COUNTRY_SETTINGS = {
             {"channelId": "netflix", "channelName": "Netflix", "channelNumber": "600"},
             {"channelId": "youtube", "channelName": "Youtube", "channelNumber": "-1"},
         ],
-        "platform_types":{
-            "EOS":{
-                "manufacturer": "Arris",
-                "model": "DCX960"
-            },
-            "HORIZON":{
-                "manufacturer": "Arris",
-                "model": "DCX960"
-            },
-            "EOS2":{
-                "manufacturer": "HUMAX",
-                "model": "2008C-STB-TN"
-            }
+        "platform_types": {
+            "EOS": {"manufacturer": "Arris", "model": "DCX960"},
+            "HORIZON": {"manufacturer": "Arris", "model": "DCX960"},
+            "EOS2": {"manufacturer": "HUMAX", "model": "2008C-STB-TN"},
         },
-        "language":"nl"
+        "language": "nl",
     },
     # "be-nl-preprod": {
     #     "api_url": "https://web-api-preprod-obo.horizon.tv/oesp/v4/BE/nld/web",
@@ -151,7 +136,7 @@ COUNTRY_SETTINGS = {
         "mqtt_url": "obomsg.prod.at.horizon.tv",
         "use_oauth": False,
         "channels": [],
-        "language":"de"
+        "language": "de",
     },
     "gb": {
         "api_url": "https://prod.spark.virginmedia.com",
@@ -160,7 +145,7 @@ COUNTRY_SETTINGS = {
         "oauth_url": "https://id.virginmedia.com/rest/v40/session/start?protocol=oidc&rememberMe=true",
         "channels": [],
         "oesp_url": "https://prod.oesp.virginmedia.com/oesp/v4/GB/eng/web",
-        "language": "en"
+        "language": "en",
     },
     # "gb-preprod": {
     #     "api_url": "https://web-api-preprod-obo.horizon.tv/oesp/v4/GB/eng/web/",
@@ -181,7 +166,7 @@ COUNTRY_SETTINGS = {
         "mqtt_url": "obomsg.prod.ie.horizon.tv",
         "use_oauth": False,
         "channels": [],
-        "language":"en"
+        "language": "en",
     },
     "pl": {
         "api_url": "https://prod.spark.upctv.pl/",
@@ -189,16 +174,10 @@ COUNTRY_SETTINGS = {
         "mqtt_url": "obomsg.prod.pl.horizon.tv",
         "use_oauth": False,
         "channels": [],
-        "language":"pl",
-        "platform_types":{
-            "EOS":{
-                "manufacturer": "Arris",
-                "model": "DCX960"
-            },
-            "APOLLO":{
-                "manufacturer": "Arris",
-                "model": "VIP5002W"
-            }
+        "language": "pl",
+        "platform_types": {
+            "EOS": {"manufacturer": "Arris", "model": "DCX960"},
+            "APOLLO": {"manufacturer": "Arris", "model": "VIP5002W"},
         },
     },
     # "hu": {
