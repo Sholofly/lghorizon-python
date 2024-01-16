@@ -22,3 +22,5 @@ logs/
 __pycache__/
 __pycache__/*
 test/nl.py
+secrets.json
+logfile.log
