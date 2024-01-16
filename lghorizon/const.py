@@ -139,9 +139,9 @@ COUNTRY_SETTINGS = {
         "language": "de",
     },
     "gb": {
-        "api_url": "https://prod.spark.virginmedia.com",
-        "personalization_url_format": "https://prod.spark.virginmedia.com/eng/web/personalization-service/v1/customer/{household_id}/devices",
-        "mqtt_url": "obomsg.prod.gb.horizon.tv",
+        "api_url": "https://staticqbr-prod-gb.gnp.cloud.virgintvgo.virginmedia.com",
+        "personalization_url_format": "https://staticqbr-prod-gb.gnp.cloud.virgintvgo.virginmedia.com/eng/web/personalization-service/v1/customer/{household_id}/devices",
+        "mqtt_url": "messagebroker-prod-gb.gnp.cloud.dmdsdp.com:443",
         "oauth_url": "https://id.virginmedia.com/rest/v40/session/start?protocol=oidc&rememberMe=true",
         "channels": [],
         "oesp_url": "https://prod.oesp.virginmedia.com/oesp/v4/GB/eng/web",

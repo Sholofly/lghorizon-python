@@ -1,7 +1,9 @@
 install-local: python3 -m pip install --upgrade -e .
 
+copy secrets_stub.json to secrets.json and update credentials in that file
+
 tag:    git tag -a v0.4.7 -m "v0.4.7"
         git push origin v0.4.7
 
 create sdist: python3 -m build
-upload: python3 -m twine upload dist/lghorizon-0.4.7*
+// Create release on github
