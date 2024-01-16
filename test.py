@@ -6,7 +6,7 @@ from lghorizon import LGHorizonApi, LGHorizonBox
 api: LGHorizonApi
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
@@ -37,7 +37,11 @@ def read_secrets(file_path):
 def event_loop():
     while True:
         time.sleep(1)  # Simulate some work
-
+        box: LGHorizonBox
+        for box in api.settop_boxes.values():
+            if not box.playing_info:
+                continue
+            _Logger.info(box.playing_info.image)
         # Check for a breaking condition
         if break_condition():
             break
