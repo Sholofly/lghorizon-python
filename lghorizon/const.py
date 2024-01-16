@@ -40,7 +40,6 @@ BE_AUTH_URL = "https://login.prd.telenet.be/openid/login.do"
 COUNTRY_SETTINGS = {
     "nl": {
         "api_url": "https://prod.spark.ziggogo.tv",
-        "personalization_url_format": "https://prod.spark.ziggogo.tv/nld/web/personalization-service/v1/customer/{household_id}/devices",
         "mqtt_url": "obomsg.prod.nl.horizon.tv",
         "use_oauth": False,
         "channels": [
@@ -73,16 +72,12 @@ COUNTRY_SETTINGS = {
     },
     "ch": {
         "api_url": "https://prod.spark.sunrisetv.ch",
-        "personalization_url_format": "https://prod.spark.sunrisetv.ch/eng/web/personalization-service/v1/customer/{householdId}/devices",
-        "mqtt_url": "messagebroker-prod-ch.gnp.cloud.dmdsdp.com",
         "use_oauth": False,
         "channels": [],
         "language": "de",
     },
     "be-nl": {
-        "api_url": "https://prod.spark.telenet.tv",
-        "personalization_url_format": "https://prod.spark.telenettv.be/nld/web/personalization-service/v1/customer/{household_id}/devices",
-        "mqtt_url": "obomsg.prod.be.horizon.tv",
+        "api_url": "https://spark-prod-be.gnp.cloud.telenet.tv",
         "use_oauth": True,
         "oauth_username_fieldname": "j_username",
         "oauth_password_fieldname": "j_password",
@@ -130,18 +125,16 @@ COUNTRY_SETTINGS = {
     #     "oauth_redirect_header": "Location",
     #     "channels": [],
     # },
-    "at": {
-        "api_url": "https://prod.spark.magentatv.at",
-        "personalization_url_format": "https://prod.spark.magentatv.at/deu/web/personalization-service/v1/customer/{householdId}/devices",
-        "mqtt_url": "obomsg.prod.at.horizon.tv",
-        "use_oauth": False,
-        "channels": [],
-        "language": "de",
-    },
+    # "at": {
+    #     "api_url": "https://prod.spark.magentatv.at",
+    #     "personalization_url_format": "https://prod.spark.magentatv.at/deu/web/personalization-service/v1/customer/{householdId}/devices",
+    #     "mqtt_url": "obomsg.prod.at.horizon.tv",
+    #     "use_oauth": False,
+    #     "channels": [],
+    #     "language": "de",
+    # },
     "gb": {
-        "api_url": "https://staticqbr-prod-gb.gnp.cloud.virgintvgo.virginmedia.com",
-        "personalization_url_format": "https://staticqbr-prod-gb.gnp.cloud.virgintvgo.virginmedia.com/eng/web/personalization-service/v1/customer/{household_id}/devices",
-        "mqtt_url": "messagebroker-prod-gb.gnp.cloud.dmdsdp.com:443",
+        "api_url": "https://spark-prod-gb.gnp.cloud.virgintvgo.virginmedia.com",
         "oauth_url": "https://id.virginmedia.com/rest/v40/session/start?protocol=oidc&rememberMe=true",
         "channels": [],
         "oesp_url": "https://prod.oesp.virginmedia.com/oesp/v4/GB/eng/web",
@@ -161,17 +154,13 @@ COUNTRY_SETTINGS = {
     #     "channels": [],
     # },
     "ie": {
-        "api_url": "https://prod.spark.virginmediatv.ie",
-        "personalization_url_format": "https://prod.spark.virginmediatv.ie/eng/web/personalization-service/v1/customer/{householdId}/devices",
-        "mqtt_url": "obomsg.prod.ie.horizon.tv",
+        "api_url": "https://spark-prod-ie.gnp.cloud.virginmediatv.ie",
         "use_oauth": False,
         "channels": [],
         "language": "en",
     },
     "pl": {
-        "api_url": "https://prod.spark.upctv.pl/",
-        "personalization_url_format": "https://prod.spark.upctv.pl/pol/web/personalization-service/v1/customer/{householdId}/devices",
-        "mqtt_url": "obomsg.prod.pl.horizon.tv",
+        "api_url": "https://spark-prod-pl.gnp.cloud.upctv.pl",
         "use_oauth": False,
         "channels": [],
         "language": "pl",

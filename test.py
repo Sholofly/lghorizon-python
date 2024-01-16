@@ -6,17 +6,18 @@ from lghorizon import LGHorizonApi, LGHorizonBox
 api: LGHorizonApi
 
 logging.basicConfig(
+    level=logging.DEBUG,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
 
 _Logger = logging.getLogger()
 
-file_handler = logging.FileHandler("logfile.log")
+file_handler = logging.FileHandler("logfile.log", mode="w")
 file_handler.setLevel(logging.DEBUG)
 _Logger.addHandler(file_handler)
 
 console_handler = logging.StreamHandler()
-file_handler.setLevel(logging.INFO)
+console_handler.setLevel(logging.DEBUG)
 _Logger.addHandler(console_handler)
 
 
@@ -58,4 +59,5 @@ if __name__ == "__main__":
         print("\nScript interrupted by user.")
     finally:
         print("Script is exiting.")
-        api.disconnect()
+        if api:
+            api.disconnect()
