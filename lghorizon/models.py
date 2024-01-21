@@ -332,8 +332,10 @@ class LGHorizonMqttClient:
         self._auth = auth
         self._brokerUrl = mqtt_broker_url.replace("wss://", "").replace(":443/mqtt", "")
         self.clientId = make_id()
-        self._mqtt_client = mqtt.Client(
-            self.clientId, transport="websockets", protocol=mqtt.MQTTv5
+        self._mqtt_client = mqtt.Client(self.clientId, transport="websockets")
+
+        self._mqtt_client.ws_set_options(
+            headers={"Sec-WebSocket-Protocol": "mqtt, mqttv3.1, mqttv3.11"}
         )
         self._mqtt_client.username_pw_set(self._auth.householdId, self._auth.mqttToken)
         self._mqtt_client.tls_set()
