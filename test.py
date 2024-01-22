@@ -52,7 +52,12 @@ if __name__ == "__main__":
     try:
         secrets_file_path = "secrets.json"
         secrets = read_secrets(secrets_file_path)
-        api = LGHorizonApi(secrets["username"], secrets["password"], secrets["country"])
+        api = LGHorizonApi(
+            secrets["username"],
+            secrets["password"],
+            secrets["country"],
+            # identifier="DTV3907048",
+        )
         api.connect()
         event_loop()
     except KeyboardInterrupt:

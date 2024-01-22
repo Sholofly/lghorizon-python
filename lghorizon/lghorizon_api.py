@@ -79,9 +79,10 @@ class LGHorizonApi:
         backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger
     )
     def _authorize(self) -> None:
-        if self._country_code == "be-nl":
+        ctry_code = self._country_code[0:2]
+        if ctry_code == "be":
             self.authorize_telenet()
-        elif self._country_code == "gb":
+        elif ctry_code == "gb":
             self.authorize_gb()
         else:
             self._authorize_default()
@@ -269,9 +270,10 @@ class LGHorizonApi:
 
     def _obtain_mqtt_token(self):
         _logger.debug("Obtain mqtt token...")
-        mqtt_response = self._do_api_call(
-            f"{self._config['authorizationService']['URL']}/v1/mqtt/token"
-        )
+        mqtt_auth_url = self._config["authorizationService"]["URL"]
+        if self._country_settings["use_legacy_auth"]:
+            mqtt_auth_url = self._country_settings["api_url"]
+        mqtt_response = self._do_api_call(f"{mqtt_auth_url}/v1/mqtt/token")
         self._auth.mqttToken = mqtt_response["token"]
         _logger.debug(f"MQTT token: {self._auth.mqttToken}")
 
