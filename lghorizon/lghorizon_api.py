@@ -272,7 +272,7 @@ class LGHorizonApi:
         _logger.debug("Obtain mqtt token...")
         mqtt_auth_url = self._config["authorizationService"]["URL"]
         if self._country_settings["use_legacy_auth"]:
-            mqtt_auth_url = self._country_settings["api_url"]
+            mqtt_auth_url = self._country_settings["api_url"] + "/auth-service"
         mqtt_response = self._do_api_call(f"{mqtt_auth_url}/v1/mqtt/token")
         self._auth.mqttToken = mqtt_response["token"]
         _logger.debug(f"MQTT token: {self._auth.mqttToken}")
