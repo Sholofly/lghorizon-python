@@ -69,14 +69,12 @@ COUNTRY_SETTINGS = {
             "APOLLO": {"manufacturer": "Arris", "model": "VIP5002W"},
         },
         "language": "nl",
-        "use_legacy_auth": False,
     },
     "ch": {
-        "api_url": "https://prod.spark.sunrisetv.ch",
+        "api_url": "https://spark-prod-ch.gnp.cloud.sunrisetv.ch",
         "use_oauth": False,
         "channels": [],
         "language": "de",
-        "use_legacy_auth": True,
     },
     "be-nl": {
         "api_url": "https://spark-prod-be.gnp.cloud.telenet.tv",
@@ -97,7 +95,6 @@ COUNTRY_SETTINGS = {
             "EOS2": {"manufacturer": "HUMAX", "model": "2008C-STB-TN"},
         },
         "language": "nl",
-        "use_legacy_auth": False,
     },
     "be-nl-preprod": {
         "api_url": "https://spark-preprod-be.gnp.cloud.telenet.tv",
@@ -112,7 +109,6 @@ COUNTRY_SETTINGS = {
             {"channelId": "netflix", "channelName": "Netflix", "channelNumber": "600"},
             {"channelId": "youtube", "channelName": "Youtube", "channelNumber": "-1"},
         ],
-        "use_legacy_auth": False,
     },
     "gb": {
         "api_url": "https://spark-prod-gb.gnp.cloud.virgintvgo.virginmedia.com",
@@ -120,14 +116,12 @@ COUNTRY_SETTINGS = {
         "channels": [],
         "oesp_url": "https://prod.oesp.virginmedia.com/oesp/v4/GB/eng/web",
         "language": "en",
-        "use_legacy_auth": False,
     },
     "ie": {
         "api_url": "https://spark-prod-ie.gnp.cloud.virginmediatv.ie",
         "use_oauth": False,
         "channels": [],
         "language": "en",
-        "use_legacy_auth": False,
     },
     "pl": {
         "api_url": "https://spark-prod-pl.gnp.cloud.upctv.pl",
@@ -138,6 +132,5 @@ COUNTRY_SETTINGS = {
             "EOS": {"manufacturer": "Arris", "model": "DCX960"},
             "APOLLO": {"manufacturer": "Arris", "model": "VIP5002W"},
         },
-        "use_legacy_auth": False,
-    }
+    },
 }
