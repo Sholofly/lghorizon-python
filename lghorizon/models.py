@@ -207,11 +207,14 @@ class LGHorizonRecordingSingle(LGHorizonBaseRecording):
 
     def __init__(self, recording_json):
         """Init the single recording."""
+        poster_url = None
+        if "poster" in recording_json and "url" in recording_json["poster"]:
+            poster_url = recording_json["poster"]["url"]
         LGHorizonBaseRecording.__init__(
             self,
             recording_json["id"],
             recording_json["title"],
-            recording_json["poster"]["url"],
+            poster_url,
             recording_json["channelId"],
             recording_json["type"],
         )
@@ -242,7 +245,7 @@ class LGHorizonRecordingEpisode:
             self.seasonNumber = recording_json["seasonNumber"]
         if "episodeNumber" in recording_json:
             self.episodeNumber = recording_json["episodeNumber"]
-        if "poster" in recording_json:
+        if "poster" in recording_json and "url" in recording_json["poster"]:
             self.image = recording_json["poster"]["url"]
 
 
@@ -265,7 +268,7 @@ class LGHorizonRecordingShow:
             self.seasonNumber = recording_json["seasonNumber"]
         if "episodeNumber" in recording_json:
             self.episodeNumber = recording_json["episodeNumber"]
-        if "poster" in recording_json:
+        if "poster" in recording_json and "url" in recording_json["poster"]:
             self.image = recording_json["poster"]["url"]
 
 
