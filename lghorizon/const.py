@@ -39,7 +39,7 @@ BE_AUTH_URL = "https://login.prd.telenet.be/openid/login.do"
 
 COUNTRY_SETTINGS = {
     "nl": {
-        "api_url": "https://prod.spark.ziggogo.tv",
+        "api_url": "https://spark-prod-nl.gnp.cloud.ziggogo.tv",
         "mqtt_url": "obomsg.prod.nl.horizon.tv",
         "use_oauth": False,
         "channels": [
