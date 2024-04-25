@@ -109,6 +109,12 @@ COUNTRY_SETTINGS = {
             {"channelId": "netflix", "channelName": "Netflix", "channelNumber": "600"},
             {"channelId": "youtube", "channelName": "Youtube", "channelNumber": "-1"},
         ],
+        "platform_types": {
+            "EOS": {"manufacturer": "Arris", "model": "DCX960"},
+            "HORIZON": {"manufacturer": "Arris", "model": "DCX960"},
+            "EOS2": {"manufacturer": "HUMAX", "model": "2008C-STB-TN"},
+        },
+        "language": "nl",
     },
     "gb": {
         "api_url": "https://spark-prod-gb.gnp.cloud.virgintvgo.virginmedia.com",
