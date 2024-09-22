@@ -1,4 +1,5 @@
 """Python client for LGHorizon."""
+
 # flake8: noqa
 # Box states
 ONLINE_RUNNING = "ONLINE_RUNNING"

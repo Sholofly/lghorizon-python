@@ -1,4 +1,5 @@
 """Set up LG Horizon."""
+
 import setuptools
 import os
 import re
@@ -6,7 +7,6 @@ import sys
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
-
 
 
 def read(*parts):
@@ -27,8 +27,8 @@ setuptools.setup(
     url="https://github.com/sholofly/LGHorizon-python",
     packages=setuptools.find_packages(include=["lghorizon"]),
     license="MIT license",
-    install_requires=["paho-mqtt>=1.5.0", "requests>=2.22.0", "backoff>=1.9.0"],
-    keywords=["LG","Horizon", "API", "Settop box"],
+    install_requires=["paho-mqtt<2.0.0", "requests>=2.22.0", "backoff>=1.9.0"],
+    keywords=["LG", "Horizon", "API", "Settop box"],
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Programming Language :: Python :: 3",
@@ -44,5 +44,5 @@ setuptools.setup(
     python_requires=">=3.9",
     zip_safe=False,
     use_scm_version=True,
-    setup_requires=['setuptools_scm']
+    setup_requires=["setuptools_scm"],
 )
