@@ -1,4 +1,5 @@
 """Python client for LGHorizon."""
+
 import logging
 import json
 import sys, traceback
@@ -287,7 +288,11 @@ class LGHorizonApi:
         _logger.debug(f"MQTT token: {self._auth.mqttToken}")
 
     @backoff.on_exception(
-        backoff.expo, BaseException, jitter=None, max_time=600, logger=_logger
+        backoff.expo,
+        BaseException,
+        jitter=None,
+        max_tries=3,
+        logger=_logger,
     )
     def connect(self) -> None:
         self._config = self._get_config(self._country_code)
