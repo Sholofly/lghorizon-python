@@ -1,5 +1,4 @@
 """Python client for LGHorizon."""
-
 import logging
 import json
 import sys, traceback
@@ -63,10 +62,12 @@ class LGHorizonApi:
         password: str,
         country_code: str = "nl",
         identifier: str = None,
+        refresh_token = None,
     ) -> None:
         """Create LGHorizon API."""
         self.username = username
         self.password = password
+        self.refresh_token = refresh_token
         self._session = Session()
         self._country_settings = COUNTRY_SETTINGS[country_code]
         self._country_code = country_code
@@ -84,7 +85,7 @@ class LGHorizonApi:
         if ctry_code == "be":
             self.authorize_telenet()
         elif ctry_code == "gb":
-            self.authorize_gb()
+            self.authorize_gb_jwt()
         else:
             self._authorize_default()
 
@@ -111,6 +112,35 @@ class LGHorizonApi:
                 raise LGHorizonApiConnectionError("Unknown connection error")
 
         self._auth.fill(auth_response.json())
+        _logger.debug("Authorization succeeded")
+
+    def authorize_gb_jwt(self) -> None:
+        _logger.debug("Authorizing JWT")
+        auth_url = "https://spark-prod-gb.gnp.cloud.virgintvgo.virginmedia.com/auth-service/v1/authorization/refresh"
+        auth_headers = {"content-type": "application/json", "charset": "utf-8"}
+        payload = '{\"refreshToken\":\"'+self.refresh_token+'\"}'
+
+        try:
+            auth_response = self._session.post(
+                auth_url, headers=auth_headers, data=payload
+            )
+        except Exception as ex:
+            raise LGHorizonApiConnectionError("Unknown connection failure") from ex
+
+        if not auth_response.ok:
+            _logger.debug("response %s", auth_response)
+            error_json = auth_response.json()
+            error = error_json["error"]
+            if error and error["statusCode"] == 97401:
+                raise LGHorizonApiUnauthorizedError("Invalid credentials")
+            elif error:
+                raise LGHorizonApiConnectionError(error["message"])
+            else:
+                raise LGHorizonApiConnectionError("Unknown connection error")
+
+        self._auth.fill(auth_response.json())
+        self.refresh_token = self._auth.refreshToken
+        self._session.cookies["ACCESSTOKEN"] = self._auth.accessToken
         _logger.debug("Authorization succeeded")
 
     def authorize_gb(self):
@@ -288,18 +318,15 @@ class LGHorizonApi:
         _logger.debug(f"MQTT token: {self._auth.mqttToken}")
 
     @backoff.on_exception(
-        backoff.expo,
-        BaseException,
-        jitter=None,
-        max_tries=3,
-        logger=_logger,
+        backoff.expo, BaseException, jitter=None, max_time=600, logger=_logger
     )
     def connect(self) -> None:
         self._config = self._get_config(self._country_code)
         _logger.debug("Connect to API")
         self._authorize()
         if self._country_code == "gb":
-            self._obtain_mqtt_token_gb()
+            self._obtain_mqtt_token()
+            #self._obtain_mqtt_token_gb()
         else:
             self._obtain_mqtt_token()
         self._mqttClient = LGHorizonMqttClient(
