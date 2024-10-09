@@ -119,9 +119,7 @@ COUNTRY_SETTINGS = {
     },
     "gb": {
         "api_url": "https://spark-prod-gb.gnp.cloud.virgintvgo.virginmedia.com",
-        "oauth_url": "https://id.virginmedia.com/rest/v40/session/start?protocol=oidc&rememberMe=true",
         "channels": [],
-        "oesp_url": "https://prod.oesp.virginmedia.com/oesp/v4/GB/eng/web",
         "language": "en",
     },
     "ie": {
