@@ -1,4 +1,5 @@
 """Python client for LGHorizon."""
+
 import logging
 import json
 import sys, traceback
