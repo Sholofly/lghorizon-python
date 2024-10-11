@@ -52,11 +52,17 @@ if __name__ == "__main__":
     try:
         secrets_file_path = "secrets.json"
         secrets = read_secrets(secrets_file_path)
+
+        refresh_token = None
+        if "refresh_token" in secrets:
+            refresh_token = secrets["refresh_token"]
+
         api = LGHorizonApi(
             secrets["username"],
             secrets["password"],
             secrets["country"],
             # identifier="DTV3907048",
+            refresh_token = refresh_token,
         )
         api.connect()
         event_loop()
