@@ -63,7 +63,7 @@ class LGHorizonApi:
         password: str,
         country_code: str = "nl",
         identifier: str = None,
-        refresh_token = None,
+        refresh_token=None,
     ) -> None:
         """Create LGHorizon API."""
         self.username = username
@@ -117,7 +117,9 @@ class LGHorizonApi:
 
     def authorize_gb(self) -> None:
         _logger.debug("Authorizing via refresh")
-        refresh_url = (f"{self._country_settings['api_url']}/auth-service/v1/authorization/refresh")
+        refresh_url = (
+            f"{self._country_settings['api_url']}/auth-service/v1/authorization/refresh"
+        )
         headers = {"content-type": "application/json", "charset": "utf-8"}
         payload = '{"refreshToken":"' + self.refresh_token + '"}'
 
@@ -290,10 +292,14 @@ class LGHorizonApi:
             self.settop_boxes[deviceId].playing_info.set_paused(
                 playerState["speed"] == 0
             )
-            if source_type in (
-                BOX_PLAY_STATE_CHANNEL,
-                BOX_PLAY_STATE_BUFFER,
-                BOX_PLAY_STATE_REPLAY,
+            if (
+                source_type
+                in (
+                    BOX_PLAY_STATE_CHANNEL,
+                    BOX_PLAY_STATE_BUFFER,
+                    BOX_PLAY_STATE_REPLAY,
+                )
+                and "eventId" in state_source
             ):
                 eventId = state_source["eventId"]
                 raw_replay_event = self._do_api_call(
