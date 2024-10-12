@@ -257,6 +257,9 @@ class LGHorizonApi:
     def _on_mqtt_message(self, message: str, topic: str) -> None:
         if "source" in message:
             deviceId = message["source"]
+            if not isinstance(deviceId,str):
+                _logger.debug("ignoring message - not a string")
+                return
             if not deviceId in self.settop_boxes.keys():
                 return
             try:
