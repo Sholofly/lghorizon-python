@@ -423,6 +423,10 @@ class LGHorizonApi:
 
     def get_recording_capacity(self) -> int:
         """Returns remaining recording capacity"""
+        ctry_code = self._country_code[0:2]
+        if ctry_code == "gb":
+            _logger.debug("GB: not supported")
+            return None
         try:
             _logger.info("Retrieving recordingcapacity...")
             quota_content = self._do_api_call(
