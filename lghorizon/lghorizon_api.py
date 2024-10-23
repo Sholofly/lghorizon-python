@@ -35,7 +35,7 @@ from .const import (
     RECORDING_TYPE_SEASON,
     RECORDING_TYPE_SHOW,
 )
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 _logger = logging.getLogger(__name__)
 _supported_platforms = ["EOS", "EOS2", "HORIZON", "APOLLO"]
@@ -56,6 +56,7 @@ class LGHorizonApi:
     _entitlements: List[str] = None
     _identifier: str = None
     _config: str = None
+    _refresh_callback: Callable = None
 
     def __init__(
         self,
@@ -146,7 +147,14 @@ class LGHorizonApi:
         self._auth.fill(auth_response.json())
         self.refresh_token = self._auth.refreshToken
         self._session.cookies["ACCESSTOKEN"] = self._auth.accessToken
+
+        if self._refresh_callback:
+            self._refresh_callback ()
+
         _logger.debug("Authorization succeeded")
+
+    def set_callback(self, refresh_callback: Callable) -> None:
+        self._refresh_callback = refresh_callback
 
     def authorize_telenet(self):
         try:
