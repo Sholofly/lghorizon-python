@@ -57,6 +57,7 @@ class LGHorizonApi:
     _identifier: str = None
     _config: str = None
     _refresh_callback: Callable = None
+    _profile_id: str = None
 
     def __init__(
         self,
@@ -65,6 +66,7 @@ class LGHorizonApi:
         country_code: str = "nl",
         identifier: str = None,
         refresh_token=None,
+        profile_id=None,
     ) -> None:
         """Create LGHorizon API."""
         self.username = username
@@ -78,6 +80,7 @@ class LGHorizonApi:
         self._channels = {}
         self._entitlements = []
         self._identifier = identifier
+        self._profile_id = profile_id
 
     @backoff.on_exception(
         backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger
@@ -149,7 +152,7 @@ class LGHorizonApi:
         self._session.cookies["ACCESSTOKEN"] = self._auth.accessToken
 
         if self._refresh_callback:
-            self._refresh_callback ()
+            self._refresh_callback()
 
         _logger.debug("Authorization succeeded")
 
@@ -246,6 +249,7 @@ class LGHorizonApi:
             self._on_mqtt_connected,
             self._on_mqtt_message,
         )
+
         self._register_customer_and_boxes()
         self._mqttClient.connect()
 
@@ -265,7 +269,7 @@ class LGHorizonApi:
     def _on_mqtt_message(self, message: str, topic: str) -> None:
         if "source" in message:
             deviceId = message["source"]
-            if not isinstance(deviceId,str):
+            if not isinstance(deviceId, str):
                 _logger.debug("ignoring message - not a string")
                 return
             if not deviceId in self.settop_boxes.keys():
@@ -378,29 +382,29 @@ class LGHorizonApi:
         personalisation_result = self._do_api_call(
             f"{self._config['personalizationService']['URL']}/v1/customer/{self._auth.householdId}?with=profiles%2Cdevices"
         )
-        _logger.debug(f"Personalisation result: {personalisation_result}")
+        _logger.debug("Personalisation result: %s ", personalisation_result)
         self._customer = LGHorizonCustomer(personalisation_result)
         self._get_channels()
-        if not "assignedDevices" in personalisation_result:
+        if "assignedDevices" not in personalisation_result:
             _logger.warning("No boxes found.")
             return
         _logger.info("Registering boxes")
-        for device in personalisation_result["assignedDevices"]:
+        for device in self._customer.settop_boxes:
             platform_type = device["platformType"]
-            if not platform_type in _supported_platforms:
+            if platform_type not in _supported_platforms:
                 continue
             if (
                 "platform_types" in self._country_settings
                 and platform_type in self._country_settings["platform_types"]
             ):
-                platformType = self._country_settings["platform_types"][platform_type]
+                platform_type = self._country_settings["platform_types"][platform_type]
             else:
-                platformType = None
+                platform_type = None
             box = LGHorizonBox(
-                device, platformType, self._mqttClient, self._auth, self._channels
+                device, platform_type, self._mqttClient, self._auth, self._channels
             )
             self.settop_boxes[box.deviceId] = box
-            _logger.info(f"Box {box.deviceId} registered...")
+            _logger.info("Box %s registered...", box.deviceId)
 
     def _get_channels(self):
         self._update_entitlements()
@@ -408,6 +412,13 @@ class LGHorizonApi:
         channels_result = self._do_api_call(
             f"{self._config['linearService']['URL']}/v2/channels?cityId={self._customer.cityId}&language={self._country_settings['language']}&productClass=Orion-DASH"
         )
+        profile_channels = []
+        if self._profile_id and self._profile_id in self._customer.profiles:
+            profile_channels = self._customer.profiles[
+                self._profile_id
+            ].favorite_channels
+
+        has_profile_channels = len(profile_channels) > 0
         for channel in channels_result:
             if "isRadio" in channel and channel["isRadio"]:
                 continue
@@ -417,6 +428,9 @@ class LGHorizonApi:
             if len(common_entitlements) == 0:
                 continue
             channel_id = channel["id"]
+            if has_profile_channels and channel_id not in profile_channels:
+                continue
+
             self._channels[channel_id] = LGHorizonChannel(channel)
         _logger.info(f"{len(self._channels)} retrieved.")
 
