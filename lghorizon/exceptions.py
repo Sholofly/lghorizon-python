@@ -1,11 +1,17 @@
 """Exceptions for the LGHorizon API."""
 
+
 class LGHorizonApiError(Exception):
-    """Generic GeocachingApi exception."""
+    """Generic LGHorizon exception."""
+
 
 class LGHorizonApiConnectionError(LGHorizonApiError):
-    """Generic GeocachingApi exception."""
+    """Generic LGHorizon exception."""
+
 
 class LGHorizonApiUnauthorizedError(Exception):
-    """Generic GeocachingApi exception."""
-        
+    """Generic LGHorizon exception."""
+
+
+class LGHorizonApiLockedError(LGHorizonApiUnauthorizedError):
+    """Generic LGHorizon exception."""
