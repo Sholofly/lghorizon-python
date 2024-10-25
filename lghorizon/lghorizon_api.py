@@ -244,7 +244,9 @@ class LGHorizonApi:
         jitter=None,
         max_tries=3,
         logger=_logger,
-        giveup=lambda e: isinstance(e, LGHorizonApiLockedError),
+        giveup=lambda e: isinstance(
+            e, (LGHorizonApiLockedError, LGHorizonApiUnauthorizedError)
+        ),
     )
     def connect(self) -> None:
         self._config = self._get_config(self._country_code)
