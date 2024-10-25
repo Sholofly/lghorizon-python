@@ -47,7 +47,7 @@ class LGHorizonApi:
     _auth: LGHorizonAuth = None
     _session: Session = None
     settop_boxes: Dict[str, LGHorizonBox] = None
-    _customer: LGHorizonCustomer = None
+    customer: LGHorizonCustomer = None
     _mqttClient: LGHorizonMqttClient = None
     _channels: Dict[str, LGHorizonChannel] = None
     _country_settings = None
@@ -350,7 +350,7 @@ class LGHorizonApi:
                 last_speed_change_time = playerState["lastSpeedChangeTime"]
                 relative_position = playerState["relativePosition"]
                 raw_vod = self._do_api_call(
-                    f"{self._config['vodService']['URL']}/v2/detailscreen/{titleId}?language={self._country_settings['language']}&profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&cityId={self._customer.cityId}"
+                    f"{self._config['vodService']['URL']}/v2/detailscreen/{titleId}?language={self._country_settings['language']}&profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&cityId={self.customer.cityId}"
                 )
                 vod = LGHorizonVod(raw_vod)
                 self.settop_boxes[deviceId].update_with_vod(
@@ -383,13 +383,13 @@ class LGHorizonApi:
             f"{self._config['personalizationService']['URL']}/v1/customer/{self._auth.householdId}?with=profiles%2Cdevices"
         )
         _logger.debug("Personalisation result: %s ", personalisation_result)
-        self._customer = LGHorizonCustomer(personalisation_result)
+        self.customer = LGHorizonCustomer(personalisation_result)
         self._get_channels()
         if "assignedDevices" not in personalisation_result:
             _logger.warning("No boxes found.")
             return
         _logger.info("Registering boxes")
-        for device in self._customer.settop_boxes:
+        for device in self.customer.settop_boxes:
             platform_type = device["platformType"]
             if platform_type not in _supported_platforms:
                 continue
@@ -410,11 +410,11 @@ class LGHorizonApi:
         self._update_entitlements()
         _logger.info("Retrieving channels...")
         channels_result = self._do_api_call(
-            f"{self._config['linearService']['URL']}/v2/channels?cityId={self._customer.cityId}&language={self._country_settings['language']}&productClass=Orion-DASH"
+            f"{self._config['linearService']['URL']}/v2/channels?cityId={self.customer.cityId}&language={self._country_settings['language']}&productClass=Orion-DASH"
         )
         profile_channels = []
-        if self._profile_id and self._profile_id in self._customer.profiles:
-            profile_channels = self._customer.profiles[
+        if self._profile_id and self._profile_id in self.customer.profiles:
+            profile_channels = self.customer.profiles[
                 self._profile_id
             ].favorite_channels
 
