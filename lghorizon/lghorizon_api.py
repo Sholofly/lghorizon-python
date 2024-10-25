@@ -277,7 +277,11 @@ class LGHorizonApi:
             box.register_mqtt()
 
     def _on_mqtt_message(self, message: str, topic: str) -> None:
-        if "source" in message:
+        if "action" in message and message["action"] == "OPS.getProfilesUpdate":
+            self._update_customer()
+            self._channels.clear()
+            self._get_channels()
+        elif "source" in message:
             deviceId = message["source"]
             if not isinstance(deviceId, str):
                 _logger.debug("ignoring message - not a string")
@@ -289,6 +293,7 @@ class LGHorizonApi:
                     self.settop_boxes[deviceId].update_state(message)
                 if "status" in message:
                     self._handle_box_update(deviceId, message)
+
             except Exception:
                 _logger.exception("Could not handle status message")
                 _logger.warning(f"Full message: {str(message)}")
@@ -388,14 +393,9 @@ class LGHorizonApi:
         return json_response
 
     def _register_customer_and_boxes(self):
-        _logger.info("Get personalisation info...")
-        personalisation_result = self._do_api_call(
-            f"{self._config['personalizationService']['URL']}/v1/customer/{self._auth.householdId}?with=profiles%2Cdevices"
-        )
-        _logger.debug("Personalisation result: %s ", personalisation_result)
-        self.customer = LGHorizonCustomer(personalisation_result)
+        self._update_customer()
         self._get_channels()
-        if "assignedDevices" not in personalisation_result:
+        if len(self.customer.settop_boxes) == 0:
             _logger.warning("No boxes found.")
             return
         _logger.info("Registering boxes")
@@ -415,6 +415,14 @@ class LGHorizonApi:
             )
             self.settop_boxes[box.deviceId] = box
             _logger.info("Box %s registered...", box.deviceId)
+
+    def _update_customer(self):
+        _logger.info("Get customer data")
+        personalisation_result = self._do_api_call(
+            f"{self._config['personalizationService']['URL']}/v1/customer/{self._auth.householdId}?with=profiles%2Cdevices"
+        )
+        _logger.debug("Personalisation result: %s ", personalisation_result)
+        self.customer = LGHorizonCustomer(personalisation_result)
 
     def _get_channels(self):
         self._update_entitlements()
