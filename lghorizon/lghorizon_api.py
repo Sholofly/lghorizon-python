@@ -281,6 +281,9 @@ class LGHorizonApi:
             self._update_customer()
             self._channels.clear()
             self._get_channels()
+            box: LGHorizonBox
+            for box in self.settop_boxes.values():
+                box.update_channels(self._channels)
         elif "source" in message:
             deviceId = message["source"]
             if not isinstance(deviceId, str):

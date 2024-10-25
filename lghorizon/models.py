@@ -438,6 +438,9 @@ class LGHorizonBox:
             self.manufacturer = platform_type["manufacturer"]
             self.model = platform_type["model"]
 
+    def update_channels(self, channels: Dict[str, LGHorizonChannel]):
+        self._channels = channels
+
     def register_mqtt(self) -> None:
         if not self._mqtt_client.is_connected:
             raise Exception("MQTT client not connected.")
