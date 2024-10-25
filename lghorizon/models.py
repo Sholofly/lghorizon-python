@@ -677,17 +677,32 @@ class LGHorizonBox:
         self._mqtt_client.publish_message(topic, json.dumps(payload))
 
 
+class LGHorizonProfile:
+    profile_id: str = None
+    name: str = None
+    favorite_channels: [] = None
+
+    def __init__(self, json_payload):
+        self.profile_id = json_payload["profileId"]
+        self.name = json_payload["name"]
+        self.favorite_channels = json_payload["favoriteChannels"]
+
+
 class LGHorizonCustomer:
     customerId: str = None
     hashedCustomerId: str = None
     countryId: str = None
     cityId: int = 0
-    settop_boxes: Dict[str, LGHorizonBox] = None
+    settop_boxes: [] = None
+    profiles: Dict[str, LGHorizonProfile] = {}
 
     def __init__(self, json_payload):
         self.customerId = json_payload["customerId"]
         self.hashedCustomerId = json_payload["hashedCustomerId"]
         self.countryId = json_payload["countryId"]
         self.cityId = json_payload["cityId"]
-        if not "assignedDevices" in json_payload:
-            return
+        if "assignedDevices" in json_payload:
+            self.settop_boxes = json_payload["assignedDevices"]
+        if "profiles" in json_payload:
+            for profile in json_payload["profiles"]:
+                self.profiles[profile["profileId"]] = LGHorizonProfile(profile)

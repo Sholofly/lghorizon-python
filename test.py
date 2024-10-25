@@ -57,12 +57,17 @@ if __name__ == "__main__":
         if "refresh_token" in secrets:
             refresh_token = secrets["refresh_token"]
 
+        profile_id = None
+        if "profile_id" in secrets:
+            profile_id = secrets["profile_id"]
+
         api = LGHorizonApi(
             secrets["username"],
             secrets["password"],
             secrets["country"],
             # identifier="DTV3907048",
-            refresh_token = refresh_token,
+            refresh_token=refresh_token,
+            profile_id=profile_id
         )
         api.connect()
         event_loop()
