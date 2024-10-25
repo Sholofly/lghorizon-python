@@ -3,7 +3,11 @@
 import logging
 import json
 import sys, traceback
-from .exceptions import LGHorizonApiUnauthorizedError, LGHorizonApiConnectionError
+from .exceptions import (
+    LGHorizonApiUnauthorizedError,
+    LGHorizonApiConnectionError,
+    LGHorizonApiLockedError,
+)
 import backoff
 from requests import Session, exceptions as request_exceptions
 from paho.mqtt.client import WebsocketConnectionError
@@ -82,9 +86,6 @@ class LGHorizonApi:
         self._identifier = identifier
         self._profile_id = profile_id
 
-    @backoff.on_exception(
-        backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger
-    )
     def _authorize(self) -> None:
         ctry_code = self._country_code[0:2]
         if ctry_code == "be":
@@ -111,6 +112,8 @@ class LGHorizonApi:
             error = error_json["error"]
             if error and error["statusCode"] == 97401:
                 raise LGHorizonApiUnauthorizedError("Invalid credentials")
+            elif error and error["statusCode"] == 97117:
+                raise LGHorizonApiLockedError("Account locked")
             elif error:
                 raise LGHorizonApiConnectionError(error["message"])
             else:
@@ -236,7 +239,12 @@ class LGHorizonApi:
         _logger.debug(f"MQTT token: {self._auth.mqttToken}")
 
     @backoff.on_exception(
-        backoff.expo, BaseException, jitter=None, max_time=600, logger=_logger
+        backoff.expo,
+        BaseException,
+        jitter=None,
+        max_tries=3,
+        logger=_logger,
+        giveup=lambda e: isinstance(e, LGHorizonApiLockedError),
     )
     def connect(self) -> None:
         self._config = self._get_config(self._country_code)
@@ -256,7 +264,7 @@ class LGHorizonApi:
     def disconnect(self):
         """Disconnect."""
         _logger.debug("Disconnect from API")
-        if not self._mqttClient.is_connected:
+        if not self._mqttClient or not self._mqttClient.is_connected:
             return
         self._mqttClient.disconnect()
 

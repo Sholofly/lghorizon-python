@@ -9,7 +9,11 @@ from .models import (
     LGHorizonRecordingEpisode,
     LGHorizonCustomer,
 )
-from .exceptions import LGHorizonApiUnauthorizedError, LGHorizonApiConnectionError
+from .exceptions import (
+    LGHorizonApiUnauthorizedError,
+    LGHorizonApiConnectionError,
+    LGHorizonApiLockedError,
+)
 from .const import (
     ONLINE_RUNNING,
     ONLINE_STANDBY,
