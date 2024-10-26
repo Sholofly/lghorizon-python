@@ -73,13 +73,11 @@ COUNTRY_SETTINGS = {
     },
     "ch": {
         "api_url": "https://spark-prod-ch.gnp.cloud.sunrisetv.ch",
-        "use_oauth": False,
         "channels": [],
         "language": "de",
     },
     "be-nl": {
         "api_url": "https://spark-prod-be.gnp.cloud.telenet.tv",
-        "use_oauth": True,
         "oauth_username_fieldname": "j_username",
         "oauth_password_fieldname": "j_password",
         "oauth_add_accept_header": False,
