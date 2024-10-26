@@ -94,7 +94,7 @@ class LGHorizonApi:
             self.authorize_with_refreshtoken()
             # elif ctry_code == "ch":
             #     self.authorize_sunrise()
-            # else:
+        else:
             self._authorize_default()
 
     def _authorize_default(self) -> None:
