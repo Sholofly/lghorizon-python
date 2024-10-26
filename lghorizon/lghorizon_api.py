@@ -90,9 +90,11 @@ class LGHorizonApi:
         ctry_code = self._country_code[0:2]
         if ctry_code == "be":
             self.authorize_telenet()
-        elif ctry_code == "gb":
-            self.authorize_gb()
-        else:
+        elif ctry_code in ("gb", "ch"):
+            self.authorize_with_refreshtoken()
+            # elif ctry_code == "ch":
+            #     self.authorize_sunrise()
+            # else:
             self._authorize_default()
 
     def _authorize_default(self) -> None:
@@ -122,7 +124,7 @@ class LGHorizonApi:
         self._auth.fill(auth_response.json())
         _logger.debug("Authorization succeeded")
 
-    def authorize_gb(self) -> None:
+    def authorize_with_refreshtoken(self) -> None:
         _logger.debug("Authorizing via refresh")
         refresh_url = (
             f"{self._country_settings['api_url']}/auth-service/v1/authorization/refresh"
