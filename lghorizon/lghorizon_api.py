@@ -279,11 +279,7 @@ class LGHorizonApi:
     def _on_mqtt_message(self, message: str, topic: str) -> None:
         if "action" in message and message["action"] == "OPS.getProfilesUpdate":
             self._update_customer()
-            self._channels.clear()
-            self._get_channels()
             box: LGHorizonBox
-            for box in self.settop_boxes.values():
-                box.update_channels(self._channels)
         elif "source" in message:
             deviceId = message["source"]
             if not isinstance(deviceId, str):
@@ -433,13 +429,6 @@ class LGHorizonApi:
         channels_result = self._do_api_call(
             f"{self._config['linearService']['URL']}/v2/channels?cityId={self.customer.cityId}&language={self._country_settings['language']}&productClass=Orion-DASH"
         )
-        profile_channels = []
-        if self._profile_id and self._profile_id in self.customer.profiles:
-            profile_channels = self.customer.profiles[
-                self._profile_id
-            ].favorite_channels
-
-        has_profile_channels = len(profile_channels) > 0
         for channel in channels_result:
             if "isRadio" in channel and channel["isRadio"]:
                 continue
@@ -449,11 +438,20 @@ class LGHorizonApi:
             if len(common_entitlements) == 0:
                 continue
             channel_id = channel["id"]
-            if has_profile_channels and channel_id not in profile_channels:
-                continue
-
             self._channels[channel_id] = LGHorizonChannel(channel)
         _logger.info(f"{len(self._channels)} retrieved.")
+
+    def get_display_channels(self):
+        all_channels = self._channels.values()
+        if not self._profile_id or self._profile_id not in self.customer.profiles:
+            return all_channels
+        profile_channel_ids = self.customer.profiles[self._profile_id].favorite_channels
+        if len(profile_channel_ids) == 0:
+            return all_channels
+
+        return [
+            channel for channel in all_channels if channel.id in profile_channel_ids
+        ]
 
     def _get_replay_event(self, listingId) -> Any:
         """Get listing."""
