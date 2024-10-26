@@ -27,7 +27,7 @@ setuptools.setup(
     url="https://github.com/sholofly/LGHorizon-python",
     packages=setuptools.find_packages(include=["lghorizon"]),
     license="MIT license",
-    install_requires=["paho-mqtt<2.0.0", "requests>=2.22.0", "backoff>=1.9.0"],
+    install_requires=["paho-mqtt<2.1.1", "requests>=2.22.0", "backoff>=1.9.0"],
     keywords=["LG", "Horizon", "API", "Settop box"],
     classifiers=[
         "Development Status :: 3 - Alpha",
