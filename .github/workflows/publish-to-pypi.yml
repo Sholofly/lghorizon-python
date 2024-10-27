@@ -7,6 +7,8 @@ jobs:
   build-n-publish:
     name: Publish Python 🐍 distribution 📦 to Pypi
     runs-on: ubuntu-24.04
+    permissions:
+      id-token: write
     steps:
     - uses: actions/checkout@master
     - name: Set up Python 3.10
