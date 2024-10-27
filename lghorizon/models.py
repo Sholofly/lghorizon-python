@@ -657,7 +657,7 @@ class LGHorizonBox:
             '{"id":"'
             + make_id(8)
             + '","type":"CPE.pushToTV","source":{"clientId":"'
-            + self._mqtt_client.clientId
+            + self._mqtt_client.client_id
             + '","friendlyDeviceName":"Home Assistant"},'
             + '"status":{"sourceType":"linear","source":{"channelId":"'
             + channel.id
@@ -674,7 +674,7 @@ class LGHorizonBox:
             '{"id":"'
             + make_id(8)
             + '","type":"CPE.pushToTV","source":{"clientId":"'
-            + self._mqtt_client.clientId
+            + self._mqtt_client.client_id
             + '","friendlyDeviceName":"Home Assistant"},'
             + '"status":{"sourceType":"nDVR","source":{"recordingId":"'
             + recording_id
