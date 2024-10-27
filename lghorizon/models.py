@@ -335,7 +335,11 @@ class LGHorizonMqttClient:
         self._auth = auth
         self._brokerUrl = mqtt_broker_url.replace("wss://", "").replace(":443/mqtt", "")
         self.clientId = make_id()
-        self._mqtt_client = mqtt.Client(self.clientId, transport="websockets")
+        self._mqtt_client = mqtt.Client(
+            mqtt.CallbackAPIVersion.VERSION1,
+            client_id=self.clientId,
+            transport="websockets",
+        )
 
         self._mqtt_client.ws_set_options(
             headers={"Sec-WebSocket-Protocol": "mqtt, mqttv3.1, mqttv3.11"}
