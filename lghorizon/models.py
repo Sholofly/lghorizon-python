@@ -360,7 +360,7 @@ class LGHorizonMqttClient:
         )
         self.client_id = make_id()
         self._mqtt_client = mqtt.Client(
-            mqtt.CallbackAPIVersion.VERSION1,
+            # mqtt.CallbackAPIVersion.VERSION1, #disabled because of dependency issue
             client_id=self.client_id,
             transport="websockets",
         )
