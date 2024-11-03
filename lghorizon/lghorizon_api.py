@@ -93,9 +93,7 @@ class LGHorizonApi:
 
     def _authorize(self) -> None:
         ctry_code = self._country_code[0:2]
-        if ctry_code == "be":
-            self._authorize_telenet()
-        elif ctry_code in ("gb", "ch"):
+        if ctry_code in ("gb", "ch", "be"):
             self._authorize_with_refresh_token()
         else:
             self._authorize_default()
