@@ -76,6 +76,15 @@ COUNTRY_SETTINGS = {
         "channels": [],
         "language": "de",
     },
+    "be-basetv": {
+        "api_url": "https://spark-prod-be.gnp.cloud.base.tv",
+        "channels": [],
+        "language": "nl",
+        "platform_types": {
+            "EOS": {"manufacturer": "Arris", "model": "DCX960"},
+            "HORIZON": {"manufacturer": "Arris", "model": "VIP5002W"},
+        },
+    },
     "be-nl": {
         "api_url": "https://spark-prod-be.gnp.cloud.telenet.tv",
         "oauth_username_fieldname": "j_username",
