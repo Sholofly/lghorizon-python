@@ -359,7 +359,7 @@ class LGHorizonMqttClient:
             ":443/mqtt", ""
         )
         self.client_id = make_id()
-        self._mqtt_client = mqtt.Client(  # disabled because of dependency issue
+        self._mqtt_client = mqtt.Client(
             client_id=self.client_id,
             transport="websockets",
         )
