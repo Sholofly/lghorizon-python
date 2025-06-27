@@ -685,11 +685,14 @@ class LGHorizonBox:
 
     def send_key_to_box(self, key: str) -> None:
         """Send emulated (remote) key press to settopbox."""
-        payload = (
-            '{"type":"CPE.KeyEvent","status":{"w3cKey":"'
-            + key
-            + '","eventType":"keyDownUp"}}'
-        )
+        payload_dict = {
+            "type": "CPE.KeyEvent",
+            "runtimeType": "key",
+            "id": "ha",
+            "source": self.device_id.lower(),
+            "status": {"w3cKey": key, "eventType": "keyDownUp"},
+        }
+        payload = json.dumps(payload_dict)
         self._mqtt_client.publish_message(
             f"{self._auth.household_id}/{self.device_id}", payload
         )
