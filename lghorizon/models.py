@@ -293,11 +293,17 @@ class LGHorizonRecordingListSeasonShow(LGHorizonBaseRecording):
     def __init__(self, recording_season_json):
         """Init the single recording."""
 
+        poster_url = None
+        if (
+            "poster" in recording_season_json
+            and "url" in recording_season_json["poster"]
+        ):
+            poster_url = recording_season_json["poster"]["url"]
         LGHorizonBaseRecording.__init__(
             self,
             recording_season_json["id"],
             recording_season_json["title"],
-            recording_season_json["poster"]["url"],
+            poster_url,
             recording_season_json["channelId"],
             recording_season_json["type"],
         )
