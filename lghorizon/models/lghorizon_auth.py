@@ -1,11 +1,14 @@
-import time
-import backoff
+"""LG Horizon Auth Model."""
 
+import time
 from typing import Any
-from aiohttp import ClientSession, ClientResponseError
-from requests import exceptions as request_exceptions
+
+import backoff
+from aiohttp import ClientResponseError, ClientSession
+
 from ..const import COUNTRY_SETTINGS
 from .exceptions import LGHorizonApiConnectionError, LGHorizonApiUnauthorizedError
+from .lghorizon_config import LGHorizonServicesConfig
 
 
 class LGHorizonAuth:
@@ -25,11 +28,12 @@ class LGHorizonAuth:
         self.access_token = None
         self.username = username
         self.password = password
-        self.household_id = None
+        self.household_id = ""
         self.token_expiry = None
         self.country_code = country_code
         self.host = COUNTRY_SETTINGS[country_code]["api_url"]
         self.use_refresh_token = COUNTRY_SETTINGS[country_code]["use_refreshtoken"]
+        self._service_config = None
 
     async def is_token_expiring(self) -> bool:
         """Check if the token is expiring within one day."""
@@ -104,3 +108,25 @@ class LGHorizonAuth:
             raise LGHorizonApiConnectionError(
                 f"Unable to call {request_url}. Error:{str(cre)}"
             ) from cre
+
+    async def get_mqtt_token(self) -> Any:
+        """Get the MQTT token."""
+        config = await self.get_service_config()
+        service_url = await config.get_service_url("authorizationService")
+        result = await self.request(
+            service_url,
+            "/v1/mqtt/token",
+        )
+        return result["token"]
+
+    async def get_service_config(self):
+        """Get the service configuration."""
+        if self._service_config is None:
+            base_country_code = self.country_code[0:2]
+            result = await self.request(
+                self.host,
+                f"/{base_country_code}/en/config-service/conf/web/backoffice.json",
+            )
+            self._service_config = LGHorizonServicesConfig(result)
+
+        return self._service_config

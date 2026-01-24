@@ -22,5 +22,13 @@ async def main():
         api = LGHorizonApi(auth)
         await api.initialize()
 
+        try:
+            print("Listening to MQTT broker... Press Ctrl+C to exit")
+            while True:
+                await asyncio.sleep(1)
+        except KeyboardInterrupt:
+            print("\nShutting down...")
+            await api.disconnect()
+
 
 asyncio.run(main())
