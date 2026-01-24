@@ -1,15 +1,10 @@
 """Python client for LG Horizon."""
 
-from .lghorizon_api import LGHorizonApi
-from .models import (
-    LGHorizonBox,
-    LGHorizonRecordingListSeasonShow,
-    LGHorizonRecordingSingle,
-    LGHorizonRecordingShow,
-    LGHorizonRecordingEpisode,
-    LGHorizonCustomer,
+from .lghorizonapi import LGHorizonApi
+from .models.lghorizon_auth import (
+    LGHorizonAuth,
 )
-from .exceptions import (
+from .models.exceptions import (
     LGHorizonApiUnauthorizedError,
     LGHorizonApiConnectionError,
     LGHorizonApiLockedError,
