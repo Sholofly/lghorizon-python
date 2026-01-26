@@ -1,24 +1,45 @@
-from typing import Optional, Dict
+"""LGHorizon customer model."""
+
+from typing import Dict
 from .lghorizon_profile import LGHorizonProfile
 
 
 class LGHorizonCustomer:
-    """LGHorizon customer"""
+    """LGHorizon customer."""
 
-    customer_id: Optional[str] = None
-    hashed_customer_id: Optional[str] = None
-    country_id: Optional[str] = None
-    city_id: int = 0
-    settop_boxes: Optional[list[str]] = None
-    profiles: Dict[str, LGHorizonProfile] = {}
+    def __init__(self, json_payload: dict):
+        """Initialize a customer."""
+        self._json_payload = json_payload
 
-    def __init__(self, json_payload):
-        self.customer_id = json_payload["customerId"]
-        self.hashed_customer_id = json_payload["hashedCustomerId"]
-        self.country_id = json_payload["countryId"]
-        self.city_id = json_payload["cityId"]
-        if "assignedDevices" in json_payload:
-            self.settop_boxes = json_payload["assignedDevices"]
-        if "profiles" in json_payload:
-            for profile in json_payload["profiles"]:
-                self.profiles[profile["profileId"]] = LGHorizonProfile(profile)
+    @property
+    def customer_id(self) -> str:
+        """Return the customer id."""
+        return self._json_payload["customerId"]
+
+    @property
+    def hashed_customer_id(self) -> str:
+        """Return the hashed customer id."""
+        return self._json_payload["hashedCustomerId"]
+
+    @property
+    def country_id(self) -> str:
+        """Return the country id."""
+        return self._json_payload["countryId"]
+
+    @property
+    def city_id(self) -> int:
+        """Return the city id."""
+        return self._json_payload["cityId"]
+
+    @property
+    def assigned_devices(self) -> list[str]:
+        """Return the assigned set-top boxes."""
+        return self._json_payload.get("assignedDevices", [])
+
+    @property
+    def profiles(self) -> Dict[str, LGHorizonProfile]:
+        """Return the profiles."""
+        return {
+            p["profileId"]: LGHorizonProfile(p)
+            for p in self._json_payload.get("profiles", [])
+        }

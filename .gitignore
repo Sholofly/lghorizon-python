@@ -24,3 +24,4 @@ __pycache__/*
 test/nl.py
 secrets.json
 logfile.log
+lghorizon.log

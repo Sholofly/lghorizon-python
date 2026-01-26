@@ -68,69 +68,42 @@ class LGHorizonMqttClient:
         instance._mqtt_client.username_pw_set(auth.household_id, instance._mqtt_token)
         instance._mqtt_client.tls_set()
         instance._mqtt_client.enable_logger(_logger)
-        instance._mqtt_client.on_connect = instance._on_mqtt_connect
+        instance._mqtt_client.on_connect = instance._on_connect
         instance._on_connected_callback = on_connected_callback
         instance._on_message_callback = on_message_callback
         return instance
 
-    def _on_mqtt_connect(self, client, userdata, flags, result_code):  # pylint: disable=unused-argument
+    def _on_connect(self, client, userdata, flags, result_code):  # pylint: disable=unused-argument
         if result_code == 0:
-            self._mqtt_client.on_message = self._on_message_wrapper
-            self._mqtt_client.subscribe(self._auth.household_id)
-            self._mqtt_client.subscribe(self._auth.household_id + "/#")
-            self._mqtt_client.subscribe(self._auth.household_id + "/" + self.client_id)
-            self._mqtt_client.subscribe(self._auth.household_id + "/+/status")
-            self._mqtt_client.subscribe(
-                self._auth.household_id + "/+/networkRecordings"
-            )
-            self._mqtt_client.subscribe(
-                self._auth.household_id + "/+/networkRecordings/capacity"
-            )
-            self._mqtt_client.subscribe(self._auth.household_id + "/+/localRecordings")
-            self._mqtt_client.subscribe(
-                self._auth.household_id + "/+/localRecordings/capacity"
-            )
-            self._mqtt_client.subscribe(self._auth.household_id + "/watchlistService")
-            self._mqtt_client.subscribe(self._auth.household_id + "/purchaseService")
-            self._mqtt_client.subscribe(
-                self._auth.household_id + "/personalizationService"
-            )
-            self._mqtt_client.subscribe(self._auth.household_id + "/recordingStatus")
-            self._mqtt_client.subscribe(
-                self._auth.household_id + "/recordingStatus/lastUserAction"
-            )
+            self._mqtt_client.on_message = self._on_message
             if self._on_connected_callback:
                 asyncio.run_coroutine_threadsafe(
                     self._on_connected_callback(), self._loop
                 )
         elif result_code == 5:
             self._mqtt_client.username_pw_set(self._auth.household_id, self._mqtt_token)
-            self.connect()
+            asyncio.run_coroutine_threadsafe(self.connect(), self._loop)
         else:
             _logger.error(
                 "Cannot connect to MQTT server with resultCode: %s", result_code
             )
 
-    def connect(self) -> None:
-        """Connect the client."""
-        self._mqtt_client.connect(self._mqtt_broker_url, 443)
-        self._mqtt_client.loop_start()
-
-    def _on_message_wrapper(self, client, userdata, message):  # pylint: disable=unused-argument
+    def _on_message(self, client, userdata, message):  # pylint: disable=unused-argument
         """Wrapper for handling MQTT messages in a thread-safe manner."""
         asyncio.run_coroutine_threadsafe(
             self._on_client_message(client, userdata, message), self._loop
         )
 
-    async def _on_client_message(self, client, userdata, message):  # pylint: disable=unused-argument
-        """Handle messages received by mqtt client."""
-        _logger.debug("Received MQTT message. Topic: %s", message.topic)
-        json_payload = json.loads(message.payload)
-        _logger.debug("Message: %s", json_payload)
-        if self._on_message_callback:
-            await self._on_message_callback(json_payload, message.topic)
+    async def connect(self) -> None:
+        """Connect the client."""
+        self._mqtt_client.connect(self._mqtt_broker_url, 443)
+        self._mqtt_client.loop_start()
 
-    def publish_message(self, topic: str, json_payload: str) -> None:
+    async def subscribe(self, topic: str) -> None:
+        """Subscribe to a MQTT topic."""
+        self._mqtt_client.subscribe(topic)
+
+    async def publish_message(self, topic: str, json_payload: str) -> None:
         """Publish a MQTT message."""
         self._mqtt_client.publish(topic, json_payload, qos=2)
 
@@ -138,3 +111,16 @@ class LGHorizonMqttClient:
         """Disconnect the client."""
         if self._mqtt_client.is_connected():
             self._mqtt_client.disconnect()
+
+    async def _on_client_message(self, client, userdata, message):  # pylint: disable=unused-argument
+        """Handle messages received by mqtt client."""
+        json_payload = await self._loop.run_in_executor(
+            None, json.loads, message.payload
+        )
+        _logger.debug(
+            "Received MQTT message \n\ntopic: %s\npayload:\n\n%s\n",
+            message.topic,
+            json.dumps(json_payload, indent=2),
+        )
+        if self._on_message_callback:
+            await self._on_message_callback(json_payload, message.topic)

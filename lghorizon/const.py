@@ -38,6 +38,13 @@ RECORDING_TYPE_SEASON = "season"
 
 BE_AUTH_URL = "https://login.prd.telenet.be/openid/login.do"
 
+PLATFORM_TYPES = {
+    "EOS": {"manufacturer": "Arris", "model": "DCX960"},
+    "EOS2": {"manufacturer": "HUMAX", "model": "2008C-STB-TN"},
+    "HORIZON": {"manufacturer": "Arris", "model": "DCX960"},
+    "APOLLO": {"manufacturer": "Arris", "model": "VIP5002W"},
+}
+
 COUNTRY_SETTINGS = {
     "nl": {
         "api_url": "https://spark-prod-nl.gnp.cloud.ziggogo.tv",

@@ -1,11 +1,24 @@
+"""LG Horizon Profile model."""
+
+
 class LGHorizonProfile:
     """LGHorizon profile."""
 
-    profile_id: str | None = None
-    name: str | None = None
-    favorite_channels: list[str] | None = None
+    def __init__(self, json_payload: dict):
+        """Initialize a profile."""
+        self._json_payload = json_payload
 
-    def __init__(self, json_payload):
-        self.profile_id = json_payload["profileId"]
-        self.name = json_payload["name"]
-        self.favorite_channels = json_payload["favoriteChannels"]
+    @property
+    def id(self) -> str:
+        """Return the profile id."""
+        return self._json_payload["profileId"]
+
+    @property
+    def name(self) -> str:
+        """Return the profile name."""
+        return self._json_payload["name"]
+
+    @property
+    def favorite_channels(self) -> list[str]:
+        """Return the favorite channels."""
+        return self._json_payload.get("favoriteChannels", [])

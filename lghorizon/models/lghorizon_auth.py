@@ -1,6 +1,8 @@
 """LG Horizon Auth Model."""
 
 import time
+import logging
+import json
 from typing import Any
 
 import backoff
@@ -9,6 +11,8 @@ from aiohttp import ClientResponseError, ClientSession
 from ..const import COUNTRY_SETTINGS
 from .exceptions import LGHorizonApiConnectionError, LGHorizonApiUnauthorizedError
 from .lghorizon_config import LGHorizonServicesConfig
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class LGHorizonAuth:
@@ -44,7 +48,7 @@ class LGHorizonAuth:
 
     async def fetch_access_token(self) -> None:
         """Fetch the access token."""
-
+        _LOGGER.debug("Fetching access token")
         headers = dict()
         headers["content-type"] = "application/json"
         headers["charset"] = "utf-8"
@@ -89,11 +93,9 @@ class LGHorizonAuth:
             headers = dict(headers)
         request_url = f"{host}{path}"
         if await self.is_token_expiring():
+            _LOGGER.debug("Access token is expiring, fetching a new one")
             await self.fetch_access_token()
         try:
-            clear_cookie = False
-            if clear_cookie:
-                self.websession.cookie_jar.clear()
             web_response = await self.websession.request(
                 "GET",
                 request_url,
@@ -101,8 +103,15 @@ class LGHorizonAuth:
                 headers=headers,
             )
             web_response.raise_for_status()
-            return await web_response.json()
+            json_response = await web_response.json()
+            _LOGGER.debug(
+                "Response from %s:\n %s",
+                request_url,
+                json.dumps(json_response, indent=2),
+            )
+            return json_response
         except ClientResponseError as cre:
+            _LOGGER.error("Error response from %s: %s", request_url, str(cre))
             if cre.status == 401:
                 await self.fetch_access_token()
             raise LGHorizonApiConnectionError(
@@ -111,6 +120,7 @@ class LGHorizonAuth:
 
     async def get_mqtt_token(self) -> Any:
         """Get the MQTT token."""
+        _LOGGER.debug("Fetching MQTT token")
         config = await self.get_service_config()
         service_url = await config.get_service_url("authorizationService")
         result = await self.request(
@@ -121,6 +131,7 @@ class LGHorizonAuth:
 
     async def get_service_config(self):
         """Get the service configuration."""
+        _LOGGER.debug("Fetching service configuration")
         if self._service_config is None:
             base_country_code = self.country_code[0:2]
             result = await self.request(
