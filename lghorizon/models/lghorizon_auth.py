@@ -3,7 +3,7 @@
 import time
 import logging
 import json
-from typing import Any
+from typing import Any, Optional
 
 import backoff
 from aiohttp import ClientResponseError, ClientSession
@@ -18,6 +18,17 @@ _LOGGER = logging.getLogger(__name__)
 class LGHorizonAuth:
     """Class to make authenticated requests."""
 
+    _websession: ClientSession
+    _refresh_token: str
+    _access_token: Optional[str]
+    _username: str
+    _password: str
+    _household_id: str
+    _token_expiry: Optional[int]
+    _country_code: str
+    _host: str
+    _use_refresh_token: bool
+
     def __init__(
         self,
         websession: ClientSession,
@@ -27,17 +38,87 @@ class LGHorizonAuth:
         password: str = "",
     ) -> None:
         """Initialize the auth with refresh token."""
-        self.websession = websession
-        self.refresh_token = refresh_token
-        self.access_token = None
-        self.username = username
-        self.password = password
-        self.household_id = ""
-        self.token_expiry = None
-        self.country_code = country_code
-        self.host = COUNTRY_SETTINGS[country_code]["api_url"]
-        self.use_refresh_token = COUNTRY_SETTINGS[country_code]["use_refreshtoken"]
+        self._websession = websession
+        self._refresh_token = refresh_token
+        self._access_token = None
+        self._username = username
+        self._password = password
+        self._household_id = ""
+        self._token_expiry = None
+        self._country_code = country_code
+        self._host = COUNTRY_SETTINGS[country_code]["api_url"]
+        self._use_refresh_token = COUNTRY_SETTINGS[country_code]["use_refreshtoken"]
         self._service_config = None
+
+    @property
+    def websession(self) -> ClientSession:
+        """Return the aiohttp client session."""
+        return self._websession
+
+    @property
+    def refresh_token(self) -> str:
+        """Return the refresh token."""
+        return self._refresh_token
+
+    @refresh_token.setter
+    def refresh_token(self, value: str) -> None:
+        """Set the refresh token."""
+        self._refresh_token = value
+
+    @property
+    def access_token(self) -> Optional[str]:
+        """Return the access token."""
+        return self._access_token
+
+    @access_token.setter
+    def access_token(self, value: Optional[str]) -> None:
+        """Set the access token."""
+        self._access_token = value
+
+    @property
+    def username(self) -> str:
+        """Return the username."""
+        return self._username
+
+    @username.setter
+    def username(self, value: str) -> None:
+        """Set the username."""
+        self._username = value
+
+    @property
+    def password(self) -> str:
+        """Return the password."""
+        return self._password
+
+    @password.setter
+    def password(self, value: str) -> None:
+        """Set the password."""
+        self._password = value
+
+    @property
+    def household_id(self) -> str:
+        """Return the household ID."""
+        return self._household_id
+
+    @household_id.setter
+    def household_id(self, value: str) -> None:
+        """Set the household ID."""
+        self._household_id = value
+
+    @property
+    def token_expiry(self) -> Optional[int]:
+        """Return the token expiry timestamp."""
+        return self._token_expiry
+
+    @token_expiry.setter
+    def token_expiry(self, value: Optional[int]) -> None:
+        """Set the token expiry timestamp."""
+        self._token_expiry = value
+
+    @property
+    def country_code(self) -> str:
+        """Return the country code."""
+        return self._country_code
 
     async def is_token_expiring(self) -> bool:
         """Check if the token is expiring within one day."""
@@ -53,16 +134,16 @@ class LGHorizonAuth:
         headers["content-type"] = "application/json"
         headers["charset"] = "utf-8"
 
-        if not self.use_refresh_token and self.access_token is None:
+        if not self._use_refresh_token and self.access_token is None:
             payload = {"password": self.password, "username": self.username}
             headers["x-device-code"] = "web"
             auth_url_path = "/auth-service/v1/authorization"
         else:
             payload = {"refreshToken": self.refresh_token}
             auth_url_path = "/auth-service/v1/authorization/refresh"
-        try:
+        try:  # Use properties and backing fields
             auth_response = await self.websession.post(
-                f"{self.host}{auth_url_path}",
+                f"{self._host}{auth_url_path}",
                 json=payload,
                 headers=headers,
             )
@@ -87,20 +168,17 @@ class LGHorizonAuth:
         self.token_expiry = auth_json["refreshTokenExpiry"]
 
     @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3)
-    async def request(self, host: str, path: str, **kwargs) -> Any:
+    async def request(self, host: str, path: str, params=None, **kwargs) -> Any:
         """Make a request."""
         if headers := kwargs.pop("headers", {}):
             headers = dict(headers)
         request_url = f"{host}{path}"
-        if await self.is_token_expiring():
+        if await self.is_token_expiring():  # Use property
             _LOGGER.debug("Access token is expiring, fetching a new one")
             await self.fetch_access_token()
         try:
             web_response = await self.websession.request(
-                "GET",
-                request_url,
-                **kwargs,
-                headers=headers,
+                "GET", request_url, **kwargs, headers=headers, params=params
             )
             web_response.raise_for_status()
             json_response = await web_response.json()
@@ -132,10 +210,10 @@ class LGHorizonAuth:
     async def get_service_config(self):
         """Get the service configuration."""
         _LOGGER.debug("Fetching service configuration")
-        if self._service_config is None:
+        if self._service_config is None:  # Use property and backing field
             base_country_code = self.country_code[0:2]
             result = await self.request(
-                self.host,
+                self._host,
                 f"/{base_country_code}/en/config-service/conf/web/backoffice.json",
             )
             self._service_config = LGHorizonServicesConfig(result)

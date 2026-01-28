@@ -2,13 +2,10 @@
 
 import json
 import logging
-from typing import Callable, Dict, Optional
+from typing import Callable, Dict, Optional, Any, Coroutine
 
-from lghorizon.models.lghorizon_sources import LGHorizonSourceType
 
 from ..const import (
-    BOX_PLAY_STATE_CHANNEL,
-    ONLINE_STANDBY,
     ONLINE_RUNNING,
     MEDIA_KEY_POWER,
     MEDIA_KEY_PLAY_PAUSE,
@@ -25,9 +22,11 @@ from ..helpers import make_id
 from .lghorizon_auth import LGHorizonAuth
 from .lghorizon_channel import LGHorizonChannel
 from .lghorizon_mqtt_client import LGHorizonMqttClient  # Added import for type checking
-from .lghorizon_device_state import LGHorizonDeviceState
+from .lghorizon_device_state import LGHorizonDeviceState, LGHorizonRunningState
 from .exceptions import LGHorizonApiConnectionError
 from .lghorizon_message import LGHorizonStatusMessage, LGHorizonUIStatusMessage
+
+from ..device_state_processor import LGHorizonDeviceStateProcessor
 
 # Assuming these models are available from legacy or will be moved to models/
 # from ..legacy.models import (
@@ -49,21 +48,22 @@ class LGHorizonDevice:
     _hashed_cpe_id: str
     _device_friendly_name: str
     _platform_type: str
-    _state: Optional[str]
     _device_state: LGHorizonDeviceState
     _manufacturer: Optional[str]
     _model: Optional[str]
     _recording_capacity: Optional[int]
-
+    _device_state_processor: LGHorizonDeviceStateProcessor
     _mqtt_client: LGHorizonMqttClient
-    _change_callback: Callable
+    _change_callback: Callable[[str], Coroutine[Any, Any, Any]]
     _auth: LGHorizonAuth
     _channels: Dict[str, LGHorizonChannel]
+    _last_ui_message_timestamp: int = 0
 
     def __init__(
         self,
         device_json,
         mqtt_client: LGHorizonMqttClient,
+        device_state_processor: LGHorizonDeviceStateProcessor,
         auth: LGHorizonAuth,
         channels: Dict[str, LGHorizonChannel],
     ):
@@ -75,11 +75,11 @@ class LGHorizonDevice:
         self._mqtt_client = mqtt_client
         self._auth = auth
         self._channels = channels
-        self._device_state = LGHorizonDeviceState()
-        self._state = None  # Initialize state
+        self._device_state = LGHorizonDeviceState()  # Initialize state
         self._manufacturer = None
         self._model = None
         self._recording_capacity = None
+        self._device_state_processor = device_state_processor
 
     @property
     def device_id(self) -> str:
@@ -106,7 +106,10 @@ class LGHorizonDevice:
     @property
     def is_available(self) -> bool:
         """Return the availability of the settop box."""
-        return self.state == ONLINE_RUNNING or self.state == ONLINE_STANDBY
+        return self._device_state.state in (
+            LGHorizonRunningState.ONLINE_RUNNING,
+            LGHorizonRunningState.ONLINE_STANDBY,
+        )
 
     @property
     def hashed_cpe_id(self) -> str:
@@ -117,16 +120,6 @@ class LGHorizonDevice:
     def device_friendly_name(self) -> str:
         """Return the device friendly name."""
         return self._device_friendly_name
-
-    @property
-    def state(self) -> Optional[str]:
-        """Return the current state of the device."""
-        return self._state
-
-    @state.setter
-    def state(self, value: str) -> None:
-        """Set the current state of the device."""
-        self._state = value
 
     @property
     def device_state(self) -> LGHorizonDeviceState:
@@ -142,6 +135,16 @@ class LGHorizonDevice:
     def recording_capacity(self, value: int) -> None:
         """Set the recording capacity used."""
         self._recording_capacity = value
+
+    @property
+    def last_ui_message_timestamp(self) -> int:
+        """Return the last ui message timestamp."""
+        return self._last_ui_message_timestamp
+
+    @last_ui_message_timestamp.setter
+    def last_ui_message_timestamp(self, value: int) -> None:
+        """Set the last ui message timestamp."""
+        self._last_ui_message_timestamp = value
 
     async def update_channels(self, channels: Dict[str, LGHorizonChannel]):
         """Update the channels list."""
@@ -159,7 +162,9 @@ class LGHorizonDevice:
         }
         await self._mqtt_client.publish_message(topic, json.dumps(payload))
 
-    async def set_callback(self, change_callback: Callable) -> None:
+    async def set_callback(
+        self, change_callback: Callable[[str], Coroutine[Any, Any, Any]]
+    ) -> None:
         """Set a callback function."""
         self._change_callback = change_callback  # type: ignore [assignment] # Callback can be None
 
@@ -167,14 +172,17 @@ class LGHorizonDevice:
         self, status_message: LGHorizonStatusMessage
     ) -> None:
         """Register a new settop box."""
-        state = status_message.state
-        if self._state == state:  # Access backing field for comparison
+        old_running_state = self.device_state.state
+        new_running_state = status_message.running_state
+        if (
+            old_running_state == new_running_state
+        ):  # Access backing field for comparison
             return
-        self.state = state  # Use the setter
-        if self._state == ONLINE_STANDBY:  # Access backing field for comparison
-            self._device_state.reset()
-            if self._change_callback:
-                self._change_callback(self._device_id)
+        await self._device_state_processor.process_state(
+            self.device_state, status_message
+        )  # Use the setter
+        if self._device_state.state == LGHorizonRunningState.ONLINE_STANDBY:
+            await self._trigger_callback()
         else:
             await self._request_settop_box_state()
         await self._request_settop_box_recording_capacity()
@@ -183,23 +191,12 @@ class LGHorizonDevice:
         self, status_message: LGHorizonUIStatusMessage
     ) -> None:
         """Handle UI status message."""
-        if (
-            status_message.ui_state is None
-            or status_message.ui_state.player_state is None
-            or status_message.ui_state.player_state.source is None
-        ):
-            return
-        match status_message.ui_state.player_state.source.source_type:
-            case LGHorizonSourceType.LINEAR:
-                await self.handle_linear_message(status_message)
 
+        await self._device_state_processor.process_ui_state(
+            self.device_state, status_message
+        )
+        self.last_ui_message_timestamp = status_message.message_timestamp
         await self._trigger_callback()
-
-    async def handle_linear_message(
-        self, status_message: LGHorizonUIStatusMessage
-    ) -> None:
-        """Handle linear UI status message."""
-        pass
 
     async def update_recording_capacity(self, payload) -> None:
         """Updates the recording capacity."""
@@ -266,76 +263,72 @@ class LGHorizonDevice:
     #     self._device_state.last_position_update = last_update_dt
     #     await self._trigger_callback()
 
-    # async def update_with_app(self, source_type: str, app: LGHorizonApp) -> None:
-    #     """Update box with app."""
-    #     self._device_state.source_type = source_type
-    #     self._device_state.channel_id = None
-    #     self._device_state.channel_title = app.title
-    #     self._device_state.title = app.title
-    #     self._device_state.image = app.image
-    #     self._device_state.reset_progress()
-    #     await self._trigger_callback()
-
     async def _trigger_callback(self):
         if self._change_callback:
             _logger.debug("Callback called from box %s", self.device_id)
-            self._change_callback(self.device_id)
+            await self._change_callback(self.device_id)
 
     async def turn_on(self) -> None:
         """Turn the settop box on."""
 
-        if self.state == ONLINE_STANDBY:
+        if self._device_state.state == LGHorizonRunningState.ONLINE_STANDBY:
             await self.send_key_to_box(MEDIA_KEY_POWER)
 
     async def turn_off(self) -> None:
         """Turn the settop box off."""
-        if self.state == ONLINE_RUNNING:
+        if self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING:
             await self.send_key_to_box(MEDIA_KEY_POWER)
-            self._device_state.reset()
+            await self._device_state.reset()
 
     async def pause(self) -> None:
         """Pause the given settopbox."""
-        if self.state == ONLINE_RUNNING and not self._device_state.paused:
+        if (
+            self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING
+            and not self._device_state.paused
+        ):
             await self.send_key_to_box(MEDIA_KEY_PLAY_PAUSE)
 
     async def play(self) -> None:
         """Resume the settopbox."""
-        if self.state == ONLINE_RUNNING and self._device_state.paused:
+        if (
+            self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING
+            and self._device_state.paused
+        ):
             await self.send_key_to_box(MEDIA_KEY_PLAY_PAUSE)
 
     async def stop(self) -> None:
         """Stop the settopbox."""
-        if self.state == ONLINE_RUNNING:
+        if self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING:
             await self.send_key_to_box(MEDIA_KEY_STOP)
 
     async def next_channel(self):
         """Select the next channel for given settop box."""
-        if self.state == ONLINE_RUNNING:
+        if self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING:
             await self.send_key_to_box(MEDIA_KEY_CHANNEL_UP)
 
     async def previous_channel(self) -> None:
         """Select the previous channel for given settop box."""
-        if self.state == ONLINE_RUNNING:
+        if self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING:
             await self.send_key_to_box(MEDIA_KEY_CHANNEL_DOWN)
 
     async def press_enter(self) -> None:
         """Press enter on the settop box."""
-        if self.state == ONLINE_RUNNING:
+        if self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING:
             await self.send_key_to_box(MEDIA_KEY_ENTER)
 
     async def rewind(self) -> None:
         """Rewind the settop box."""
-        if self.state == ONLINE_RUNNING:
+        if self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING:
             await self.send_key_to_box(MEDIA_KEY_REWIND)
 
     async def fast_forward(self) -> None:
         """Fast forward the settop box."""
-        if self.state == ONLINE_RUNNING:
+        if self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING:
             await self.send_key_to_box(MEDIA_KEY_FAST_FORWARD)
 
     async def record(self):
         """Record on the settop box."""
-        if self.state == ONLINE_RUNNING:
+        if self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING:
             await self.send_key_to_box(MEDIA_KEY_RECORD)
 
     async def set_channel(self, source: str) -> None:
@@ -385,15 +378,6 @@ class LGHorizonDevice:
         await self._mqtt_client.publish_message(
             f"{self._auth.household_id}/{self.device_id}", payload
         )
-
-    async def _set_unknown_channel_info(self) -> None:
-        """Set unknown channel info."""
-        _logger.warning("Couldn't set channel. Channel info set to unknown...")
-        self._device_state.source_type = BOX_PLAY_STATE_CHANNEL
-        self._device_state.channel_id = None
-        self._device_state.title = "No information available"
-        self._device_state.image = None
-        self._device_state.paused = False
 
     async def _request_settop_box_state(self) -> None:
         """Send mqtt message to receive state from settop box."""

@@ -703,14 +703,14 @@ class LGHorizonBox:
             f"{self._auth.household_id}/{self.device_id}", payload
         )
 
-    def _set_unknown_channel_info(self) -> None:
-        """Set unknown channel info."""
-        _logger.warning("Couldn't set channel. Channel info set to unknown...")
-        self.playing_info.set_source_type(BOX_PLAY_STATE_CHANNEL)
-        self.playing_info.set_channel(None)
-        self.playing_info.set_title("No information available")
-        self.playing_info.set_image(None)
-        self.playing_info.set_paused(False)
+    # def _set_unknown_channel_info(self) -> None:
+    #     """Set unknown channel info."""
+    #     _logger.warning("Couldn't set channel. Channel info set to unknown...")
+    #     self.playing_info.set_source_type(BOX_PLAY_STATE_CHANNEL)
+    #     self.playing_info.set_channel(None)
+    #     self.playing_info.set_title("No information available")
+    #     self.playing_info.set_image(None)
+    #     self.playing_info.set_paused(False)
 
     def _request_settop_box_state(self) -> None:
         """Send mqtt message to receive state from settop box."""

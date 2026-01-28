@@ -5,6 +5,7 @@ import json
 
 from enum import Enum
 from .lghorizon_ui_status import LGHorizonUIState
+from .lghorizon_device_state import LGHorizonRunningState
 
 
 class LGHorizonMessageType(Enum):
@@ -62,9 +63,9 @@ class LGHorizonStatusMessage(LGHorizonMessage):
         return self._payload.get("source", "unknown")
 
     @property
-    def state(self) -> str:
+    def running_state(self) -> LGHorizonRunningState:
         """Return the device ID from the payload, if available."""
-        return self._payload.get("state", "unknown")
+        return LGHorizonRunningState[self._payload.get("state", "unknown").upper()]
 
 
 class LGHorizonUIStatusMessage(LGHorizonMessage):

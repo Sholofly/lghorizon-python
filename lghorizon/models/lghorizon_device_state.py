@@ -2,6 +2,16 @@
 
 from datetime import datetime
 from typing import Optional
+from enum import Enum
+from .lghorizon_sources import LGHorizonSourceType
+
+
+class LGHorizonRunningState(Enum):
+    """Running state of horizon box."""
+
+    UNKNOWN = "UNKNOWN"
+    ONLINE_RUNNING = "ONLINE_RUNNING"
+    ONLINE_STANDBY = "ONLINE_STANDBY"
 
 
 class LGHorizonDeviceState:
@@ -10,24 +20,38 @@ class LGHorizonDeviceState:
     _channel_id: Optional[str]
     _title: Optional[str]
     _image: Optional[str]
-    _source_type: Optional[str]
+    _source_type: LGHorizonSourceType
     _paused: bool
     _channel_title: Optional[str]
     _duration: Optional[float]
     _position: Optional[float]
     _last_position_update: Optional[datetime]
+    _state: LGHorizonRunningState
+    _speed: Optional[int]
 
     def __init__(self) -> None:
         """Initialize the playing info."""
         self._channel_id = None
         self._title = None
         self._image = None
-        self._source_type = None
+        self._source_type = LGHorizonSourceType.UNKNOWN
         self._paused = False
         self._channel_title = None
         self._duration = None
         self._position = None
         self._last_position_update = None
+        self._state = LGHorizonRunningState.UNKNOWN
+        self._speed = None
+
+    @property
+    def state(self) -> LGHorizonRunningState:
+        """Return the channel ID."""
+        return self._state
+
+    @state.setter
+    def state(self, value: LGHorizonRunningState) -> None:
+        """Set the channel ID."""
+        self._state = value
 
     @property
     def channel_id(self) -> Optional[str]:
@@ -60,24 +84,21 @@ class LGHorizonDeviceState:
         self._image = value
 
     @property
-    def source_type(self) -> Optional[str]:
+    def source_type(self) -> LGHorizonSourceType:
         """Return the source type."""
         return self._source_type
 
     @source_type.setter
-    def source_type(self, value: Optional[str]) -> None:
+    def source_type(self, value: LGHorizonSourceType) -> None:
         """Set the source type."""
         self._source_type = value
 
     @property
     def paused(self) -> bool:
         """Return if the media is paused."""
-        return self._paused
-
-    @paused.setter
-    def paused(self, value: bool) -> None:
-        """Set the paused state."""
-        self._paused = value
+        if self.speed is None:
+            return False
+        return self.speed == 0
 
     @property
     def channel_title(self) -> Optional[str]:
@@ -119,18 +140,28 @@ class LGHorizonDeviceState:
         """Set the last position update time."""
         self._last_position_update = value
 
-    def reset_progress(self) -> None:
+    async def reset_progress(self) -> None:
         """Reset the progress-related attributes."""
         self.last_position_update = None
         self.duration = None
         self.position = None
 
-    def reset(self) -> None:
+    @property
+    def speed(self) -> Optional[int]:
+        """Return the speed."""
+        return self._speed
+
+    @speed.setter
+    def speed(self, value: int | None) -> None:
+        """Set the channel ID."""
+        self._speed = value
+
+    async def reset(self) -> None:
         """Reset all playing information."""
         self.channel_id = None
         self.title = None
         self.image = None
-        self.source_type = None
-        self.paused = False
+        self.source_type = LGHorizonSourceType.UNKNOWN
+        self.speed = None
         self.channel_title = None
-        self.reset_progress()
+        await self.reset_progress()

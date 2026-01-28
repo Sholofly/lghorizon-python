@@ -14,6 +14,9 @@ from .models.lghorizon_profile import LGHorizonProfile
 from .models.lghorizon_message import LGHorizonMessageType
 from .message_factory import LGHorizonMessageFactory
 from .models.lghorizon_message import LGHorizonStatusMessage, LGHorizonUIStatusMessage
+from .models.lghorizon_device_state import LGHorizonRunningState
+from .device_state_processor import LGHorizonDeviceStateProcessor
+
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -31,22 +34,29 @@ class LGHorizonApi:
     _initialized: bool = False
     _devices: Dict[str, LGHorizonDevice] = {}
     _message_factory: LGHorizonMessageFactory = LGHorizonMessageFactory()
+    _device_state_processor: LGHorizonDeviceStateProcessor | None
 
     def __init__(self, auth: LGHorizonAuth, profile_id: str = "") -> None:
         """Initialize LG Horizon API client."""
         self.auth = auth
         self._profile_id = profile_id
         self._channels = {}
+        self._device_state_processor = None
 
     async def initialize(self) -> None:
         """Initialize the API client."""
         self._service_config = await self.auth.get_service_config()
         self._customer = await self._get_customer_info()
+        if self._profile_id == "":
+            self._profile_id = list(self._customer.profiles.keys())[0]
         await self._refresh_entitlements()
         await self._refresh_channels()
         self._mqtt_client = await self._create_mqtt_client()
         await self._mqtt_client.connect()
         await self._register_devices()
+        self._device_state_processor = LGHorizonDeviceStateProcessor(
+            self.auth, self._channels, self._customer, self._profile_id
+        )
         self._initialized = True
 
     async def get_devices(self) -> Dict[str, LGHorizonDevice]:
@@ -102,7 +112,17 @@ class LGHorizonApi:
         channels = await self.get_profile_channels(self._profile_id)
         for raw_box in self._customer.assigned_devices:
             _LOGGER.debug("Creating box for device: %s", raw_box)
-            device = LGHorizonDevice(raw_box, self._mqtt_client, self.auth, channels)
+            if self._device_state_processor is None:
+                self._device_state_processor = LGHorizonDeviceStateProcessor(
+                    self.auth, self._channels, self._customer, self._profile_id
+                )
+            device = LGHorizonDevice(
+                raw_box,
+                self._mqtt_client,
+                self._device_state_processor,
+                self.auth,
+                channels,
+            )
             await device.register_mqtt()
             self._devices[device.device_id] = device
 
@@ -120,10 +140,10 @@ class LGHorizonApi:
         )
         return mqtt_client
 
-    async def _on_mqtt_connected(self) -> None:
+    async def _on_mqtt_connected(self):
         """MQTT connected callback."""
         await self._mqtt_client.subscribe(self.auth.household_id)
-        await self._mqtt_client.subscribe(self.auth.household_id + "/#")
+        # await self._mqtt_client.subscribe(self.auth.household_id + "/#")
         await self._mqtt_client.subscribe(
             self.auth.household_id + "/" + self._mqtt_client.client_id
         )
@@ -148,22 +168,25 @@ class LGHorizonApi:
             self.auth.household_id + "/recordingStatus/lastUserAction"
         )
 
-    async def _on_mqtt_message(self, mqtt_message: dict, mqtt_topic: str) -> None:
+    async def _on_mqtt_message(self, mqtt_message: dict, mqtt_topic: str):
         """MQTT message callback."""
         message = await self._message_factory.create_message(mqtt_topic, mqtt_message)
         match message.message_type:
             case LGHorizonMessageType.STATUS:
                 message.__class__ = LGHorizonStatusMessage
                 status_message = cast(LGHorizonStatusMessage, message)
-                await self._devices[status_message.source].handle_status_message(
-                    status_message
-                )
+                device = self._devices[status_message.source]
+                await device.handle_status_message(status_message)
             case LGHorizonMessageType.UI_STATUS:
                 message.__class__ = LGHorizonUIStatusMessage
-                status_message = cast(LGHorizonUIStatusMessage, message)
-                await self._devices[status_message.source].handle_ui_status_message(
-                    status_message
-                )
+                ui_status_message = cast(LGHorizonUIStatusMessage, message)
+                device = self._devices[ui_status_message.source]
+                if (
+                    not device.device_state.state
+                    == LGHorizonRunningState.ONLINE_RUNNING
+                ):
+                    return
+                await device.handle_ui_status_message(ui_status_message)
 
     async def _get_customer_info(self) -> Any:
         service_url = await self._service_config.get_service_url(

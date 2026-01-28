@@ -3,7 +3,7 @@
 import json
 import logging
 import asyncio
-from typing import Callable
+from typing import Callable, Any, Coroutine
 
 import paho.mqtt.client as mqtt
 
@@ -21,8 +21,8 @@ class LGHorizonMqttClient:
     _auth: LGHorizonAuth
     _mqtt_token: str = ""
     client_id: str = ""
-    _on_connected_callback: Callable
-    _on_message_callback: Callable
+    _on_connected_callback: Callable[[], Coroutine[Any, Any, Any]]
+    _on_message_callback: Callable[[dict, str], Coroutine[Any, Any, Any]]
 
     @property
     def is_connected(self):
@@ -32,8 +32,8 @@ class LGHorizonMqttClient:
     def __init__(
         self,
         auth: LGHorizonAuth,
-        on_connected_callback: Callable,
-        on_message_callback: Callable,
+        on_connected_callback: Callable[[], Coroutine[Any, Any, Any]],
+        on_message_callback: Callable[[dict, str], Coroutine[Any, Any, Any]],
     ):
         """Initialize the MQTT client."""
         self._auth = auth
@@ -45,8 +45,8 @@ class LGHorizonMqttClient:
     async def create(
         cls,
         auth: LGHorizonAuth,
-        on_connected_callback: Callable,
-        on_message_callback: Callable,
+        on_connected_callback: Callable[[], Coroutine[Any, Any, Any]],
+        on_message_callback: Callable[[dict, str], Coroutine[Any, Any, Any]],
     ):
         """Create the MQTT client."""
         instance = cls(auth, on_connected_callback, on_message_callback)
