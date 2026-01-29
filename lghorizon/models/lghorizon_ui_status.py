@@ -5,6 +5,7 @@ from .lghorizon_sources import (
     LGHorizonSource,
     LGHorizonLinearSource,
     LGHorizonVODSource,
+    LGHorizonReplaySource,
     LGHorizonNDVRSource,
     LGHorizonReviewBufferSource,
     LGHorizonUnknownSource,
@@ -53,6 +54,8 @@ class LGHorizonPlayerState:
                     return LGHorizonLinearSource(self._raw_json["source"])
                 case LGHorizonSourceType.VOD:
                     return LGHorizonVODSource(self._raw_json["source"])
+                case LGHorizonSourceType.REPLAY:
+                    return LGHorizonReplaySource(self._raw_json["source"])
 
         return LGHorizonUnknownSource(self._raw_json["source"])
 

@@ -22,7 +22,7 @@ class LGHorizonDeviceState:
     _image: Optional[str]
     _source_type: LGHorizonSourceType
     _paused: bool
-    _channel_title: Optional[str]
+    _sub_title: Optional[str]
     _duration: Optional[float]
     _position: Optional[float]
     _last_position_update: Optional[datetime]
@@ -36,7 +36,7 @@ class LGHorizonDeviceState:
         self._image = None
         self._source_type = LGHorizonSourceType.UNKNOWN
         self._paused = False
-        self._channel_title = None
+        self.sub_title = None
         self._duration = None
         self._position = None
         self._last_position_update = None
@@ -101,14 +101,14 @@ class LGHorizonDeviceState:
         return self.speed == 0
 
     @property
-    def channel_title(self) -> Optional[str]:
+    def sub_title(self) -> Optional[str]:
         """Return the channel title."""
-        return self._channel_title
+        return self._sub_title
 
-    @channel_title.setter
-    def channel_title(self, value: Optional[str]) -> None:
+    @sub_title.setter
+    def sub_title(self, value: Optional[str]) -> None:
         """Set the channel title."""
-        self._channel_title = value
+        self._sub_title = value
 
     @property
     def duration(self) -> Optional[float]:
@@ -160,8 +160,8 @@ class LGHorizonDeviceState:
         """Reset all playing information."""
         self.channel_id = None
         self.title = None
+        self.sub_title = None
         self.image = None
         self.source_type = LGHorizonSourceType.UNKNOWN
         self.speed = None
-        self.channel_title = None
         await self.reset_progress()

@@ -39,7 +39,18 @@ class LGHorizonReplayEvent:
     @property
     def episode_name(self) -> Optional[str]:
         """Return the episode name."""
-        return self._raw_json.get("episodeName")
+        return self._raw_json.get("episodeName", None)
+
+    @property
+    def full_episode_title(self) -> Optional[str]:
+        """Return the full episode title."""
+
+        if not self.season_number and not self.episode_number:
+            return None
+        full_title = f"""S{self.season_number:02d}E{self.episode_number:02d}"""
+        if self.episode_name:
+            full_title += f": {self.episode_name}"
+        return full_title
 
     def __repr__(self) -> str:
         """Return a string representation of the replay event."""
@@ -49,7 +60,7 @@ class LGHorizonReplayEvent:
 class LGHorizonVODType(Enum):
     """Enumeration of LG Horizon VOD types."""
 
-    MOVIE = "MOVIE"
+    ASSET = "ASSET"
     EPISODE = "EPISODE"
     UNKNOWN = "UNKNOWN"
 
@@ -71,11 +82,21 @@ class LGHorizonVOD:
         return self._vod_json["id"]
 
     @property
+    def episode_title(self) -> str:
+        """Return the ID of the VOD."""
+        match self.vod_type:
+            case LGHorizonVODType.ASSET:
+                return ""
+            case LGHorizonVODType.EPISODE:
+                return f"S{self._vod_json['season'].zfill(2)}E{self._vod_json['episode'].zfill(2)}: {self._vod_json['title']}"
+        return ""
+
+    @property
     def title(self) -> str:
         """Return the title of the VOD."""
         match self.vod_type:
-            case LGHorizonVODType.MOVIE:
-                return self._vod_json["seriesTitle"]
+            case LGHorizonVODType.ASSET:
+                return self._vod_json["title"]
             case LGHorizonVODType.EPISODE:
                 return self._vod_json["seriesTitle"]
         return "unknown"

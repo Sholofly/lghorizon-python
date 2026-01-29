@@ -100,6 +100,20 @@ class LGHorizonVODSource(LGHorizonSource):
         return LGHorizonSourceType.VOD
 
 
+class LGHorizonReplaySource(LGHorizonSource):
+    """Represent the VOD Source of an LG Horizon device."""
+
+    @property
+    def event_id(self) -> str:
+        """Return the title ID."""
+        return self._raw_json.get("eventId", "")
+
+    @property
+    def source_type(self) -> LGHorizonSourceType:
+        """Return the source type."""
+        return LGHorizonSourceType.REPLAY
+
+
 class LGHorizonUnknownSource(LGHorizonSource):
     """Represent the Linear Source of an LG Horizon device."""
 

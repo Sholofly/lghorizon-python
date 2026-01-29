@@ -181,10 +181,10 @@ class LGHorizonDevice:
         await self._device_state_processor.process_state(
             self.device_state, status_message
         )  # Use the setter
-        if self._device_state.state == LGHorizonRunningState.ONLINE_STANDBY:
-            await self._trigger_callback()
-        else:
+        if self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING:
             await self._request_settop_box_state()
+
+        await self._trigger_callback()
         await self._request_settop_box_recording_capacity()
 
     async def handle_ui_status_message(
