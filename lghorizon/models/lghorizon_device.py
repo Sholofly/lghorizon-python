@@ -166,7 +166,8 @@ class LGHorizonDevice:
         self, change_callback: Callable[[str], Coroutine[Any, Any, Any]]
     ) -> None:
         """Set a callback function."""
-        self._change_callback = change_callback  # type: ignore [assignment] # Callback can be None
+        self._change_callback = change_callback
+        await self.register_mqtt()  # type: ignore [assignment] # Callback can be None
 
     async def handle_status_message(
         self, status_message: LGHorizonStatusMessage
@@ -203,65 +204,6 @@ class LGHorizonDevice:
         if "CPE.capacity" not in payload or "used" not in payload:
             return
         self.recording_capacity = payload["used"]  # Use the setter
-
-    # async def update_with_replay_event(
-    #     self, source_type: str, event: LGHorizonReplayEvent, channel: LGHorizonChannel
-    # ) -> None:
-    #     """Update box with replay event."""
-    #     self._device_state.source_type = source_type
-    #     self._device_state.channel_id = channel.id
-    #     self._device_state.channel_title = channel.title
-    #     title = event.title
-    #     if event.episode_name:
-    #         title += f": {event.episode_name}"
-    #     self._device_state.title = title
-    #     self._device_state.image = channel.stream_image
-    #     self._device_state.reset_progress()
-    #     await self._trigger_callback()
-
-    # async def update_with_recording(
-    #     self,
-    #     source_type: str,
-    #     recording: LGHorizonRecordingSingle,
-    #     channel: LGHorizonChannel,  # type: ignore [valid-type] # channel can be None
-    #     start: float,
-    #     end: float,
-    #     last_speed_change: float,
-    #     relative_position: float,
-    # ) -> None:
-    #     """Update box with recording."""
-    #     self._device_state.source_type = source_type
-    #     self._device_state.channel_id = channel.id
-    #     self._device_state.channel_title = channel.title
-    #     self._device_state.title = f"{recording.title}"
-    #     self._device_state.image = recording.image
-    #     start_dt = datetime.fromtimestamp(start / 1000.0)
-    #     end_dt = datetime.fromtimestamp(end / 1000.0)
-    #     duration = (end_dt - start_dt).total_seconds()
-    #     self._device_state.duration = duration
-    #     self._device_state.position = relative_position / 1000.0
-    #     last_update_dt = datetime.fromtimestamp(last_speed_change / 1000.0)
-    #     self._device_state.last_position_update = last_update_dt
-    #     await self._trigger_callback()
-
-    # async def update_with_vod(
-    #     self,
-    #     source_type: str,
-    #     vod: LGHorizonVod,
-    #     last_speed_change: float,
-    #     relative_position: float,
-    # ) -> None:
-    #     """Update box with vod."""
-    #     self._device_state.source_type = source_type
-    #     self._device_state.channel_id = None
-    #     self._device_state.channel_title = None
-    #     self._device_state.title = vod.title
-    #     self._device_state.image = None
-    #     self._device_state.duration = vod.duration
-    #     self._device_state.position = relative_position / 1000.0
-    #     last_update_dt = datetime.fromtimestamp(last_speed_change / 1000.0)
-    #     self._device_state.last_position_update = last_update_dt
-    #     await self._trigger_callback()
 
     async def _trigger_callback(self):
         if self._change_callback:

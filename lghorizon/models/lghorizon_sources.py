@@ -68,9 +68,14 @@ class LGHorizonNDVRSource(LGHorizonSource):
     """Represent the ReviewBuffer Source of an LG Horizon device."""
 
     @property
-    def event_id(self) -> str:
-        """Return the event ID."""
-        return self._raw_json.get("eventId", "")
+    def recording_id(self) -> str:
+        """Return the recording ID."""
+        return self._raw_json.get("recordingId", "")
+
+    @property
+    def channel_id(self) -> str:
+        """Return the channel ID."""
+        return self._raw_json.get("channelId", "")
 
     @property
     def source_type(self) -> LGHorizonSourceType:

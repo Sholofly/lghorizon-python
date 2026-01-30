@@ -82,24 +82,36 @@ class LGHorizonVOD:
         return self._vod_json["id"]
 
     @property
-    def episode_title(self) -> str:
+    def season_number(self) -> Optional[int]:
+        """Return the season number of the recording."""
+        return self._vod_json.get("seasonNumber", None)
+
+    @property
+    def episode_number(self) -> Optional[int]:
+        """Return the episode number of the recording."""
+        return self._vod_json.get("episodeNumber", None)
+
+    @property
+    def full_episode_title(self) -> Optional[str]:
         """Return the ID of the VOD."""
-        match self.vod_type:
-            case LGHorizonVODType.ASSET:
-                return ""
-            case LGHorizonVODType.EPISODE:
-                return f"S{self._vod_json['season'].zfill(2)}E{self._vod_json['episode'].zfill(2)}: {self._vod_json['title']}"
-        return ""
+        if self.vod_type != LGHorizonVODType.EPISODE:
+            return None
+        if not self.season_number and not self.episode_number:
+            return None
+        full_title = f"""S{self.season_number:02d}E{self.episode_number:02d}"""
+        if self.title:
+            full_title += f": {self.title}"
+        return full_title
 
     @property
     def title(self) -> str:
-        """Return the title of the VOD."""
-        match self.vod_type:
-            case LGHorizonVODType.ASSET:
-                return self._vod_json["title"]
-            case LGHorizonVODType.EPISODE:
-                return self._vod_json["seriesTitle"]
-        return "unknown"
+        """Return the ID of the VOD."""
+        return self._vod_json["title"]
+
+    @property
+    def series_title(self) -> Optional[str]:
+        """Return the series title of the VOD."""
+        return self._vod_json.get("seriesTitle", None)
 
     @property
     def duration(self) -> float:

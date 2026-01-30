@@ -7,6 +7,8 @@ from .lghorizon_profile import LGHorizonProfile
 class LGHorizonCustomer:
     """LGHorizon customer."""
 
+    _profiles: Dict[str, LGHorizonProfile] = {}
+
     def __init__(self, json_payload: dict):
         """Initialize a customer."""
         self._json_payload = json_payload
@@ -39,7 +41,15 @@ class LGHorizonCustomer:
     @property
     def profiles(self) -> Dict[str, LGHorizonProfile]:
         """Return the profiles."""
-        return {
-            p["profileId"]: LGHorizonProfile(p)
-            for p in self._json_payload.get("profiles", [])
-        }
+        if not self._profiles or self._profiles == {}:
+            self._profiles = {
+                p["profileId"]: LGHorizonProfile(p)
+                for p in self._json_payload.get("profiles", [])
+            }
+        return self._profiles
+
+    async def get_profile_lang(self, profile_id: str) -> str:
+        """Return the profile language."""
+        if profile_id not in self.profiles:
+            return "nl"
+        return self.profiles[profile_id].options.lang

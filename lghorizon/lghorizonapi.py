@@ -15,6 +15,8 @@ from .models.lghorizon_message import LGHorizonMessageType
 from .message_factory import LGHorizonMessageFactory
 from .models.lghorizon_message import LGHorizonStatusMessage, LGHorizonUIStatusMessage
 from .models.lghorizon_device_state import LGHorizonRunningState
+from .models.lghorizon_recordings import LGHorizonRecordingList, LGHorizonRecordingQuota
+from .recording_factory import LGHorizonRecordingFactory
 from .device_state_processor import LGHorizonDeviceStateProcessor
 
 
@@ -35,6 +37,7 @@ class LGHorizonApi:
     _devices: Dict[str, LGHorizonDevice] = {}
     _message_factory: LGHorizonMessageFactory = LGHorizonMessageFactory()
     _device_state_processor: LGHorizonDeviceStateProcessor | None
+    _recording_factory: LGHorizonRecordingFactory = LGHorizonRecordingFactory()
 
     def __init__(self, auth: LGHorizonAuth, profile_id: str = "") -> None:
         """Initialize LG Horizon API client."""
@@ -123,7 +126,6 @@ class LGHorizonApi:
                 self.auth,
                 channels,
             )
-            await device.register_mqtt()
             self._devices[device.device_id] = device
 
     async def disconnect(self) -> None:
@@ -212,10 +214,10 @@ class LGHorizonApi:
         """Retrieve channels."""
         _LOGGER.debug("Retrieving channels...")
         service_url = await self._service_config.get_service_url("linearService")
-
+        lang = await self._customer.get_profile_lang(self._profile_id)
         channels_json = await self.auth.request(
             service_url,
-            f"/v2/channels?cityId={self._customer.city_id}&language={self._customer.country_id}&productClass=Orion-DASH",
+            f"/v2/channels?cityId={self._customer.city_id}&language={lang}&productClass=Orion-DASH",
         )
         for channel_json in channels_json:
             channel = LGHorizonChannel(channel_json)
@@ -227,6 +229,42 @@ class LGHorizonApi:
                 continue
 
             self._channels[channel.id] = channel
+
+    async def get_all_recordings(self) -> LGHorizonRecordingList:
+        """Retrieve all recordings."""
+        _LOGGER.debug("Retrieving recordings...")
+        service_url = await self._service_config.get_service_url("recordingService")
+        lang = await self._customer.get_profile_lang(self._profile_id)
+        recordings_json = await self.auth.request(
+            service_url,
+            f"/customers/{self.auth.household_id}/recordings?isAdult=false&offset=0&limit=100&sort=time&sortOrder=desc&profileId={self._profile_id}&language={lang}",
+        )
+        recordings = await self._recording_factory.create_recordings(recordings_json)
+        return recordings
+
+    async def get_show_recordings(
+        self, show_id: str, channel_id: str
+    ) -> LGHorizonRecordingList:
+        """Retrieve all recordings."""
+        _LOGGER.debug("Retrieving recordings fro show...")
+        service_url = await self._service_config.get_service_url("recordingService")
+        lang = await self._customer.get_profile_lang(self._profile_id)
+        episodes_json = await self.auth.request(
+            service_url,
+            f"/customers/8436830_nl/episodes/shows/{show_id}?source=recording&isAdult=false&offset=0&limit=100&profileId={self._profile_id}&language={lang}&channelId={channel_id}&sort=time&sortOrder=asc",
+        )
+        recordings = await self._recording_factory.create_episodes(episodes_json)
+        return recordings
+
+    async def get_recording_quota(self) -> LGHorizonRecordingQuota:
+        """Refresh recording quota."""
+        _LOGGER.debug("Refreshing recording quota...")
+        service_url = await self._service_config.get_service_url("recordingService")
+        quota_json = await self.auth.request(
+            service_url,
+            f"/customers/{self.auth.household_id}/quota",
+        )
+        return LGHorizonRecordingQuota(quota_json)
 
 
 __all__ = ["LGHorizonApi", "LGHorizonAuth"]

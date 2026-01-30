@@ -50,18 +50,29 @@ async def main():
         # Start the input reader task
         input_task = asyncio.create_task(read_input_and_signal_shutdown())
 
+        async def device_callback(device_id: str):
+            device = devices[device_id]
+            print(
+                f"Device {device.device_id} state changed. Status:\n\nName: {device.device_friendly_name}\nState: {device.device_state.state.value}\nChannel: {device.device_state.channel_name}\nTitle: {device.device_state.title}\nSubtitle: {device.device_state.sub_title}\nSource type: {device.device_state.source_type.value}\n\n",
+            )
+
         try:
             await api.initialize()
             devices = await api.get_devices()
-
-            async def device_callback(device_id: str):
-                device = devices[device_id]
-                print(
-                    f"Device {device.device_id} state changed. Status:\n\nName: {device.device_friendly_name}\nState: {device.device_state.state.value}\nTitle: {device.device_state.title}\nSubtitle: {device.device_state.sub_title}\nSource type: {device.device_state.source_type.value}\n\n",
-                )
-
             for device in devices.values():
                 await device.set_callback(device_callback)
+            quota = await api.get_recording_quota()
+            print(f"Recording occupancy: {quota.percentage_used}")
+            try:
+                recordings = await api.get_all_recordings()
+                print(f"Total recordings: {recordings.total}")
+
+                show_recordings = await api.get_show_recordings(
+                    "crid:~~2F~~2Fbds.tv~~2F272418335", "NL_000006_019130"
+                )
+                print(f"recordings: {show_recordings.total}")
+            except Exception as ex:
+                print(ex)
 
             # Wait until the shutdown event is set
             await shutdown_event.wait()

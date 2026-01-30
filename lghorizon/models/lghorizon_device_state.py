@@ -18,6 +18,7 @@ class LGHorizonDeviceState:
     """Represent current state of a box."""
 
     _channel_id: Optional[str]
+    _channel_name: Optional[str]
     _title: Optional[str]
     _image: Optional[str]
     _source_type: LGHorizonSourceType
@@ -42,6 +43,7 @@ class LGHorizonDeviceState:
         self._last_position_update = None
         self._state = LGHorizonRunningState.UNKNOWN
         self._speed = None
+        self._channel_name = None
 
     @property
     def state(self) -> LGHorizonRunningState:
@@ -62,6 +64,16 @@ class LGHorizonDeviceState:
     def channel_id(self, value: Optional[str]) -> None:
         """Set the channel ID."""
         self._channel_id = value
+
+    @property
+    def channel_name(self) -> Optional[str]:
+        """Return the channel ID."""
+        return self._channel_name
+
+    @channel_name.setter
+    def channel_name(self, value: Optional[str]) -> None:
+        """Set the channel ID."""
+        self._channel_name = value
 
     @property
     def title(self) -> Optional[str]:
@@ -164,4 +176,5 @@ class LGHorizonDeviceState:
         self.image = None
         self.source_type = LGHorizonSourceType.UNKNOWN
         self.speed = None
+        self.channel_name = None
         await self.reset_progress()

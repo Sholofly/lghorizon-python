@@ -56,6 +56,10 @@ class LGHorizonPlayerState:
                     return LGHorizonVODSource(self._raw_json["source"])
                 case LGHorizonSourceType.REPLAY:
                     return LGHorizonReplaySource(self._raw_json["source"])
+                case LGHorizonSourceType.NDVR:
+                    return LGHorizonNDVRSource(self._raw_json["source"])
+                case LGHorizonSourceType.REVIEWBUFFER:
+                    return LGHorizonReviewBufferSource(self._raw_json["source"])
 
         return LGHorizonUnknownSource(self._raw_json["source"])
 

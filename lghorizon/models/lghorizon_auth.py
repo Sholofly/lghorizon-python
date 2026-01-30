@@ -196,6 +196,12 @@ class LGHorizonAuth:
                 f"Unable to call {request_url}. Error:{str(cre)}"
             ) from cre
 
+        except Exception as ex:
+            _LOGGER.error("Error calling %s: %s", request_url, str(ex))
+            raise LGHorizonApiConnectionError(
+                f"Unable to call {request_url}. Error:{str(ex)}"
+            ) from ex
+
     async def get_mqtt_token(self) -> Any:
         """Get the MQTT token."""
         _LOGGER.debug("Fetching MQTT token")
