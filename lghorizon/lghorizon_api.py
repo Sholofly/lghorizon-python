@@ -190,7 +190,7 @@ class LGHorizonApi:
                     return
                 await device.handle_ui_status_message(ui_status_message)
 
-    async def _get_customer_info(self) -> Any:
+    async def _get_customer_info(self) -> LGHorizonCustomer:
         service_url = await self._service_config.get_service_url(
             "personalizationService"
         )
