@@ -1,14 +1,11 @@
-"""MQTT client for LGHorizon."""
-
+import asyncio
 import json
 import logging
-import asyncio
-from typing import Callable, Any, Coroutine
 
 import paho.mqtt.client as mqtt
-
-from ..helpers import make_id
-from .lghorizon_auth import LGHorizonAuth
+from typing import Any, Callable, Coroutine
+from .helpers import make_id
+from .lghorizon_models import LGHorizonAuth
 
 _logger = logging.getLogger(__name__)
 

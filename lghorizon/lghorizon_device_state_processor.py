@@ -6,9 +6,9 @@ import urllib.parse
 
 from typing import cast, Dict, Optional
 
-from .models.lghorizon_device_state import LGHorizonDeviceState, LGHorizonRunningState
-from .models.lghorizon_message import LGHorizonStatusMessage, LGHorizonUIStatusMessage
-from .models.lghorizon_sources import (
+from .lghorizon_models import LGHorizonDeviceState, LGHorizonRunningState
+from .lghorizon_models import LGHorizonStatusMessage, LGHorizonUIStatusMessage
+from .lghorizon_models import (
     LGHorizonSourceType,
     LGHorizonLinearSource,
     LGHorizonVODSource,
@@ -16,20 +16,20 @@ from .models.lghorizon_sources import (
     LGHorizonNDVRSource,
     LGHorizonReviewBufferSource,
 )
-from .models.lghorizon_auth import LGHorizonAuth
-from .models.lghorizon_events import (
+from .lghorizon_models import LGHorizonAuth
+from .lghorizon_models import (
     LGHorizonReplayEvent,
     LGHorizonVOD,
 )
 
-from .models.lghorizon_recordings import LGHorizonRecordingSingle
-from .models.lghorizon_channel import LGHorizonChannel
-from .models.lghorizon_ui_status import (
+from .lghorizon_models import LGHorizonRecordingSingle
+from .lghorizon_models import LGHorizonChannel
+from .lghorizon_models import (
     LGHorizonUIStateType,
     LGHorizonAppsState,
     LGHorizonPlayerState,
 )
-from .models.lghorizon_customer import LGHorizonCustomer
+from .lghorizon_models import LGHorizonCustomer
 
 
 class LGHorizonDeviceStateProcessor:

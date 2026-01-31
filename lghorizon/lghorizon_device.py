@@ -1,44 +1,38 @@
-"""LG Horizon device (set-top box) model."""
+"""LG Horizon Device."""
+
+from __future__ import annotations
 
 import json
 import logging
-from typing import Callable, Dict, Optional, Any, Coroutine
+from typing import Any, Callable, Coroutine, Dict, Optional
+from .lghorizon_models import (
+    LGHorizonRunningState,
+    LGHorizonStatusMessage,
+    LGHorizonUIStatusMessage,
+    LGHorizonDeviceState,
+    LGHorizonAuth,
+    LGHorizonChannel,
+)
 
-
-from ..const import (
-    ONLINE_RUNNING,
-    MEDIA_KEY_POWER,
-    MEDIA_KEY_PLAY_PAUSE,
-    MEDIA_KEY_STOP,
-    MEDIA_KEY_CHANNEL_UP,
+from .exceptions import LGHorizonApiConnectionError
+from .helpers import make_id
+from .lghorizon_device_state_processor import LGHorizonDeviceStateProcessor
+from .lghorizon_mqtt_client import LGHorizonMqttClient
+from .const import (
     MEDIA_KEY_CHANNEL_DOWN,
+    MEDIA_KEY_CHANNEL_UP,
     MEDIA_KEY_ENTER,
-    MEDIA_KEY_REWIND,
     MEDIA_KEY_FAST_FORWARD,
+    MEDIA_KEY_PLAY_PAUSE,
+    MEDIA_KEY_POWER,
     MEDIA_KEY_RECORD,
+    MEDIA_KEY_REWIND,
+    MEDIA_KEY_STOP,
+    ONLINE_RUNNING,
     PLATFORM_TYPES,
 )
-from ..helpers import make_id
-from .lghorizon_auth import LGHorizonAuth
-from .lghorizon_channel import LGHorizonChannel
-from .lghorizon_mqtt_client import LGHorizonMqttClient  # Added import for type checking
-from .lghorizon_device_state import LGHorizonDeviceState, LGHorizonRunningState
-from .exceptions import LGHorizonApiConnectionError
-from .lghorizon_message import LGHorizonStatusMessage, LGHorizonUIStatusMessage
 
-from ..device_state_processor import LGHorizonDeviceStateProcessor
-
-# Assuming these models are available from legacy or will be moved to models/
-# from ..legacy.models import (
-#     # LGHorizonPlayingInfo,
-#     # LGHorizonPlayerState, # This is now in lghorizon_ui_status.py
-#     # LGHorizonReplayEvent,
-#     # LGHorizonRecordingSingle,
-#     # LGHorizonVod,
-#     # LGHorizonApp,
-# )
-
-_logger = logging.getLogger(__name__)
+_LOGGER = logging.getLogger(__name__)
 
 
 class LGHorizonDevice:
@@ -207,7 +201,7 @@ class LGHorizonDevice:
 
     async def _trigger_callback(self):
         if self._change_callback:
-            _logger.debug("Callback called from box %s", self.device_id)
+            _LOGGER.debug("Callback called from box %s", self.device_id)
             await self._change_callback(self.device_id)
 
     async def turn_on(self) -> None:

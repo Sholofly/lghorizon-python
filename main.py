@@ -7,8 +7,8 @@ import sys  # Import sys for stdin
 
 import aiohttp
 
-from lghorizon import LGHorizonApi
-from lghorizon.models import LGHorizonAuth
+from lghorizon.lghorizon_api import LGHorizonApi
+from lghorizon.lghorizon_models import LGHorizonAuth
 
 # Define an asyncio Event to signal shutdown
 shutdown_event = asyncio.Event()

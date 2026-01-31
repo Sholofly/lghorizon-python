@@ -1,6 +1,6 @@
 "LG Horizon Message Factory."
 
-from .models.lghorizon_message import (
+from .lghorizon_models import (
     LGHorizonMessage,
     LGHorizonStatusMessage,
     LGHorizonUnknownMessage,

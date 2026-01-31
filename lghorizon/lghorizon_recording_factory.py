@@ -1,4 +1,4 @@
-from .models.lghorizon_recordings import (
+from .lghorizon_models import (
     LGHorizonRecordingList,
     LGHorizonRecordingSingle,
     LGHorizonRecordingSeason,

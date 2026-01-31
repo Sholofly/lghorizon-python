@@ -3,21 +3,21 @@
 import logging
 from typing import Any, Dict, cast
 
-from .models.lghorizon_device import LGHorizonDevice
-from .models.lghorizon_channel import LGHorizonChannel
-from .models.lghorizon_auth import LGHorizonAuth
-from .models.lghorizon_customer import LGHorizonCustomer
-from .models.lghorizon_mqtt_client import LGHorizonMqttClient
-from .models.lghorizon_config import LGHorizonServicesConfig
-from .models.lghorizon_entitlements import LGHorizonEntitlements
-from .models.lghorizon_profile import LGHorizonProfile
-from .models.lghorizon_message import LGHorizonMessageType
-from .message_factory import LGHorizonMessageFactory
-from .models.lghorizon_message import LGHorizonStatusMessage, LGHorizonUIStatusMessage
-from .models.lghorizon_device_state import LGHorizonRunningState
-from .models.lghorizon_recordings import LGHorizonRecordingList, LGHorizonRecordingQuota
-from .recording_factory import LGHorizonRecordingFactory
-from .device_state_processor import LGHorizonDeviceStateProcessor
+from .lghorizon_device import LGHorizonDevice
+from .lghorizon_models import LGHorizonChannel
+from .lghorizon_models import LGHorizonAuth
+from .lghorizon_models import LGHorizonCustomer
+from .lghorizon_mqtt_client import LGHorizonMqttClient
+from .lghorizon_models import LGHorizonServicesConfig
+from .lghorizon_models import LGHorizonEntitlements
+from .lghorizon_models import LGHorizonProfile
+from .lghorizon_models import LGHorizonMessageType
+from .lghorizon_message_factory import LGHorizonMessageFactory
+from .lghorizon_models import LGHorizonStatusMessage, LGHorizonUIStatusMessage
+from .lghorizon_models import LGHorizonRunningState
+from .lghorizon_models import LGHorizonRecordingList, LGHorizonRecordingQuota
+from .lghorizon_recording_factory import LGHorizonRecordingFactory
+from .lghorizon_device_state_processor import LGHorizonDeviceStateProcessor
 
 
 _LOGGER = logging.getLogger(__name__)
