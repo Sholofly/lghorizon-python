@@ -99,6 +99,9 @@ class LGHorizonDeviceStateProcessor:
             return
         await device_state.reset()
         device_state.source_type = player_state.source_type
+        device_state.ui_state_type = LGHorizonUIStateType.MAINUI
+        device_state.speed = player_state.speed
+
         match player_state.source_type:
             case LGHorizonSourceType.LINEAR:
                 await self._process_linear_state(device_state, player_state)
@@ -130,6 +133,7 @@ class LGHorizonDeviceStateProcessor:
             return
         player_state.source.__class__ = LGHorizonLinearSource
         source = cast(LGHorizonLinearSource, player_state.source)
+        device_state.ui_state_type = LGHorizonUIStateType.APPS
         service_config = await self._auth.get_service_config()
         service_url = await service_config.get_service_url("linearService")
         lang = await self._customer.get_profile_lang(self._profile_id)

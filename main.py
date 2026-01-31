@@ -6,6 +6,7 @@ import logging
 import sys  # Import sys for stdin
 
 import aiohttp
+import traceback
 
 from lghorizon.lghorizon_api import LGHorizonApi
 from lghorizon.lghorizon_models import LGHorizonAuth
@@ -71,8 +72,8 @@ async def main():
                     "crid:~~2F~~2Fbds.tv~~2F272418335", "NL_000006_019130"
                 )
                 print(f"recordings: {show_recordings.total}")
-            except Exception as ex:
-                print(ex)
+            except Exception:
+                traceback.print_exc()
 
             # Wait until the shutdown event is set
             await shutdown_event.wait()

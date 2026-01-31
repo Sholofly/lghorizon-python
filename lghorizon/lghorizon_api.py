@@ -1,7 +1,7 @@
 """LG Horizon API client."""
 
 import logging
-from typing import Any, Dict, cast
+from typing import Any, Dict, cast, Callable, Optional
 
 from .lghorizon_device import LGHorizonDevice
 from .lghorizon_models import LGHorizonChannel
@@ -15,7 +15,11 @@ from .lghorizon_models import LGHorizonMessageType
 from .lghorizon_message_factory import LGHorizonMessageFactory
 from .lghorizon_models import LGHorizonStatusMessage, LGHorizonUIStatusMessage
 from .lghorizon_models import LGHorizonRunningState
-from .lghorizon_models import LGHorizonRecordingList, LGHorizonRecordingQuota
+from .lghorizon_models import (
+    LGHorizonRecordingList,
+    LGHorizonRecordingQuota,
+    LGHorizonShowRecordingList,
+)
 from .lghorizon_recording_factory import LGHorizonRecordingFactory
 from .lghorizon_device_state_processor import LGHorizonDeviceStateProcessor
 
@@ -26,7 +30,7 @@ _LOGGER = logging.getLogger(__name__)
 class LGHorizonApi:
     """LG Horizon API client."""
 
-    _mqtt_client: LGHorizonMqttClient
+    _mqtt_client: LGHorizonMqttClient | None
     auth: LGHorizonAuth
     _service_config: LGHorizonServicesConfig
     _customer: LGHorizonCustomer
@@ -45,6 +49,8 @@ class LGHorizonApi:
         self._profile_id = profile_id
         self._channels = {}
         self._device_state_processor = None
+        self._mqtt_client = None
+        self._initialized = False
 
     async def initialize(self) -> None:
         """Initialize the API client."""
@@ -62,14 +68,20 @@ class LGHorizonApi:
         )
         self._initialized = True
 
-    async def get_devices(self) -> Dict[str, LGHorizonDevice]:
+    async def set_token_refresh_callback(
+        self, token_refresh_callback: Callable[str, None]
+    ) -> None:
+        """Set the token refresh callback."""
+        self.auth.token_refresh_callback = token_refresh_callback
+
+    async def get_devices(self) -> dict[str, LGHorizonDevice]:
         """Get devices."""
         if not self._initialized:
             raise RuntimeError("LGHorizonApi not initialized")
 
         return self._devices
 
-    async def get_profiles(self) -> Dict[str, LGHorizonProfile]:
+    async def get_profiles(self) -> dict[str, LGHorizonProfile]:
         """Get profile IDs."""
         if not self._initialized:
             raise RuntimeError("LGHorizonApi not initialized")
@@ -77,10 +89,12 @@ class LGHorizonApi:
         return self._customer.profiles
 
     async def get_profile_channels(
-        self, profile_id: str
-    ) -> Dict[str, LGHorizonChannel]:
+        self, profile_id: Optional[str] = None
+    ) -> dict[str, LGHorizonChannel]:
         """Returns channels to display baed on profile."""
         # Attempt to retrieve the profile by the given profile_id
+        if not profile_id:
+            profile_id = self._profile_id
         profile = self._customer.profiles.get(profile_id)
 
         # If the specified profile is not found, and there are other profiles available,
@@ -244,7 +258,7 @@ class LGHorizonApi:
 
     async def get_show_recordings(
         self, show_id: str, channel_id: str
-    ) -> LGHorizonRecordingList:
+    ) -> LGHorizonShowRecordingList:
         """Retrieve all recordings."""
         _LOGGER.debug("Retrieving recordings fro show...")
         service_url = await self._service_config.get_service_url("recordingService")

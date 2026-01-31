@@ -8,7 +8,7 @@ import time
 from abc import ABC, abstractmethod
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Callable
 
 import backoff
 from aiohttp import ClientResponseError, ClientSession
@@ -453,6 +453,7 @@ class LGHorizonAuth:
     _country_code: str
     _host: str
     _use_refresh_token: bool
+    _token_refresh_callback: Callable[str, None] | None
 
     def __init__(
         self,
@@ -474,6 +475,7 @@ class LGHorizonAuth:
         self._host = COUNTRY_SETTINGS[country_code]["api_url"]
         self._use_refresh_token = COUNTRY_SETTINGS[country_code]["use_refreshtoken"]
         self._service_config = None
+        self._token_refresh_callback = None
 
     @property
     def websession(self) -> ClientSession:
@@ -589,6 +591,8 @@ class LGHorizonAuth:
         self.household_id = auth_json["householdId"]
         self.access_token = auth_json["accessToken"]
         self.refresh_token = auth_json["refreshToken"]
+        if self._token_refresh_callback:
+            self._token_refresh_callback(self.refresh_token)
         self.username = auth_json["username"]
         self.token_expiry = auth_json["refreshTokenExpiry"]
 
@@ -839,6 +843,7 @@ class LGHorizonDeviceState:
         self._title = None
         self._image = None
         self._source_type = LGHorizonSourceType.UNKNOWN
+        self._ui_state_type = LGHorizonUIStateType.UNKNOWN
         self._paused = False
         self.sub_title = None
         self._duration = None
@@ -907,6 +912,16 @@ class LGHorizonDeviceState:
     def source_type(self, value: LGHorizonSourceType) -> None:
         """Set the source type."""
         self._source_type = value
+
+    @property
+    def ui_state_type(self) -> LGHorizonUIStateType:
+        """Return the source type."""
+        return self._ui_state_type
+
+    @ui_state_type.setter
+    def ui_state_type(self, value: LGHorizonUIStateType) -> None:
+        """Set the source type."""
+        self._ui_state_type = value
 
     @property
     def paused(self) -> bool:
@@ -1222,6 +1237,11 @@ class LGHorizonRecordingSingle(LGHorizonRecording):
         return self._recording_payload.get("showId", None)
 
     @property
+    def show_title(self) -> Optional[str]:
+        """Return the show ID of the recording."""
+        return self._recording_payload.get("showTitle", None)
+
+    @property
     def season_id(self) -> Optional[str]:
         """Return the season ID of the recording."""
         return self._recording_payload.get("seasonId", None)
@@ -1304,6 +1324,36 @@ class LGHorizonRecordingList:
     def __init__(self, recordings: List[LGHorizonRecording]) -> None:
         """Abstract base class for LG Horizon recordings."""
         self._recordings = recordings
+
+    @property
+    def recordings(self) -> int:
+        """Return the total number of recordings."""
+        return self._recordings
+
+
+class LGHorizonShowRecordingList(LGHorizonRecordingList):
+    """LGHorizon recording."""
+
+    def __init__(
+        self,
+        show_title: Optional[str],
+        show_image,
+        recordings: List[LGHorizonRecording],
+    ) -> None:
+        """Abstract base class for LG Horizon recordings."""
+        super().__init__(recordings)
+        self._show_title = show_title
+        self._show_image = show_image
+
+    @property
+    def show_title(self) -> str:
+        """Title of the show."""
+        return self._show_title
+
+    @property
+    def show_image(self) -> Optional[str]:
+        """Image of the show."""
+        return self._show_image
 
 
 class LGHorizonRecordingQuota:
