@@ -824,13 +824,16 @@ class LGHorizonCustomer:
 class LGHorizonDeviceState:
     """Represent current state of a box."""
 
+    _id: Optional[str]
     _channel_id: Optional[str]
     _channel_name: Optional[str]
-    _title: Optional[str]
+    _show_title: Optional[str]
+    _episode_title: Optional[str]
+    _season_number: Optional[int]
+    _episode_number: Optional[int]
     _image: Optional[str]
     _source_type: LGHorizonSourceType
     _paused: bool
-    _sub_title: Optional[str]
     _duration: Optional[float]
     _position: Optional[float]
     _last_position_update: Optional[datetime]
@@ -840,18 +843,21 @@ class LGHorizonDeviceState:
     def __init__(self) -> None:
         """Initialize the playing info."""
         self._channel_id = None
-        self._title = None
+        self._show_title = None
+        self._episode_title = None
+        self._season_number = None
+        self._episode_number = None
         self._image = None
         self._source_type = LGHorizonSourceType.UNKNOWN
         self._ui_state_type = LGHorizonUIStateType.UNKNOWN
         self._paused = False
-        self.sub_title = None
         self._duration = None
         self._position = None
         self._last_position_update = None
         self._state = LGHorizonRunningState.UNKNOWN
         self._speed = None
         self._channel_name = None
+        self._id = None
 
     @property
     def state(self) -> LGHorizonRunningState:
@@ -874,6 +880,16 @@ class LGHorizonDeviceState:
         self._channel_id = value
 
     @property
+    def id(self) -> Optional[str]:
+        """Return the channel ID."""
+        return self._id
+
+    @id.setter
+    def id(self, value: Optional[str]) -> None:
+        """Set the channel ID."""
+        self._id = value
+
+    @property
     def channel_name(self) -> Optional[str]:
         """Return the channel ID."""
         return self._channel_name
@@ -884,14 +900,44 @@ class LGHorizonDeviceState:
         self._channel_name = value
 
     @property
-    def title(self) -> Optional[str]:
+    def show_title(self) -> Optional[str]:
         """Return the title."""
-        return self._title
+        return self._show_title
 
-    @title.setter
-    def title(self, value: Optional[str]) -> None:
+    @show_title.setter
+    def show_title(self, value: Optional[str]) -> None:
         """Set the title."""
-        self._title = value
+        self._show_title = value
+
+    @property
+    def episode_title(self) -> Optional[str]:
+        """Return the title."""
+        return self._episode_title
+
+    @episode_title.setter
+    def episode_title(self, value: Optional[str]) -> None:
+        """Set the title."""
+        self._episode_title = value
+
+    @property
+    def episode_number(self) -> Optional[int]:
+        """Return the title."""
+        return self._episode_number
+
+    @episode_number.setter
+    def episode_number(self, value: Optional[int]) -> None:
+        """Set the title."""
+        self._episode_number = value
+
+    @property
+    def season_number(self) -> Optional[int]:
+        """Return the title."""
+        return self._season_number
+
+    @season_number.setter
+    def season_number(self, value: Optional[int]) -> None:
+        """Set the title."""
+        self._season_number = value
 
     @property
     def image(self) -> Optional[str]:
@@ -929,16 +975,6 @@ class LGHorizonDeviceState:
         if self.speed is None:
             return False
         return self.speed == 0
-
-    @property
-    def sub_title(self) -> Optional[str]:
-        """Return the channel title."""
-        return self._sub_title
-
-    @sub_title.setter
-    def sub_title(self, value: Optional[str]) -> None:
-        """Set the channel title."""
-        self._sub_title = value
 
     @property
     def duration(self) -> Optional[float]:
@@ -989,7 +1025,10 @@ class LGHorizonDeviceState:
     async def reset(self) -> None:
         """Reset all playing information."""
         self.channel_id = None
-        self.title = None
+        self.episode_number = None
+        self.season_number = None
+        self.episode_title = None
+        self.show_title = None
         self.sub_title = None
         self.image = None
         self.source_type = LGHorizonSourceType.UNKNOWN
@@ -1193,7 +1232,7 @@ class LGHorizonRecording(ABC):
     @property
     def title(self) -> str:
         """Return the title of the recording."""
-        return self._recording_payload["title"]
+        return self._recording_payload.get("title", "unknown")
 
     @property
     def channel_id(self) -> str:
@@ -1222,6 +1261,11 @@ class LGHorizonRecordingSingle(LGHorizonRecording):
         return self._recording_payload.get("episodeTitle", None)
 
     @property
+    def episode_id(self) -> Optional[str]:
+        """Return the episode title of the recording."""
+        return self._recording_payload.get("episodeId", None)
+
+    @property
     def season_number(self) -> Optional[int]:
         """Return the season number of the recording."""
         return self._recording_payload.get("seasonNumber", None)
@@ -1245,16 +1289,6 @@ class LGHorizonRecordingSingle(LGHorizonRecording):
     def season_id(self) -> Optional[str]:
         """Return the season ID of the recording."""
         return self._recording_payload.get("seasonId", None)
-
-    @property
-    def full_episode_title(self) -> Optional[str]:
-        """Return the full episode title of the recording."""
-        if not self.season_number and not self.episode_number:
-            return None
-        full_title = f"""S{self.season_number:02d}E{self.episode_number:02d}"""
-        if self.episode_title:
-            full_title += f": {self.episode_title}"
-        return full_title
 
     @property
     def channel_id(self) -> Optional[str]:
@@ -1283,6 +1317,11 @@ class LGHorizonRecordingSeason(LGHorizonRecording):
     def season_title(self) -> str:
         """Return the season title of the recording."""
         return self._recording_payload.get("seasonTitle", "")
+
+    @property
+    def show_id(self) -> str:
+        """Return the season title of the recording."""
+        return self._recording_payload.get("showId", "")
 
     @property
     def most_relevant_episode(self) -> Optional[LGHOrizonRelevantEpisode]:
@@ -1326,7 +1365,7 @@ class LGHorizonRecordingList:
         self._recordings = recordings
 
     @property
-    def recordings(self) -> int:
+    def recordings(self) -> List[LGHorizonRecording]:
         """Return the total number of recordings."""
         return self._recordings
 

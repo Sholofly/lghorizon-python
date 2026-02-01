@@ -50,6 +50,6 @@ class LGHorizonRecordingFactory:
         for recording in episode_json["data"]:
             recording_single = LGHorizonRecordingSingle(recording)
             if show_title is None:
-                show_title = recording_single.show_title
+                show_title = recording_single.show_title or recording_single.title
             recording_list.append(recording_single)
         return LGHorizonShowRecordingList(show_title, show_image, recording_list)

@@ -54,7 +54,7 @@ async def main():
         async def device_callback(device_id: str):
             device = devices[device_id]
             print(
-                f"Device {device.device_id} state changed. Status:\n\nName: {device.device_friendly_name}\nState: {device.device_state.state.value}\nChannel: {device.device_state.channel_name}\nTitle: {device.device_state.title}\nSubtitle: {device.device_state.sub_title}\nSource type: {device.device_state.source_type.value}\n\n",
+                f"Device {device.device_id} state changed. Status:\n\nName: {device.device_friendly_name}\nState: {device.device_state.state.value}\nChannel: {device.device_state.channel_name}\nShow: {device.device_state.show_title}\nEpisode: {device.device_state.episode_title}\nSource type: {device.device_state.source_type.value}\n\n",
             )
 
         try:

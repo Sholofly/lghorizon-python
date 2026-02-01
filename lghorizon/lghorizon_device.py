@@ -146,8 +146,6 @@ class LGHorizonDevice:
 
     async def register_mqtt(self) -> None:
         """Register the mqtt connection."""
-        if not self._mqtt_client.is_connected:
-            raise LGHorizonApiConnectionError("MQTT client not connected.")
         topic = f"{self._auth.household_id}/{self._mqtt_client.client_id}/status"
         payload = {
             "source": self._mqtt_client.client_id,
@@ -200,7 +198,7 @@ class LGHorizonDevice:
         self.recording_capacity = payload["used"]  # Use the setter
 
     async def _trigger_callback(self):
-        if self._change_callback:
+        if self._change_callback is not None:
             _LOGGER.debug("Callback called from box %s", self.device_id)
             await self._change_callback(self.device_id)
 

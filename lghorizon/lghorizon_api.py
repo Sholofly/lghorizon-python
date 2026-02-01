@@ -191,12 +191,16 @@ class LGHorizonApi:
             case LGHorizonMessageType.STATUS:
                 message.__class__ = LGHorizonStatusMessage
                 status_message = cast(LGHorizonStatusMessage, message)
-                device = self._devices[status_message.source]
+                device = self._devices.get(status_message.source, None)
+                if not device:
+                    return
                 await device.handle_status_message(status_message)
             case LGHorizonMessageType.UI_STATUS:
                 message.__class__ = LGHorizonUIStatusMessage
                 ui_status_message = cast(LGHorizonUIStatusMessage, message)
-                device = self._devices[ui_status_message.source]
+                device = self._devices.get(ui_status_message.source, None)
+                if not device:
+                    return
                 if (
                     not device.device_state.state
                     == LGHorizonRunningState.ONLINE_RUNNING
@@ -265,7 +269,7 @@ class LGHorizonApi:
         lang = await self._customer.get_profile_lang(self._profile_id)
         episodes_json = await self.auth.request(
             service_url,
-            f"/customers/8436830_nl/episodes/shows/{show_id}?source=recording&isAdult=false&offset=0&limit=100&profileId={self._profile_id}&language={lang}&channelId={channel_id}&sort=time&sortOrder=asc",
+            f"/customers/{self.auth.household_id}/episodes/shows/{show_id}?source=recording&isAdult=false&offset=0&limit=100&profileId={self._profile_id}&language={lang}&channelId={channel_id}&sort=time&sortOrder=asc",
         )
         recordings = await self._recording_factory.create_episodes(episodes_json)
         return recordings

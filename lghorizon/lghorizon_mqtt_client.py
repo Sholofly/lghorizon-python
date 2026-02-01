@@ -1,9 +1,10 @@
 import asyncio
 import json
 import logging
+from typing import Any, Callable, Coroutine
 
 import paho.mqtt.client as mqtt
-from typing import Any, Callable, Coroutine
+
 from .helpers import make_id
 from .lghorizon_models import LGHorizonAuth
 
@@ -11,32 +12,36 @@ _logger = logging.getLogger(__name__)
 
 
 class LGHorizonMqttClient:
-    """LGHorizon MQTT client."""
-
-    _mqtt_broker_url: str = ""
-    _mqtt_client: mqtt.Client
-    _auth: LGHorizonAuth
-    _mqtt_token: str = ""
-    client_id: str = ""
-    _on_connected_callback: Callable[[], Coroutine[Any, Any, Any]]
-    _on_message_callback: Callable[[dict, str], Coroutine[Any, Any, Any]]
-
-    @property
-    def is_connected(self):
-        """Is client connected."""
-        return self._mqtt_client.is_connected
+    """Async‑vriendelijke wrapper rond Paho MQTT."""
 
     def __init__(
         self,
         auth: LGHorizonAuth,
         on_connected_callback: Callable[[], Coroutine[Any, Any, Any]],
         on_message_callback: Callable[[dict, str], Coroutine[Any, Any, Any]],
-    ):
-        """Initialize the MQTT client."""
+        loop: asyncio.AbstractEventLoop,
+    ) -> None:
         self._auth = auth
         self._on_connected_callback = on_connected_callback
         self._on_message_callback = on_message_callback
-        self._loop = asyncio.get_event_loop()
+        self._loop = loop
+
+        self._mqtt_client: mqtt.Client | None = None
+        self._mqtt_broker_url: str = ""
+        self._mqtt_token: str = ""
+        self.client_id: str = ""
+
+        # FIFO queues
+        self._message_queue: asyncio.Queue = asyncio.Queue()
+        self._publish_queue: asyncio.Queue = asyncio.Queue()
+
+        # Worker tasks
+        self._message_worker_task: asyncio.Task | None = None
+        self._publish_worker_task: asyncio.Task | None = None
+
+    @property
+    def is_connected(self) -> bool:
+        return self._mqtt_client is not None and self._mqtt_client.is_connected()
 
     @classmethod
     async def create(
@@ -44,80 +49,155 @@ class LGHorizonMqttClient:
         auth: LGHorizonAuth,
         on_connected_callback: Callable[[], Coroutine[Any, Any, Any]],
         on_message_callback: Callable[[dict, str], Coroutine[Any, Any, Any]],
-    ):
-        """Create the MQTT client."""
-        instance = cls(auth, on_connected_callback, on_message_callback)
+    ) -> "LGHorizonMqttClient":
+        loop = asyncio.get_running_loop()
+        instance = cls(auth, on_connected_callback, on_message_callback, loop)
+
+        # Service config ophalen
         service_config = await auth.get_service_config()
         mqtt_broker_url = await service_config.get_service_url("mqttBroker")
         instance._mqtt_broker_url = mqtt_broker_url.replace("wss://", "").replace(
             ":443/mqtt", ""
         )
+
         instance.client_id = await make_id()
+
+        # Paho client
         instance._mqtt_client = mqtt.Client(
             client_id=instance.client_id,
             transport="websockets",
         )
-
         instance._mqtt_client.ws_set_options(
             headers={"Sec-WebSocket-Protocol": "mqtt, mqttv3.1, mqttv3.11"}
         )
+
+        # Token ophalen
         instance._mqtt_token = await auth.get_mqtt_token()
-        instance._mqtt_client.username_pw_set(auth.household_id, instance._mqtt_token)
-        instance._mqtt_client.tls_set()
-        instance._mqtt_client.enable_logger(_logger)
-        instance._mqtt_client.on_connect = instance._on_connect
-        instance._on_connected_callback = on_connected_callback
-        instance._on_message_callback = on_message_callback
-        return instance
-
-    def _on_connect(self, client, userdata, flags, result_code):  # pylint: disable=unused-argument
-        if result_code == 0:
-            self._mqtt_client.on_message = self._on_message
-            if self._on_connected_callback:
-                asyncio.run_coroutine_threadsafe(
-                    self._on_connected_callback(), self._loop
-                )
-        elif result_code == 5:
-            self._mqtt_client.username_pw_set(self._auth.household_id, self._mqtt_token)
-            asyncio.run_coroutine_threadsafe(self.connect(), self._loop)
-        else:
-            _logger.error(
-                "Cannot connect to MQTT server with resultCode: %s", result_code
-            )
-
-    def _on_message(self, client, userdata, message):  # pylint: disable=unused-argument
-        """Wrapper for handling MQTT messages in a thread-safe manner."""
-        asyncio.run_coroutine_threadsafe(
-            self._on_client_message(client, userdata, message), self._loop
+        instance._mqtt_client.username_pw_set(
+            auth.household_id,
+            instance._mqtt_token,
         )
 
+        # TLS instellen (blocking → executor)
+        await loop.run_in_executor(None, instance._mqtt_client.tls_set)
+
+        instance._mqtt_client.enable_logger(_logger)
+        instance._mqtt_client.on_connect = instance._on_connect
+        instance._mqtt_client.on_message = instance._on_message
+
+        return instance
+
     async def connect(self) -> None:
-        """Connect the client."""
-        self._mqtt_client.connect(self._mqtt_broker_url, 443)
+        """Async‑veilige connect."""
+        if not self._mqtt_client:
+            raise RuntimeError("MQTT client not initialized")
+
+        # Blocking connect → executor
+        await self._loop.run_in_executor(
+            None,
+            self._mqtt_client.connect,
+            self._mqtt_broker_url,
+            443,
+        )
+
+        # Start Paho thread
         self._mqtt_client.loop_start()
 
+        # Start workers
+        self._message_worker_task = asyncio.create_task(self._message_worker())
+        self._publish_worker_task = asyncio.create_task(self._publish_worker())
+
+    async def disconnect(self) -> None:
+        """Async‑veilige disconnect."""
+        if not self._mqtt_client:
+            return
+
+        # Stop workers
+        if self._message_worker_task:
+            self._message_worker_task.cancel()
+            self._message_worker_task = None
+
+        if self._publish_worker_task:
+            self._publish_worker_task.cancel()
+            self._publish_worker_task = None
+
+        # Blocking disconnect → executor
+        await self._loop.run_in_executor(None, self._mqtt_client.disconnect)
+        self._mqtt_client.loop_stop()
+
     async def subscribe(self, topic: str) -> None:
-        """Subscribe to a MQTT topic."""
+        """Subscribe op een topic (Paho doet dit sync in eigen thread)."""
+        if not self._mqtt_client:
+            raise RuntimeError("MQTT client not initialized")
+
         self._mqtt_client.subscribe(topic)
 
     async def publish_message(self, topic: str, json_payload: str) -> None:
-        """Publish a MQTT message."""
-        self._mqtt_client.publish(topic, json_payload, qos=2)
+        """Queue een publish-opdracht."""
+        await self._publish_queue.put((topic, json_payload))
 
-    async def disconnect(self) -> None:
-        """Disconnect the client."""
-        if self._mqtt_client.is_connected():
-            self._mqtt_client.disconnect()
+    # -------------------------
+    # INTERNAL CALLBACKS
+    # -------------------------
 
-    async def _on_client_message(self, client, userdata, message):  # pylint: disable=unused-argument
-        """Handle messages received by mqtt client."""
-        json_payload = await self._loop.run_in_executor(
-            None, json.loads, message.payload
+    def _on_connect(self, client, userdata, flags, result_code):
+        if result_code == 0:
+            asyncio.run_coroutine_threadsafe(
+                self._on_connected_callback(),
+                self._loop,
+            )
+        elif result_code == 5:
+            # Token verlopen → opnieuw proberen
+            self._mqtt_client.username_pw_set(
+                self._auth.household_id,
+                self._mqtt_token,
+            )
+            asyncio.run_coroutine_threadsafe(self.connect(), self._loop)
+        else:
+            _logger.error("MQTT connect error: %s", result_code)
+
+    def _on_message(self, client, userdata, message):
+        """Ontvangen bericht → FIFO queue."""
+        asyncio.run_coroutine_threadsafe(
+            self._message_queue.put((message.topic, message.payload)),
+            self._loop,
         )
-        _logger.debug(
-            "Received MQTT message \n\ntopic: %s\npayload:\n\n%s\n",
-            message.topic,
-            json.dumps(json_payload, indent=2),
-        )
-        if self._on_message_callback:
-            await self._on_message_callback(json_payload, message.topic)
+
+    # -------------------------
+    # MESSAGE WORKER (FIFO)
+    # -------------------------
+
+    async def _message_worker(self):
+        """Verwerkt berichten in volgorde van binnenkomst."""
+        while True:
+            topic, payload = await self._message_queue.get()
+
+            try:
+                json_payload = json.loads(payload)
+                await self._on_message_callback(json_payload, topic)
+            except Exception:
+                _logger.exception("Error processing MQTT message")
+
+            self._message_queue.task_done()
+
+    # -------------------------
+    # PUBLISH WORKER (FIFO)
+    # -------------------------
+
+    async def _publish_worker(self):
+        """Verwerkt publish-opdrachten in volgorde, maar alleen als connected."""
+        while True:
+            topic, payload = await self._publish_queue.get()
+
+            try:
+                # Wacht tot MQTT echt connected is
+                while not self.is_connected:
+                    await asyncio.sleep(0.1)
+
+                # Publish is non-blocking
+                self._mqtt_client.publish(topic, payload, qos=2)
+
+            except Exception:
+                _logger.exception("Error publishing MQTT message")
+
+            self._publish_queue.task_done()

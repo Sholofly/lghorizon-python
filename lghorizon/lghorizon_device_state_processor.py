@@ -15,6 +15,7 @@ from .lghorizon_models import (
     LGHorizonReplaySource,
     LGHorizonNDVRSource,
     LGHorizonReviewBufferSource,
+    LGHorizonRecordingSource,
 )
 from .lghorizon_models import LGHorizonAuth
 from .lghorizon_models import (
@@ -119,9 +120,10 @@ class LGHorizonDeviceStateProcessor:
         device_state: LGHorizonDeviceState,
         apps_state: LGHorizonAppsState,
     ) -> None:
-        device_state.channel_id = apps_state.id
+        device_state.id = apps_state.id
         device_state.title = apps_state.app_name
         device_state.image = apps_state.logo_path
+        device_state.ui_state_type = LGHorizonUIStateType.APPS
 
     async def _process_linear_state(
         self,
@@ -133,7 +135,6 @@ class LGHorizonDeviceStateProcessor:
             return
         player_state.source.__class__ = LGHorizonLinearSource
         source = cast(LGHorizonLinearSource, player_state.source)
-        device_state.ui_state_type = LGHorizonUIStateType.APPS
         service_config = await self._auth.get_service_config()
         service_url = await service_config.get_service_url("linearService")
         lang = await self._customer.get_profile_lang(self._profile_id)
@@ -144,12 +145,15 @@ class LGHorizonDeviceStateProcessor:
             service_path,
         )
         replay_event = LGHorizonReplayEvent(event_json)
+        device_state.id = replay_event.event_id
         channel = self._channels[replay_event.channel_id]
         device_state.source_type = source.source_type
         device_state.channel_id = channel.channel_number
         device_state.channel_name = channel.title
-        device_state.title = replay_event.title
-        device_state.sub_title = replay_event.full_episode_title
+        device_state.episode_title = replay_event.episode_name
+        device_state.season_number = replay_event.season_number
+        device_state.episode_number = replay_event.episode_number
+        device_state.show_title = replay_event.title
 
         # Add random number to url to force refresh
         join_param = "?"
@@ -181,12 +185,15 @@ class LGHorizonDeviceStateProcessor:
             service_path,
         )
         replay_event = LGHorizonReplayEvent(event_json)
+        device_state.id = replay_event.event_id
         channel = self._channels[replay_event.channel_id]
         device_state.source_type = source.source_type
         device_state.channel_id = channel.channel_number
         device_state.channel_name = channel.title
-        device_state.title = replay_event.title
-        device_state.sub_title = replay_event.full_episode_title
+        device_state.episode_title = replay_event.episode_name
+        device_state.season_number = replay_event.season_number
+        device_state.episode_number = replay_event.episode_number
+        device_state.show_title = replay_event.title
 
         # Add random number to url to force refresh
         join_param = "?"
@@ -218,11 +225,13 @@ class LGHorizonDeviceStateProcessor:
             service_path,
         )
         replay_event = LGHorizonReplayEvent(event_json)
+        device_state.id = replay_event.event_id
         device_state.source_type = source.source_type
         device_state.channel_id = None
-        device_state.title = replay_event.title
-        if replay_event.full_episode_title:
-            device_state.sub_title = replay_event.full_episode_title
+        device_state.episode_title = replay_event.episode_name
+        device_state.season_number = replay_event.season_number
+        device_state.episode_number = replay_event.episode_number
+        device_state.show_title = replay_event.title
 
         # Add random number to url to force refresh
         device_state.image = await self._get_intent_image_url(replay_event.event_id)
@@ -248,9 +257,14 @@ class LGHorizonDeviceStateProcessor:
             service_path,
         )
         vod = LGHorizonVOD(vod_json)
+        device_state.id = vod.id
         device_state.title = vod.title
         device_state.sub_title = vod.full_episode_title
         device_state.duration = vod.duration
+        device_state.episode_title = vod.title
+        device_state.season_number = vod.season_number
+        device_state.episode_number = vod.episode_number
+        device_state.show_title = vod.series_title
         device_state.image = await self._get_intent_image_url(vod.id)
         await device_state.reset_progress()
 
@@ -271,12 +285,20 @@ class LGHorizonDeviceStateProcessor:
             service_path,
         )
         recording = LGHorizonRecordingSingle(recording_json)
-        device_state.title = recording.title
-        device_state.sub_title = recording.full_episode_title
+        device_state.id = recording.id
         device_state.channel_id = recording.channel_id
         if recording.channel_id:
             channel = self._channels[recording.channel_id]
             device_state.channel_name = channel.title
+
+        device_state.episode_title = recording.episode_title
+        device_state.season_number = recording.season_number
+        device_state.episode_number = recording.episode_number
+        if recording.source == LGHorizonRecordingSource.SHOW:
+            device_state.show_title = recording.title
+        else:
+            device_state.show_title = recording.show_title
+        device_state.image = await self._get_intent_image_url(recording.id)
 
     async def _get_intent_image_url(self, intent_id: str) -> Optional[str]:
         """Get intent image url."""
