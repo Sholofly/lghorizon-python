@@ -1,7 +1,7 @@
 """LG Horizon Device."""
 
 from __future__ import annotations
-
+import asyncio
 import json
 import logging
 from typing import Any, Callable, Coroutine, Dict, Optional
@@ -265,22 +265,71 @@ class LGHorizonDevice:
         if self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING:
             await self.send_key_to_box(MEDIA_KEY_RECORD)
 
+    async def set_player_position(self, position: int) -> None:
+        """Set the player position on the settop box."""
+        payload = {
+            "source": self.device_id,
+            "type": "CPE.setPlayerPosition",
+            "runtimeType": "setPlayerposition",
+            "id": await make_id(),
+            "version": "1.3.11",
+            "status": {"relativePosition": position},
+        }
+        payload_str = json.dumps(payload)
+        await self._mqtt_client.publish_message(
+            f"{self._auth.household_id}/{self.device_id}", payload_str
+        )
+
+    async def display_message(self, sourceType: str, message: str) -> None:
+        """Toon een bericht op de settopbox en herhaal dit voor langere zichtbaarheid."""
+
+        # We sturen de payload 3 keer met een kortere tussentijd
+        for i in range(3):
+            payload = {
+                "id": await make_id(8),
+                "type": "CPE.pushToTV",
+                "source": {
+                    "clientId": self._mqtt_client.client_id,
+                    "friendlyDeviceName": f"\n\n{message}",
+                },
+                "status": {
+                    "sourceType": sourceType,
+                    "source": {"channelId": "1234"},
+                    "title": "Nieuwe melding",
+                    "relativePosition": 0,
+                    "speed": 1,
+                },
+            }
+
+            await self._mqtt_client.publish_message(
+                f"{self._auth.household_id}/{self.device_id}", json.dumps(payload)
+            )
+
+            # Omdat de melding 3 seconden blijft staan, wachten we 3 seconden
+            # voor de volgende 'refresh'.
+            if i < 2:
+                await asyncio.sleep(3)
+
     async def set_channel(self, source: str) -> None:
         """Change te channel from the settopbox."""
         channel = [src for src in self._channels.values() if src.title == source][0]
-        payload = (
-            '{"id":"'
-            + await make_id(8)
-            + '","type":"CPE.pushToTV","source":{"clientId":"'
-            + self._mqtt_client.client_id
-            + '","friendlyDeviceName":"Home Assistant"},'
-            + '"status":{"sourceType":"linear","source":{"channelId":"'
-            + channel.id
-            + '"},"relativePosition":0,"speed":1}}'
-        )
+        payload = {
+            "id": await make_id(8),
+            "type": "CPE.pushToTV",
+            "source": {
+                "clientId": self._mqtt_client.client_id,
+                "friendlyDeviceName": "Home Assistant",
+            },
+            "status": {
+                "sourceType": "linear",
+                "source": {"channelId": channel.id},
+                "relativePosition": 0,
+                "speed": 1,
+            },
+        }
 
         await self._mqtt_client.publish_message(
-            f"{self._auth.household_id}/{self.device_id}", payload
+            f"{self._auth.household_id}/{self.device_id}", json.dumps(payload)
         )
 
     async def play_recording(self, recording_id):

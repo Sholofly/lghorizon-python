@@ -22,7 +22,6 @@ class LGHorizonMessageFactory:
             case LGHorizonMessageType.STATUS:
                 return LGHorizonStatusMessage(payload, topic)
             case LGHorizonMessageType.UI_STATUS:
-                # Placeholder for UI_STATUS message handling
                 return LGHorizonUIStatusMessage(payload, topic)
             case LGHorizonMessageType.UNKNOWN:
                 return LGHorizonUnknownMessage(payload, topic)

@@ -54,7 +54,7 @@ async def main():
         async def device_callback(device_id: str):
             device = devices[device_id]
             print(
-                f"Device {device.device_id} state changed. Status:\n\nName: {device.device_friendly_name}\nState: {device.device_state.state.value}\nChannel: {device.device_state.channel_name}\nShow: {device.device_state.show_title}\nEpisode: {device.device_state.episode_title}\nSource type: {device.device_state.source_type.value}\n\n",
+                f"Device {device.device_id} state changed. Status:\n\nName: {device.device_friendly_name}\nState: {device.device_state.state.value}\nChannel: {device.device_state.channel_name} ({device.device_state.channel_id})\nShow: {device.device_state.show_title}\nEpisode: {device.device_state.episode_title}\nSource type: {device.device_state.source_type.value}\nlast pos update: {device.device_state.last_position_update}\npos: {device.device_state.position}\nstart time: {device.device_state.start_time}\nend time: {device.device_state.end_time}\n\n",
             )
 
         try:
@@ -62,19 +62,9 @@ async def main():
             devices = await api.get_devices()
             for device in devices.values():
                 await device.set_callback(device_callback)
+
             quota = await api.get_recording_quota()
             print(f"Recording occupancy: {quota.percentage_used}")
-            try:
-                recordings = await api.get_all_recordings()
-                print(f"Total recordings: {recordings.total}")
-
-                show_recordings = await api.get_show_recordings(
-                    "crid:~~2F~~2Fbds.tv~~2F272418335", "NL_000006_019130"
-                )
-                print(f"recordings: {show_recordings.total}")
-            except Exception:
-                traceback.print_exc()
-
             # Wait until the shutdown event is set
             await shutdown_event.wait()
 

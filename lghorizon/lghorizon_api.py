@@ -158,8 +158,10 @@ class LGHorizonApi:
 
     async def _on_mqtt_connected(self):
         """MQTT connected callback."""
+        await self._mqtt_client.subscribe("#")
         await self._mqtt_client.subscribe(self.auth.household_id)
         # await self._mqtt_client.subscribe(self.auth.household_id + "/#")
+        # await self._mqtt_client.subscribe(self.auth.household_id + "/+/#")
         await self._mqtt_client.subscribe(
             self.auth.household_id + "/" + self._mqtt_client.client_id
         )
