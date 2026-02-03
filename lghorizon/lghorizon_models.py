@@ -1097,6 +1097,8 @@ class LGHorizonDeviceState:
         self.speed = None
         self.channel_name = None
         self.id = None
+        self.start_time = None
+        self.end_time = None
         await self.reset_progress()
 
 
