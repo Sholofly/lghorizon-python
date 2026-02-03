@@ -157,14 +157,23 @@ class LGHorizonDevice:
     async def set_callback(
         self, change_callback: Callable[[str], Coroutine[Any, Any, Any]]
     ) -> None:
-        """Set a callback function."""
+        """Set a callback function to be called when the device state changes.
+
+        Args:
+            change_callback: An asynchronous callable that takes the device ID
+                             as an argument.
+        """
         self._change_callback = change_callback
         await self.register_mqtt()  # type: ignore [assignment] # Callback can be None
 
     async def handle_status_message(
         self, status_message: LGHorizonStatusMessage
     ) -> None:
-        """Register a new settop box."""
+        """Handle an incoming status message from the set-top box.
+
+        Args:
+            status_message: The status message received from the device.
+        """
         old_running_state = self.device_state.state
         new_running_state = status_message.running_state
         if (
@@ -198,6 +207,10 @@ class LGHorizonDevice:
         self.recording_capacity = payload["used"]  # Use the setter
 
     async def _trigger_callback(self):
+        """Trigger the registered callback function.
+
+        This method is called when the device's state changes and a callback is set.
+        """
         if self._change_callback is not None:
             _LOGGER.debug("Callback called from box %s", self.device_id)
             await self._change_callback(self.device_id)
@@ -281,9 +294,18 @@ class LGHorizonDevice:
         )
 
     async def display_message(self, sourceType: str, message: str) -> None:
-        """Toon een bericht op de settopbox en herhaal dit voor langere zichtbaarheid."""
+        """Display a message on the set-top box and repeat it for longer visibility.
 
         # We sturen de payload 3 keer met een kortere tussentijd
+
+        This method sends the message payload multiple times to ensure it stays
+        visible on the screen for a longer duration, as the display time for
+        such messages is typically short.
+
+        Args:
+            sourceType: The type of source for the message (e.g., "linear").
+            message: The message string to display.
+        """
         for i in range(3):
             payload = {
                 "id": await make_id(8),
@@ -334,18 +356,22 @@ class LGHorizonDevice:
 
     async def play_recording(self, recording_id):
         """Play recording."""
-        payload = (
-            '{"id":"'
-            + await make_id(8)
-            + '","type":"CPE.pushToTV","source":{"clientId":"'
-            + self._mqtt_client.client_id
-            + '","friendlyDeviceName":"Home Assistant"},'
-            + '"status":{"sourceType":"nDVR","source":{"recordingId":"'
-            + recording_id
-            + '"},"relativePosition":0}}'
-        )
+        payload = {
+            "id": await make_id(8),
+            "type": "CPE.pushToTV",
+            "source": {
+                "clientId": self._mqtt_client.client_id,
+                "friendlyDeviceName": "Home Assistant",
+            },
+            "status": {
+                "sourceType": "nDVR",
+                "source": {"recordingId": recording_id},
+                "relativePosition": 0,
+            },
+        }
+
         await self._mqtt_client.publish_message(
-            f"{self._auth.household_id}/{self.device_id}", payload
+            f"{self._auth.household_id}/{self.device_id}", json.dumps(payload)
         )
 
     async def send_key_to_box(self, key: str) -> None:

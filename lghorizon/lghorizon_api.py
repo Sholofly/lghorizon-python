@@ -45,6 +45,12 @@ class LGHorizonApi:
 
     def __init__(self, auth: LGHorizonAuth, profile_id: str = "") -> None:
         """Initialize LG Horizon API client."""
+        """Initialize LG Horizon API client.
+
+        Args:
+            auth: The authentication object for API requests.
+            profile_id: The ID of the user profile to use (optional).
+        """
         self.auth = auth
         self._profile_id = profile_id
         self._channels = {}
@@ -90,7 +96,7 @@ class LGHorizonApi:
 
     async def get_profile_channels(
         self, profile_id: Optional[str] = None
-    ) -> dict[str, LGHorizonChannel]:
+    ) -> Dict[str, LGHorizonChannel]:
         """Returns channels to display baed on profile."""
         # Attempt to retrieve the profile by the given profile_id
         if not profile_id:
@@ -98,7 +104,7 @@ class LGHorizonApi:
         profile = self._customer.profiles.get(profile_id)
 
         # If the specified profile is not found, and there are other profiles available,
-        # default to the first profile in the customer's list.
+        # default to the first profile in the customer's list if available.
         if not profile and self._customer.profiles:
             _LOGGER.debug(
                 "Profile with ID '%s' not found. Defaulting to first available profile.",
@@ -149,6 +155,10 @@ class LGHorizonApi:
         self._initialized = False
 
     async def _create_mqtt_client(self) -> LGHorizonMqttClient:
+        """Create and configure the MQTT client.
+
+        Returns: An initialized LGHorizonMqttClient instance.
+        """
         mqtt_client = await LGHorizonMqttClient.create(
             self.auth,
             self._on_mqtt_connected,
@@ -264,7 +274,7 @@ class LGHorizonApi:
 
     async def get_show_recordings(
         self, show_id: str, channel_id: str
-    ) -> LGHorizonShowRecordingList:
+    ) -> LGHorizonShowRecordingList:  # type: ignore[valid-type]
         """Retrieve all recordings."""
         _LOGGER.debug("Retrieving recordings fro show...")
         service_url = await self._service_config.get_service_url("recordingService")

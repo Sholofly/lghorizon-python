@@ -52,7 +52,7 @@ class LGHorizonRecordingState(Enum):
     UNKNOWN = "unknown"
 
 
-class LGHorizonRecordingType(Enum):
+class LGHorizonRecordingType(Enum):  # type: ignore[no-redef]
     """Enumeration of LG Horizon recording states."""
 
     SINGLE = "single"
@@ -91,6 +91,12 @@ class LGHorizonMessage(ABC):
     def __init__(self, topic: str, payload: dict) -> None:
         """Abstract base class for LG Horizon messages."""
         self._topic = topic
+        """Initialize the abstract base class for LG Horizon messages.
+
+        Args:
+            topic: The MQTT topic of the message.
+            payload: The dictionary payload of the message.
+        """
         self._payload = payload
 
     def __repr__(self) -> str:
@@ -122,7 +128,7 @@ class LGHorizonStatusMessage(LGHorizonMessage):
 
 
 class LGHorizonSourceType(Enum):
-    """Enumeration of LG Horizon message types."""
+    """Enumeration of LG Horizon source types."""
 
     LINEAR = "linear"
     REVIEWBUFFER = "reviewBuffer"
@@ -141,7 +147,7 @@ class LGHorizonSource(ABC):
 
     @property
     @abstractmethod
-    def source_type(self) -> LGHorizonSourceType:
+    def source_type(self) -> LGHorizonSourceType:  # type: ignore[no-redef]
         """Return the message type."""
 
 
@@ -182,7 +188,7 @@ class LGHorizonReviewBufferSource(LGHorizonSource):
 
 
 class LGHorizonNDVRSource(LGHorizonSource):
-    """Represent the ReviewBuffer Source of an LG Horizon device."""
+    """Represent the Network Digital Video Recorder (NDVR) Source of an LG Horizon device."""
 
     @property
     def recording_id(self) -> str:
@@ -223,7 +229,7 @@ class LGHorizonVODSource(LGHorizonSource):
 
 
 class LGHorizonReplaySource(LGHorizonSource):
-    """Represent the VOD Source of an LG Horizon device."""
+    """Represent the Replay Source of an LG Horizon device."""
 
     @property
     def event_id(self) -> str:
@@ -237,7 +243,7 @@ class LGHorizonReplaySource(LGHorizonSource):
 
 
 class LGHorizonUnknownSource(LGHorizonSource):
-    """Represent the Linear Source of an LG Horizon device."""
+    """Represent an unknown source type of an LG Horizon device."""
 
     @property
     def source_type(self) -> LGHorizonSourceType:
@@ -295,7 +301,7 @@ class LGHorizonPlayerState:
 
 
 class LGHorizonAppsState:
-    """Represent the State of an LG Horizon device."""
+    """Represent the Apps State of an LG Horizon device."""
 
     def __init__(self, raw_json: dict) -> None:
         """Initialize the Apps state."""
@@ -318,7 +324,7 @@ class LGHorizonAppsState:
 
 
 class LGHorizonUIState:
-    """Represent the State of an LG Horizon device."""
+    """Represent the UI State of an LG Horizon device."""
 
     _player_state: LGHorizonPlayerState | None = None
     _apps_state: LGHorizonAppsState | None = None
@@ -326,6 +332,11 @@ class LGHorizonUIState:
     def __init__(self, raw_json: dict) -> None:
         """Initialize the State."""
         self._raw_json = raw_json
+        """Initialize the UI State.
+
+        Args:
+            raw_json: The raw JSON dictionary containing UI state information.
+        """
 
     @property
     def ui_status(self) -> LGHorizonUIStateType:
@@ -460,7 +471,7 @@ class LGHorizonAuth:
     _country_code: str
     _host: str
     _use_refresh_token: bool
-    _token_refresh_callback: Callable[str, None] | None
+    _token_refresh_callback: Callable[str, None] | None  # pyright: ignore[reportInvalidTypeForm]
 
     def __init__(
         self,
@@ -1165,10 +1176,6 @@ class LGHorizonReplayEvent:
             full_title += f": {self.episode_name}"
         return full_title
 
-    def __repr__(self) -> str:
-        """Return a string representation of the replay event."""
-        return f"LGHorizonReplayEvent(title='{self.title}', channel_id='{self.channel_id}', event_id='{self.event_id}')"
-
 
 class LGHorizonVODType(Enum):
     """Enumeration of LG Horizon VOD types."""
@@ -1182,6 +1189,11 @@ class LGHorizonVOD:
     """LGHorizon video on demand."""
 
     def __init__(self, vod_json) -> None:
+        """Initialize an LG Horizon VOD object.
+
+        Args:
+            vod_json: The raw JSON dictionary containing VOD information.
+        """
         self._vod_json = vod_json
 
     @property
@@ -1221,7 +1233,7 @@ class LGHorizonVOD:
 
 
 class LGHOrizonRelevantEpisode:
-    """LGHorizon recording."""
+    """Represents a relevant episode within a recording season or show."""
 
     def __init__(self, episode_json: dict) -> None:
         """Abstract base class for LG Horizon recordings."""
@@ -1298,7 +1310,10 @@ class LGHorizonRecording(ABC):
         return None
 
     def __init__(self, recording_payload: dict) -> None:
-        """Abstract base class for LG Horizon recordings."""
+        """Abstract base class for LG Horizon recordings.
+        Args:
+            recording_payload: The raw JSON dictionary containing recording information.
+        """
         self._recording_payload = recording_payload
 
 
@@ -1362,7 +1377,7 @@ class LGHorizonRecordingSingle(LGHorizonRecording):
 
 
 class LGHorizonRecordingSeason(LGHorizonRecording):
-    """LGHorizon recording."""
+    """Represents an LG Horizon recording season."""
 
     _most_relevant_epsode: Optional[LGHOrizonRelevantEpisode]
 
@@ -1395,7 +1410,7 @@ class LGHorizonRecordingSeason(LGHorizonRecording):
 
 
 class LGHorizonRecordingShow(LGHorizonRecording):
-    """LGHorizon recording."""
+    """Represents an LG Horizon recording show."""
 
     _most_relevant_epsode: Optional[LGHOrizonRelevantEpisode]
 
@@ -1418,7 +1433,7 @@ class LGHorizonRecordingShow(LGHorizonRecording):
 
 
 class LGHorizonRecordingList:
-    """LGHorizon recording."""
+    """Represents a list of LG Horizon recordings."""
 
     @property
     def total(self) -> int:
@@ -1426,7 +1441,11 @@ class LGHorizonRecordingList:
         return len(self._recordings)
 
     def __init__(self, recordings: List[LGHorizonRecording]) -> None:
-        """Abstract base class for LG Horizon recordings."""
+        """Initialize an LG Horizon recording list.
+
+        Args:
+            recordings: A list of LGHorizonRecording objects.
+        """
         self._recordings = recordings
 
     @property
@@ -1444,7 +1463,13 @@ class LGHorizonShowRecordingList(LGHorizonRecordingList):
         show_image,
         recordings: List[LGHorizonRecording],
     ) -> None:
-        """Abstract base class for LG Horizon recordings."""
+        """Initialize an LG Horizon show recording list.
+
+        Args:
+            show_title: The title of the show.
+            show_image: The image URL for the show.
+            recordings: A list of LGHorizonRecording objects belonging to the show.
+        """
         super().__init__(recordings)
         self._show_title = show_title
         self._show_image = show_image

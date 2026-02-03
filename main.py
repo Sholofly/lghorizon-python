@@ -29,7 +29,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def main():
-    """main loop"""
+    """Main function to run the LG Horizon API test script."""
     logging.basicConfig(
         level=logging.DEBUG,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
