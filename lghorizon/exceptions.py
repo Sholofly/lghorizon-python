@@ -6,12 +6,12 @@ class LGHorizonApiError(Exception):
 
 
 class LGHorizonApiConnectionError(LGHorizonApiError):
-    """Generic LGHorizon exception."""
+    """Exception for connection-related errors with the LG Horizon API."""
 
 
 class LGHorizonApiUnauthorizedError(Exception):
-    """Generic LGHorizon exception."""
+    """Exception for unauthorized access to the LG Horizon API."""
 
 
 class LGHorizonApiLockedError(LGHorizonApiUnauthorizedError):
-    """Generic LGHorizon exception."""
+    """Exception for locked account errors with the LG Horizon API."""

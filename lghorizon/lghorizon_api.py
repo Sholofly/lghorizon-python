@@ -1,539 +1,300 @@
-"""Python client for LGHorizon."""
-# pylint: disable=broad-exception-caught
-# pylint: disable=line-too-long
+"""LG Horizon API client."""
 
 import logging
-import json
-import re
+from typing import Any, Dict, cast, Callable, Optional
 
-from typing import Any, Callable, Dict, List
-import backoff
-
-from requests import Session, exceptions as request_exceptions
-
-from .exceptions import (
-    LGHorizonApiUnauthorizedError,
-    LGHorizonApiConnectionError,
-    LGHorizonApiLockedError,
+from .lghorizon_device import LGHorizonDevice
+from .lghorizon_models import LGHorizonChannel
+from .lghorizon_models import LGHorizonAuth
+from .lghorizon_models import LGHorizonCustomer
+from .lghorizon_mqtt_client import LGHorizonMqttClient
+from .lghorizon_models import LGHorizonServicesConfig
+from .lghorizon_models import LGHorizonEntitlements
+from .lghorizon_models import LGHorizonProfile
+from .lghorizon_models import LGHorizonMessageType
+from .lghorizon_message_factory import LGHorizonMessageFactory
+from .lghorizon_models import LGHorizonStatusMessage, LGHorizonUIStatusMessage
+from .lghorizon_models import LGHorizonRunningState
+from .lghorizon_models import (
+    LGHorizonRecordingList,
+    LGHorizonRecordingQuota,
+    LGHorizonShowRecordingList,
 )
-
-from .models import (
-    LGHorizonAuth,
-    LGHorizonBox,
-    LGHorizonMqttClient,
-    LGHorizonCustomer,
-    LGHorizonChannel,
-    LGHorizonReplayEvent,
-    LGHorizonRecordingSingle,
-    LGHorizonVod,
-    LGHorizonApp,
-    LGHorizonBaseRecording,
-    LGHorizonRecordingListSeasonShow,
-    LGHorizonRecordingEpisode,
-    LGHorizonRecordingShow,
-)
-
-from .const import (
-    COUNTRY_SETTINGS,
-    BOX_PLAY_STATE_BUFFER,
-    BOX_PLAY_STATE_CHANNEL,
-    BOX_PLAY_STATE_DVR,
-    BOX_PLAY_STATE_REPLAY,
-    BOX_PLAY_STATE_VOD,
-    RECORDING_TYPE_SINGLE,
-    RECORDING_TYPE_SEASON,
-    RECORDING_TYPE_SHOW,
-)
+from .lghorizon_recording_factory import LGHorizonRecordingFactory
+from .lghorizon_device_state_processor import LGHorizonDeviceStateProcessor
 
 
-_logger = logging.getLogger(__name__)
-_supported_platforms = ["EOS", "EOS2", "HORIZON", "APOLLO"]
+_LOGGER = logging.getLogger(__name__)
 
 
 class LGHorizonApi:
-    """Main class for handling connections with LGHorizon Settop boxes."""
+    """LG Horizon API client."""
 
-    _auth: LGHorizonAuth = None
-    _session: Session = None
-    settop_boxes: Dict[str, LGHorizonBox] = None
-    customer: LGHorizonCustomer = None
-    _mqtt_client: LGHorizonMqttClient = None
-    _channels: Dict[str, LGHorizonChannel] = None
-    _country_settings = None
-    _country_code: str = None
-    recording_capacity: int = None
-    _entitlements: List[str] = None
-    _identifier: str = None
-    _config: str = None
-    _refresh_callback: Callable = None
-    _profile_id: str = None
+    _mqtt_client: LGHorizonMqttClient | None
+    auth: LGHorizonAuth
+    _service_config: LGHorizonServicesConfig
+    _customer: LGHorizonCustomer
+    _channels: Dict[str, LGHorizonChannel]
+    _entitlements: LGHorizonEntitlements
+    _profile_id: str
+    _initialized: bool = False
+    _devices: Dict[str, LGHorizonDevice] = {}
+    _message_factory: LGHorizonMessageFactory = LGHorizonMessageFactory()
+    _device_state_processor: LGHorizonDeviceStateProcessor | None
+    _recording_factory: LGHorizonRecordingFactory = LGHorizonRecordingFactory()
 
-    def __init__(
-        self,
-        username: str,
-        password: str,
-        country_code: str = "nl",
-        identifier: str = None,
-        refresh_token=None,
-        profile_id=None,
-    ) -> None:
-        """Create LGHorizon API."""
-        self.username = username
-        self.password = password
-        self.refresh_token = refresh_token
-        self._session = Session()
-        self._country_settings = COUNTRY_SETTINGS[country_code]
-        self._country_code = country_code
-        self._auth = LGHorizonAuth()
-        self.settop_boxes = {}
-        self._channels = {}
-        self._entitlements = []
-        self._identifier = identifier
+    def __init__(self, auth: LGHorizonAuth, profile_id: str = "") -> None:
+        """Initialize LG Horizon API client."""
+        """Initialize LG Horizon API client.
+
+        Args:
+            auth: The authentication object for API requests.
+            profile_id: The ID of the user profile to use (optional).
+        """
+        self.auth = auth
         self._profile_id = profile_id
+        self._channels = {}
+        self._device_state_processor = None
+        self._mqtt_client = None
+        self._initialized = False
 
-    def _authorize(self) -> None:
-        ctry_code = self._country_code[0:2]
-        if ctry_code in ("gb", "ch", "be"):
-            self._authorize_with_refresh_token()
-        else:
-            self._authorize_default()
-
-    def _authorize_default(self) -> None:
-        _logger.debug("Authorizing")
-        auth_url = f"{self._country_settings['api_url']}/auth-service/v1/authorization"
-        auth_headers = {"x-device-code": "web"}
-        auth_payload = {"password": self.password, "username": self.username}
-        try:
-            auth_response = self._session.post(
-                auth_url, headers=auth_headers, json=auth_payload
-            )
-        except Exception as ex:
-            raise LGHorizonApiConnectionError("Unknown connection failure") from ex
-
-        if not auth_response.ok:
-            error_json = auth_response.json()
-            error = error_json["error"]
-            if error and error["statusCode"] == 97401:
-                raise LGHorizonApiUnauthorizedError("Invalid credentials")
-            elif error and error["statusCode"] == 97117:
-                raise LGHorizonApiLockedError("Account locked")
-            elif error:
-                raise LGHorizonApiConnectionError(error["message"])
-            else:
-                raise LGHorizonApiConnectionError("Unknown connection error")
-
-        self._auth.fill(auth_response.json())
-        _logger.debug("Authorization succeeded")
-
-    def _authorize_with_refresh_token(self) -> None:
-        """Handle authorizzationg using request token."""
-        _logger.debug("Authorizing via refresh")
-        refresh_url = (
-            f"{self._country_settings['api_url']}/auth-service/v1/authorization/refresh"
+    async def initialize(self) -> None:
+        """Initialize the API client."""
+        self._service_config = await self.auth.get_service_config()
+        self._customer = await self._get_customer_info()
+        if self._profile_id == "":
+            self._profile_id = list(self._customer.profiles.keys())[0]
+        await self._refresh_entitlements()
+        await self._refresh_channels()
+        self._mqtt_client = await self._create_mqtt_client()
+        await self._mqtt_client.connect()
+        await self._register_devices()
+        self._device_state_processor = LGHorizonDeviceStateProcessor(
+            self.auth, self._channels, self._customer, self._profile_id
         )
-        headers = {"content-type": "application/json", "charset": "utf-8"}
-        payload = '{"refreshToken":"' + self.refresh_token + '"}'
+        self._initialized = True
 
-        try:
-            auth_response = self._session.post(
-                refresh_url, headers=headers, data=payload
+    async def set_token_refresh_callback(
+        self, token_refresh_callback: Callable[str, None]
+    ) -> None:
+        """Set the token refresh callback."""
+        self.auth.token_refresh_callback = token_refresh_callback
+
+    async def get_devices(self) -> dict[str, LGHorizonDevice]:
+        """Get devices."""
+        if not self._initialized:
+            raise RuntimeError("LGHorizonApi not initialized")
+
+        return self._devices
+
+    async def get_profiles(self) -> dict[str, LGHorizonProfile]:
+        """Get profile IDs."""
+        if not self._initialized:
+            raise RuntimeError("LGHorizonApi not initialized")
+
+        return self._customer.profiles
+
+    async def get_profile_channels(
+        self, profile_id: Optional[str] = None
+    ) -> Dict[str, LGHorizonChannel]:
+        """Returns channels to display baed on profile."""
+        # Attempt to retrieve the profile by the given profile_id
+        if not profile_id:
+            profile_id = self._profile_id
+        profile = self._customer.profiles.get(profile_id)
+
+        # If the specified profile is not found, and there are other profiles available,
+        # default to the first profile in the customer's list if available.
+        if not profile and self._customer.profiles:
+            _LOGGER.debug(
+                "Profile with ID '%s' not found. Defaulting to first available profile.",
+                profile_id,
             )
-        except Exception as ex:
-            raise LGHorizonApiConnectionError("Unknown connection failure") from ex
+            profile = list(self._customer.profiles.values())[0]
 
-        if not auth_response.ok:
-            _logger.debug("response %s", auth_response)
-            error_json = auth_response.json()
-            error = None
-            if "error" in error_json:
-                error = error_json["error"]
-            if error and error["statusCode"] == 97401:
-                raise LGHorizonApiUnauthorizedError("Invalid credentials")
-            elif error:
-                raise LGHorizonApiConnectionError(error["message"])
-            else:
-                raise LGHorizonApiConnectionError("Unknown connection error")
-
-        self._auth.fill(auth_response.json())
-        self.refresh_token = self._auth.refresh_token
-        self._session.cookies["ACCESSTOKEN"] = self._auth.access_token
-
-        if self._refresh_callback:
-            self._refresh_callback()
-
-        _logger.debug("Authorization succeeded")
-
-    def set_callback(self, refresh_callback: Callable) -> None:
-        """Set the refresh callback."""
-        self._refresh_callback = refresh_callback
-
-    def _authorize_telenet(self):
-        """Authorize telenet users."""
-        try:
-            login_session = Session()
-            # Step 1 - Get Authorization data
-            _logger.debug("Step 1 - Get Authorization data")
-            auth_url = (
-                f"{self._country_settings['api_url']}/auth-service/v1/sso/authorization"
-            )
-            auth_response = login_session.get(auth_url)
-            if not auth_response.ok:
-                raise LGHorizonApiConnectionError("Can't connect to authorization URL")
-            auth_response_json = auth_response.json()
-            authorization_uri = auth_response_json["authorizationUri"]
-            authorization_validity_token = auth_response_json["validityToken"]
-
-            # Step 2 - Get Authorization cookie
-            _logger.debug("Step 2 - Get Authorization cookie")
-
-            auth_cookie_response = login_session.get(authorization_uri)
-            if not auth_cookie_response.ok:
-                raise LGHorizonApiConnectionError("Can't connect to authorization URL")
-
-            _logger.debug("Step 3 - Login")
-
-            username_fieldname = self._country_settings["oauth_username_fieldname"]
-            pasword_fieldname = self._country_settings["oauth_password_fieldname"]
-
-            payload = {
-                username_fieldname: self.username,
-                pasword_fieldname: self.password,
-                "rememberme": "true",
+        # If a profile is found and it has favorite channels, filter the main channels list.
+        if profile and profile.favorite_channels:
+            _LOGGER.debug("Returning favorite channels for profile '%s'.", profile.name)
+            # Use a set for faster lookup of favorite channel IDs
+            profile_channel_ids = set(profile.favorite_channels)
+            return {
+                channel.id: channel
+                for channel in self._channels.values()
+                if channel.id in profile_channel_ids
             }
 
-            login_response = login_session.post(
-                self._country_settings["oauth_url"], payload, allow_redirects=False
+        # If no profile is found (even after defaulting) or the profile has no favorite channels,
+        # return all available channels.
+        _LOGGER.debug("No specific profile channels found, returning all channels.")
+        return self._channels
+
+    async def _register_devices(self) -> None:
+        """Register devices."""
+        _LOGGER.debug("Registering devices...")
+        self._devices = {}
+        channels = await self.get_profile_channels(self._profile_id)
+        for raw_box in self._customer.assigned_devices:
+            _LOGGER.debug("Creating box for device: %s", raw_box)
+            if self._device_state_processor is None:
+                self._device_state_processor = LGHorizonDeviceStateProcessor(
+                    self.auth, self._channels, self._customer, self._profile_id
+                )
+            device = LGHorizonDevice(
+                raw_box,
+                self._mqtt_client,
+                self._device_state_processor,
+                self.auth,
+                channels,
             )
-            if not login_response.ok:
-                raise LGHorizonApiConnectionError("Can't connect to authorization URL")
-            redirect_url = login_response.headers[
-                self._country_settings["oauth_redirect_header"]
-            ]
+            self._devices[device.device_id] = device
 
-            if self._identifier is not None:
-                redirect_url += f"&dtv_identifier={self._identifier}"
-            redirect_response = login_session.get(redirect_url, allow_redirects=False)
-            success_url = redirect_response.headers[
-                self._country_settings["oauth_redirect_header"]
-            ]
-            code_matches = re.findall(r"code=(.*)&", success_url)
+    async def disconnect(self) -> None:
+        """Disconnect the client."""
+        if self._mqtt_client:
+            await self._mqtt_client.disconnect()
+        self._initialized = False
 
-            authorization_code = code_matches[0]
+    async def _create_mqtt_client(self) -> LGHorizonMqttClient:
+        """Create and configure the MQTT client.
 
-            new_payload = {
-                "authorizationGrant": {
-                    "authorizationCode": authorization_code,
-                    "validityToken": authorization_validity_token,
-                }
-            }
-            headers = {
-                "content-type": "application/json",
-            }
-            post_result = login_session.post(
-                auth_url, json.dumps(new_payload), headers=headers
-            )
-            self._auth.fill(post_result.json())
-            self._session.cookies["ACCESSTOKEN"] = self._auth.access_token
-        except Exception:
-            pass
-
-    def _obtain_mqtt_token(self):
-        _logger.debug("Obtain mqtt token...")
-        mqtt_auth_url = self._config["authorizationService"]["URL"]
-        mqtt_response = self._do_api_call(f"{mqtt_auth_url}/v1/mqtt/token")
-        self._auth.mqttToken = mqtt_response["token"]
-        _logger.debug("MQTT token: %s", self._auth.mqttToken)
-
-    @backoff.on_exception(
-        backoff.expo,
-        BaseException,
-        jitter=None,
-        max_tries=3,
-        logger=_logger,
-        giveup=lambda e: isinstance(
-            e, (LGHorizonApiLockedError, LGHorizonApiUnauthorizedError)
-        ),
-    )
-    def connect(self) -> None:
-        """Start connection process."""
-        self._config = self._get_config(self._country_code)
-        _logger.debug("Connect to API")
-        self._authorize()
-        self._obtain_mqtt_token()
-        self._mqtt_client = LGHorizonMqttClient(
-            self._auth,
-            self._config["mqttBroker"]["URL"],
+        Returns: An initialized LGHorizonMqttClient instance.
+        """
+        mqtt_client = await LGHorizonMqttClient.create(
+            self.auth,
             self._on_mqtt_connected,
             self._on_mqtt_message,
         )
+        return mqtt_client
 
-        self._register_customer_and_boxes()
-        self._mqtt_client.connect()
-
-    def disconnect(self):
-        """Disconnect."""
-        _logger.debug("Disconnect from API")
-        if not self._mqtt_client or not self._mqtt_client.is_connected:
-            return
-        self._mqtt_client.disconnect()
-
-    def _on_mqtt_connected(self) -> None:
-        _logger.debug("Connected to MQTT server. Registering all boxes...")
-        box: LGHorizonBox
-        for box in self.settop_boxes.values():
-            box.register_mqtt()
-
-    def _on_mqtt_message(self, message: str, topic: str) -> None:
-        if "action" in message and message["action"] == "OPS.getProfilesUpdate":
-            self._update_customer()
-        elif "source" in message:
-            device_id = message["source"]
-            if not isinstance(device_id, str):
-                _logger.debug("ignoring message - not a string")
-                return
-            if device_id not in self.settop_boxes:
-                return
-            try:
-                if "deviceType" in message and message["deviceType"] == "STB":
-                    self.settop_boxes[device_id].update_state(message)
-                if "status" in message:
-                    self._handle_box_update(device_id, message)
-
-            except Exception:
-                _logger.exception("Could not handle status message")
-                _logger.warning("Full message: %s", str(message))
-                self.settop_boxes[device_id].playing_info.reset()
-                self.settop_boxes[device_id].playing_info.set_paused(False)
-        elif "CPE.capacity" in message:
-            splitted_topic = topic.split("/")
-            if len(splitted_topic) != 4:
-                return
-            device_id = splitted_topic[1]
-            if device_id not in self.settop_boxes:
-                return
-            self.settop_boxes[device_id].update_recording_capacity(message)
-
-    def _handle_box_update(self, device_id: str, raw_message: Any) -> None:
-        status_payload = raw_message["status"]
-        if "uiStatus" not in status_payload:
-            return
-        ui_status = status_payload["uiStatus"]
-        if ui_status == "mainUI":
-            player_state = status_payload["playerState"]
-            if "sourceType" not in player_state or "source" not in player_state:
-                return
-            source_type = player_state["sourceType"]
-            state_source = player_state["source"]
-            self.settop_boxes[device_id].playing_info.set_paused(
-                player_state["speed"] == 0
-            )
-            if (
-                source_type
-                in (
-                    BOX_PLAY_STATE_CHANNEL,
-                    BOX_PLAY_STATE_BUFFER,
-                    BOX_PLAY_STATE_REPLAY,
-                )
-                and "eventId" in state_source
-            ):
-                event_id = state_source["eventId"]
-                raw_replay_event = self._do_api_call(
-                    f"{self._config['linearService']['URL']}/v2/replayEvent/{event_id}?returnLinearContent=true&language={self._country_settings['language']}"
-                )
-                replay_event = LGHorizonReplayEvent(raw_replay_event)
-                channel = self._channels[replay_event.channel_id]
-                self.settop_boxes[device_id].update_with_replay_event(
-                    source_type, replay_event, channel
-                )
-            elif source_type == BOX_PLAY_STATE_DVR:
-                recording_id = state_source["recordingId"]
-                session_start_time = state_source["sessionStartTime"]
-                session_end_time = state_source["sessionEndTime"]
-                last_speed_change_time = player_state["lastSpeedChangeTime"]
-                relative_position = player_state["relativePosition"]
-                raw_recording = self._do_api_call(
-                    f"{self._config['recordingService']['URL']}/customers/{self._auth.household_id}/details/single/{recording_id}?profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&language={self._country_settings['language']}"
-                )
-                recording = LGHorizonRecordingSingle(raw_recording)
-                channel = self._channels[recording.channel_id]
-                self.settop_boxes[device_id].update_with_recording(
-                    source_type,
-                    recording,
-                    channel,
-                    session_start_time,
-                    session_end_time,
-                    last_speed_change_time,
-                    relative_position,
-                )
-            elif source_type == BOX_PLAY_STATE_VOD:
-                title_id = state_source["titleId"]
-                last_speed_change_time = player_state["lastSpeedChangeTime"]
-                relative_position = player_state["relativePosition"]
-                raw_vod = self._do_api_call(
-                    f"{self._config['vodService']['URL']}/v2/detailscreen/{title_id}?language={self._country_settings['language']}&profileId=4504e28d-c1cb-4284-810b-f5eaab06f034&cityId={self.customer.city_id}"
-                )
-                vod = LGHorizonVod(raw_vod)
-                self.settop_boxes[device_id].update_with_vod(
-                    source_type, vod, last_speed_change_time, relative_position
-                )
-        elif ui_status == "apps":
-            app = LGHorizonApp(status_payload["appsState"])
-            self.settop_boxes[device_id].update_with_app("app", app)
-
-    @backoff.on_exception(
-        backoff.expo, LGHorizonApiConnectionError, max_tries=3, logger=_logger
-    )
-    def _do_api_call(self, url: str) -> str:
-        _logger.info("Executing API call to %s", url)
-        try:
-            api_response = self._session.get(url)
-            api_response.raise_for_status()
-            json_response = api_response.json()
-        except request_exceptions.HTTPError as http_ex:
-            self._authorize()
-            raise LGHorizonApiConnectionError(
-                f"Unable to call {url}. Error:{str(http_ex)}"
-            ) from http_ex
-        _logger.debug("Result API call: %s", json_response)
-        return json_response
-
-    def _register_customer_and_boxes(self):
-        self._update_customer()
-        self._get_channels()
-        if len(self.customer.settop_boxes) == 0:
-            _logger.warning("No boxes found.")
-            return
-        _logger.info("Registering boxes")
-        for device in self.customer.settop_boxes:
-            platform_type = device["platformType"]
-            if platform_type not in _supported_platforms:
-                continue
-            if (
-                "platform_types" in self._country_settings
-                and platform_type in self._country_settings["platform_types"]
-            ):
-                platform_type = self._country_settings["platform_types"][platform_type]
-            else:
-                platform_type = None
-            box = LGHorizonBox(
-                device, platform_type, self._mqtt_client, self._auth, self._channels
-            )
-            self.settop_boxes[box.device_id] = box
-            _logger.info("Box %s registered...", box.device_id)
-
-    def _update_customer(self):
-        _logger.info("Get customer data")
-        personalisation_result = self._do_api_call(
-            f"{self._config['personalizationService']['URL']}/v1/customer/{self._auth.household_id}?with=profiles%2Cdevices"
+    async def _on_mqtt_connected(self):
+        """MQTT connected callback."""
+        await self._mqtt_client.subscribe("#")
+        await self._mqtt_client.subscribe(self.auth.household_id)
+        # await self._mqtt_client.subscribe(self.auth.household_id + "/#")
+        # await self._mqtt_client.subscribe(self.auth.household_id + "/+/#")
+        await self._mqtt_client.subscribe(
+            self.auth.household_id + "/" + self._mqtt_client.client_id
         )
-        _logger.debug("Personalisation result: %s ", personalisation_result)
-        self.customer = LGHorizonCustomer(personalisation_result)
-
-    def _get_channels(self):
-        self._update_entitlements()
-        _logger.info("Retrieving channels...")
-        channels_result = self._do_api_call(
-            f"{self._config['linearService']['URL']}/v2/channels?cityId={self.customer.city_id}&language={self._country_settings['language']}&productClass=Orion-DASH"
+        await self._mqtt_client.subscribe(self.auth.household_id + "/+/status")
+        await self._mqtt_client.subscribe(
+            self.auth.household_id + "/+/networkRecordings"
         )
-        for channel in channels_result:
-            if "isRadio" in channel and channel["isRadio"]:
-                continue
+        await self._mqtt_client.subscribe(
+            self.auth.household_id + "/+/networkRecordings/capacity"
+        )
+        await self._mqtt_client.subscribe(self.auth.household_id + "/+/localRecordings")
+        await self._mqtt_client.subscribe(
+            self.auth.household_id + "/+/localRecordings/capacity"
+        )
+        await self._mqtt_client.subscribe(self.auth.household_id + "/watchlistService")
+        await self._mqtt_client.subscribe(self.auth.household_id + "/purchaseService")
+        await self._mqtt_client.subscribe(
+            self.auth.household_id + "/personalizationService"
+        )
+        await self._mqtt_client.subscribe(self.auth.household_id + "/recordingStatus")
+        await self._mqtt_client.subscribe(
+            self.auth.household_id + "/recordingStatus/lastUserAction"
+        )
+
+    async def _on_mqtt_message(self, mqtt_message: dict, mqtt_topic: str):
+        """MQTT message callback."""
+        message = await self._message_factory.create_message(mqtt_topic, mqtt_message)
+        match message.message_type:
+            case LGHorizonMessageType.STATUS:
+                message.__class__ = LGHorizonStatusMessage
+                status_message = cast(LGHorizonStatusMessage, message)
+                device = self._devices.get(status_message.source, None)
+                if not device:
+                    return
+                await device.handle_status_message(status_message)
+            case LGHorizonMessageType.UI_STATUS:
+                message.__class__ = LGHorizonUIStatusMessage
+                ui_status_message = cast(LGHorizonUIStatusMessage, message)
+                device = self._devices.get(ui_status_message.source, None)
+                if not device:
+                    return
+                if (
+                    not device.device_state.state
+                    == LGHorizonRunningState.ONLINE_RUNNING
+                ):
+                    return
+                await device.handle_ui_status_message(ui_status_message)
+
+    async def _get_customer_info(self) -> LGHorizonCustomer:
+        service_url = await self._service_config.get_service_url(
+            "personalizationService"
+        )
+        result = await self.auth.request(
+            service_url,
+            f"/v1/customer/{self.auth.household_id}?with=profiles%2Cdevices",
+        )
+        return LGHorizonCustomer(result)
+
+    async def _refresh_entitlements(self) -> Any:
+        """Retrieve entitlements."""
+        _LOGGER.debug("Retrieving entitlements...")
+        service_url = await self._service_config.get_service_url("purchaseService")
+        result = await self.auth.request(
+            service_url,
+            f"/v2/customers/{self.auth.household_id}/entitlements?enableDaypass=true",
+        )
+        self._entitlements = LGHorizonEntitlements(result)
+
+    async def _refresh_channels(self):
+        """Retrieve channels."""
+        _LOGGER.debug("Retrieving channels...")
+        service_url = await self._service_config.get_service_url("linearService")
+        lang = await self._customer.get_profile_lang(self._profile_id)
+        channels_json = await self.auth.request(
+            service_url,
+            f"/v2/channels?cityId={self._customer.city_id}&language={lang}&productClass=Orion-DASH",
+        )
+        for channel_json in channels_json:
+            channel = LGHorizonChannel(channel_json)
             common_entitlements = list(
-                set(self._entitlements) & set(channel["linearProducts"])
+                set(self._entitlements.entitlement_ids) & set(channel.linear_products)
             )
+
             if len(common_entitlements) == 0:
                 continue
-            channel_id = channel["id"]
-            self._channels[channel_id] = LGHorizonChannel(channel)
-        _logger.info("%s retrieved.", len(self._channels))
 
-    def get_display_channels(self):
-        """Returns channels to display baed on profile."""
-        all_channels = self._channels.values()
-        if not self._profile_id or self._profile_id not in self.customer.profiles:
-            return all_channels
-        profile_channel_ids = self.customer.profiles[self._profile_id].favorite_channels
-        if len(profile_channel_ids) == 0:
-            return all_channels
+            self._channels[channel.id] = channel
 
-        return [
-            channel for channel in all_channels if channel.id in profile_channel_ids
-        ]
-
-    def _get_replay_event(self, listing_id) -> Any:
-        """Get listing."""
-        _logger.info("Retrieving replay event details...")
-        response = self._do_api_call(
-            f"{self._config['linearService']['URL']}/v2/replayEvent/{listing_id}?returnLinearContent=true&language={self._country_settings['language']}"
+    async def get_all_recordings(self) -> LGHorizonRecordingList:
+        """Retrieve all recordings."""
+        _LOGGER.debug("Retrieving recordings...")
+        service_url = await self._service_config.get_service_url("recordingService")
+        lang = await self._customer.get_profile_lang(self._profile_id)
+        recordings_json = await self.auth.request(
+            service_url,
+            f"/customers/{self.auth.household_id}/recordings?isAdult=false&offset=0&limit=100&sort=time&sortOrder=desc&profileId={self._profile_id}&language={lang}",
         )
-        _logger.info("Replay event details retrieved")
-        return response
-
-    def get_recording_capacity(self) -> int:
-        """Returns remaining recording capacity"""
-        ctry_code = self._country_code[0:2]
-        if ctry_code == "gb":
-            _logger.debug("GB: not supported")
-            return None
-        try:
-            _logger.info("Retrieving recordingcapacity...")
-            quota_content = self._do_api_call(
-                f"{self._config['recordingService']['URL']}/customers/{self._auth.household_id}/quota"
-            )
-            if "quota" not in quota_content and "occupied" not in quota_content:
-                _logger.error("Unable to fetch recording capacity...")
-                return None
-            capacity = (quota_content["occupied"] / quota_content["quota"]) * 100
-            self.recording_capacity = round(capacity)
-            _logger.debug("Remaining recordingcapacity %s %%", self.recording_capacity)
-            return self.recording_capacity
-        except Exception:
-            _logger.error("Unable to fetch recording capacity...")
-            return None
-
-    def get_recordings(self) -> List[LGHorizonBaseRecording]:
-        """Returns recordings."""
-        _logger.info("Retrieving recordings...")
-        recording_content = self._do_api_call(
-            f"{self._config['recordingService']['URL']}/customers/{self._auth.household_id}/recordings?sort=time&sortOrder=desc&language={self._country_settings['language']}"
-        )
-        recordings = []
-        for recording_data_item in recording_content["data"]:
-            recording_type = recording_data_item["type"]
-            if recording_type == RECORDING_TYPE_SINGLE:
-                recordings.append(LGHorizonRecordingSingle(recording_data_item))
-            elif recording_type in (RECORDING_TYPE_SEASON, RECORDING_TYPE_SHOW):
-                recordings.append(LGHorizonRecordingListSeasonShow(recording_data_item))
-        _logger.info("%s recordings retrieved...", len(recordings))
+        recordings = await self._recording_factory.create_recordings(recordings_json)
         return recordings
 
-    def get_recording_show(self, show_id: str) -> list[LGHorizonRecordingSingle]:
-        """Returns show recording"""
-        _logger.info("Retrieving show recordings...")
-        show_recording_content = self._do_api_call(
-            f"{self._config['recordingService']['URL']}/customers/{self._auth.household_id}/episodes/shows/{show_id}?source=recording&language=nl&sort=time&sortOrder=asc"
+    async def get_show_recordings(
+        self, show_id: str, channel_id: str
+    ) -> LGHorizonShowRecordingList:  # type: ignore[valid-type]
+        """Retrieve all recordings."""
+        _LOGGER.debug("Retrieving recordings fro show...")
+        service_url = await self._service_config.get_service_url("recordingService")
+        lang = await self._customer.get_profile_lang(self._profile_id)
+        episodes_json = await self.auth.request(
+            service_url,
+            f"/customers/{self.auth.household_id}/episodes/shows/{show_id}?source=recording&isAdult=false&offset=0&limit=100&profileId={self._profile_id}&language={lang}&channelId={channel_id}&sort=time&sortOrder=asc",
         )
-        recordings = []
-        for item in show_recording_content["data"]:
-            if item["source"] == "show":
-                recordings.append(LGHorizonRecordingShow(item))
-            else:
-                recordings.append(LGHorizonRecordingEpisode(item))
-        _logger.info("%s showrecordings retrieved...", len(recordings))
+        recordings = await self._recording_factory.create_episodes(episodes_json)
         return recordings
 
-    def _update_entitlements(self) -> None:
-        _logger.info("Retrieving entitlements...")
-        entitlements_json = self._do_api_call(
-            f"{self._config['purchaseService']['URL']}/v2/customers/{self._auth.household_id}/entitlements?enableDaypass=true"
+    async def get_recording_quota(self) -> LGHorizonRecordingQuota:
+        """Refresh recording quota."""
+        _LOGGER.debug("Refreshing recording quota...")
+        service_url = await self._service_config.get_service_url("recordingService")
+        quota_json = await self.auth.request(
+            service_url,
+            f"/customers/{self.auth.household_id}/quota",
         )
-        self._entitlements.clear()
-        for entitlement in entitlements_json["entitlements"]:
-            self._entitlements.append(entitlement["id"])
+        return LGHorizonRecordingQuota(quota_json)
 
-    def _get_config(self, country_code: str):
-        base_country_code = country_code[0:2]
-        config_url = f"{self._country_settings['api_url']}/{base_country_code}/en/config-service/conf/web/backoffice.json"
-        result = self._do_api_call(config_url)
-        _logger.debug(result)
-        return result
+
+__all__ = ["LGHorizonApi", "LGHorizonAuth"]

@@ -38,11 +38,18 @@ RECORDING_TYPE_SEASON = "season"
 
 BE_AUTH_URL = "https://login.prd.telenet.be/openid/login.do"
 
+PLATFORM_TYPES = {
+    "EOS": {"manufacturer": "Arris", "model": "DCX960"},
+    "EOS2": {"manufacturer": "HUMAX", "model": "2008C-STB-TN"},
+    "HORIZON": {"manufacturer": "Arris", "model": "DCX960"},
+    "APOLLO": {"manufacturer": "Arris", "model": "VIP5002W"},
+}
+
 COUNTRY_SETTINGS = {
     "nl": {
         "api_url": "https://spark-prod-nl.gnp.cloud.ziggogo.tv",
         "mqtt_url": "obomsg.prod.nl.horizon.tv",
-        "use_oauth": False,
+        "use_refreshtoken": False,
         "channels": [
             {
                 "channelId": "NL_000073_019506",
@@ -106,7 +113,7 @@ COUNTRY_SETTINGS = {
     },
     "be-nl-preprod": {
         "api_url": "https://spark-preprod-be.gnp.cloud.telenet.tv",
-        "use_oauth": True,
+        "use_refreshtoken": True,
         "oauth_username_fieldname": "j_username",
         "oauth_password_fieldname": "j_password",
         "oauth_add_accept_header": False,
@@ -131,13 +138,13 @@ COUNTRY_SETTINGS = {
     },
     "ie": {
         "api_url": "https://spark-prod-ie.gnp.cloud.virginmediatv.ie",
-        "use_oauth": False,
+        "use_refreshtoken": False,
         "channels": [],
         "language": "en",
     },
     "pl": {
         "api_url": "https://spark-prod-pl.gnp.cloud.upctv.pl",
-        "use_oauth": False,
+        "use_refreshtoken": False,
         "channels": [],
         "language": "pl",
         "platform_types": {
