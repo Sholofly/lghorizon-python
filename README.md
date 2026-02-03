@@ -1,5 +1,3 @@
-# LG Horizon Api
-
 # LG Horizon API Python Library
 
 A Python library to interact with and control LG Horizon set-top boxes. This library provides functionalities for authentication, real-time device status monitoring via MQTT, and various control commands for your Horizon devices.
