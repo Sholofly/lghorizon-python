@@ -117,7 +117,7 @@ class LGHorizonMqttClient:
             self._reconnect_task.cancel()
             self._reconnect_task = None
 
-        _logger.info("Attempting initial MQTT connection...")
+        _logger.debug("Attempting initial MQTT connection...")
         # Blocking connect → executor
         await self._loop.run_in_executor(
             None,
@@ -185,7 +185,7 @@ class LGHorizonMqttClient:
             result_code: The connection result code.
         """
         if result_code == 0:
-            _logger.info("MQTT client connected successfully.")
+            _logger.debug("MQTT client connected successfully.")
             # If a reconnect task was running, it means we successfully reconnected.
             # Cancel it as we are now connected.
             if self._reconnect_task:
@@ -196,7 +196,7 @@ class LGHorizonMqttClient:
                 self._loop,
             )
         elif result_code == 5:
-            _logger.warning(
+            _logger.debug(
                 "MQTT connection failed: Token expired. Attempting to refresh token and reconnect."
             )
             # Schedule the token refresh and reconnect in the main event loop
@@ -217,7 +217,7 @@ class LGHorizonMqttClient:
                 self._auth.household_id,
                 self._mqtt_token,
             )
-            _logger.info("MQTT token refreshed. Attempting to reconnect.")
+            _logger.debug("MQTT token refreshed. Attempting to reconnect.")
             # Call connect. If it fails, _on_disconnect will be triggered,
             # and the _reconnect_loop will take over.
             await self.connect()
@@ -228,7 +228,7 @@ class LGHorizonMqttClient:
             if not self._disconnect_requested and (
                 not self._reconnect_task or self._reconnect_task.done()
             ):
-                _logger.info(
+                _logger.debug(
                     "Scheduling MQTT reconnect after token refresh/connect failure."
                 )
                 self._reconnect_task = asyncio.create_task(self._reconnect_loop())
@@ -256,7 +256,7 @@ class LGHorizonMqttClient:
         """
         _logger.warning("MQTT disconnected with result code: %s", result_code)
         if not self._disconnect_requested:
-            _logger.info("Unexpected MQTT disconnection. Initiating reconnect loop.")
+            _logger.debug("Unexpected MQTT disconnection. Initiating reconnect loop.")
             if not self._reconnect_task or self._reconnect_task.done():
                 self._reconnect_task = asyncio.run_coroutine_threadsafe(
                     self._reconnect_loop(), self._loop
@@ -264,7 +264,7 @@ class LGHorizonMqttClient:
             else:
                 _logger.debug("Reconnect loop already active.")
         else:
-            _logger.info("MQTT disconnected as requested.")
+            _logger.debug("MQTT disconnected as requested.")
 
     async def _reconnect_loop(self):
         """Manages the MQTT reconnection process with exponential backoff."""
@@ -285,7 +285,7 @@ class LGHorizonMqttClient:
             await asyncio.sleep(delay)
 
             try:
-                _logger.info("Attempting MQTT reconnect...")
+                _logger.debug("Attempting MQTT reconnect...")
                 await self.connect()
                 # If connect() succeeds, _on_connect will be called, which will cancel this task.
                 # If connect() fails, _on_disconnect will be called again, and this loop continues.
