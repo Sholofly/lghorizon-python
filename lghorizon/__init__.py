@@ -35,6 +35,8 @@ from .exceptions import (
     LGHorizonApiLockedError,
 )
 
+from .const import COUNTRY_SETTINGS
+
 __all__ = [
     "LGHorizonApi",
     "LGHorizonDevice",
@@ -68,4 +70,5 @@ __all__ = [
     "LGHorizonServicesConfig",
     "LGHorizonRecording",
     "LGHorizonShowRecordingList",
+    "COUNTRY_SETTINGS",
 ]
