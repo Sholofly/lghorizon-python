@@ -88,7 +88,7 @@ async def main():
         async def device_callback(device_id: str):
             device = devices[device_id]
             print(
-                f"Device {device.device_id} state changed. Status:\n\nName: {device.device_friendly_name}\nState: {device.device_state.state.value}\nChannel: {device.device_state.channel_name} ({device.device_state.channel_id})\nShow: {device.device_state.show_title}\nEpisode: {device.device_state.episode_title}\nSource type: {device.device_state.source_type.value}\nlast pos update: {convert_timestamp_to_datetime(device.device_state.last_position_update)}\npos: {format_duration(device.device_state.position)}\nduration: {format_duration(device.device_state.duration)}\nstart time: {device.device_state.start_time}\nend time: {device.device_state.end_time}\n\n",
+                f"Device {device.device_id} state changed. Status:\n\nName: {device.device_friendly_name}\nState: {device.device_state.state.value}\nChannel: {device.device_state.channel_name} ({device.device_state.channel_id})\nShow: {device.device_state.show_title}\nEpisode: {device.device_state.episode_title}\nSource type: {device.device_state.source_type.value}\nlast pos update: {convert_timestamp_to_datetime(device.device_state.last_position_update)}\npos: {format_duration(device.device_state.position)}\nduration: {format_duration(device.device_state.duration)}\nstart time: {convert_timestamp_to_datetime(device.device_state.start_time)}\nend time: {convert_timestamp_to_datetime(device.device_state.end_time)}\n\n",
             )
 
         try:
