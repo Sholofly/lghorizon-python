@@ -69,6 +69,17 @@ class LGHorizonUIStateType(Enum):
     UNKNOWN = "unknown"
 
 
+class LGHorizonMediaType(Enum):
+    """Enumeration of LG Horizon Media types"""
+
+    UNKNOWN = "unknown"
+    CHANNEL = "channel"
+    APP = "app"
+    MOVIE = "movie"
+    EPISODE = "episode"
+    TVSHOW = "tvshow"
+
+
 class LGHorizonMessage(ABC):
     """Abstract base class for LG Horizon messages."""
 
@@ -869,6 +880,7 @@ class LGHorizonDeviceState:
     _speed: Optional[int]
     _start_time: Optional[int]
     _end_time: Optional[int]
+    _media_type: LGHorizonMediaType
 
     def __init__(self) -> None:
         """Initialize the playing info."""
@@ -890,6 +902,7 @@ class LGHorizonDeviceState:
         self._id = None
         self._start_time = None
         self._end_time = None
+        self._media_type = LGHorizonMediaType.UNKNOWN
 
     @property
     def state(self) -> LGHorizonRunningState:
@@ -1032,6 +1045,16 @@ class LGHorizonDeviceState:
         self._ui_state_type = value
 
     @property
+    def media_type(self) -> LGHorizonMediaType:
+        """Return the source type."""
+        return self._media_type
+
+    @media_type.setter
+    def media_type(self, value: LGHorizonMediaType) -> None:
+        """Set the source type."""
+        self._media_type = value
+
+    @property
     def paused(self) -> bool:
         """Return if the media is paused."""
         if self.speed is None:
@@ -1099,6 +1122,7 @@ class LGHorizonDeviceState:
         self.id = None
         self.start_time = None
         self.end_time = None
+        self.media_type = LGHorizonMediaType.UNKNOWN
         await self.reset_progress()
 
 
