@@ -27,6 +27,7 @@ from .lghorizon_models import (
     LGHorizonUIState,
     LGHorizonProfileOptions,
     LGHorizonServicesConfig,
+    LGHorizonMediaType,
 )
 from .exceptions import (
     LGHorizonApiError,
@@ -70,5 +71,6 @@ __all__ = [
     "LGHorizonServicesConfig",
     "LGHorizonRecording",
     "LGHorizonShowRecordingList",
+    "LGHorizonMediaType",
     "COUNTRY_SETTINGS",
 ]
