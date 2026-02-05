@@ -74,6 +74,7 @@ class LGHorizonDevice:
         self._model = None
         self._recording_capacity = None
         self._device_state_processor = device_state_processor
+        self._change_callback = None
 
     @property
     def device_id(self) -> str:

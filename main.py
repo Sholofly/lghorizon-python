@@ -80,7 +80,7 @@ async def main():
 
     async with aiohttp.ClientSession() as session:
         auth = LGHorizonAuth(session, country, username=username, password=password)
-        api = LGHorizonApi(auth)
+        api = LGHorizonApi(auth, profile_id=None)
 
         # Start the input reader task
         input_task = asyncio.create_task(read_input_and_signal_shutdown())
