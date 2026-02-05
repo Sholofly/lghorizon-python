@@ -36,15 +36,14 @@ class LGHorizonApi:
     _customer: LGHorizonCustomer
     _channels: Dict[str, LGHorizonChannel]
     _entitlements: LGHorizonEntitlements
-    _profile_id: str
+    _profile_id: Optional[str]
     _initialized: bool = False
     _devices: Dict[str, LGHorizonDevice] = {}
     _message_factory: LGHorizonMessageFactory = LGHorizonMessageFactory()
     _device_state_processor: LGHorizonDeviceStateProcessor | None
     _recording_factory: LGHorizonRecordingFactory = LGHorizonRecordingFactory()
 
-    def __init__(self, auth: LGHorizonAuth, profile_id: str = "") -> None:
-        """Initialize LG Horizon API client."""
+    def __init__(self, auth: LGHorizonAuth, profile_id: Optional[str]) -> None:
         """Initialize LG Horizon API client.
 
         Args:
@@ -62,7 +61,7 @@ class LGHorizonApi:
         """Initialize the API client."""
         self._service_config = await self.auth.get_service_config()
         self._customer = await self._get_customer_info()
-        if self._profile_id == "":
+        if not self._profile_id:
             self._profile_id = list(self._customer.profiles.keys())[0]
         await self._refresh_entitlements()
         await self._refresh_channels()
