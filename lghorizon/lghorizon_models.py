@@ -839,6 +839,18 @@ class LGHorizonCustomer:
         return self._json_payload["cityId"]
 
     @property
+    def recording_retention_period(self) -> Optional[int]:
+        """Return the city id."""
+        return self._json_payload.get("recordingRetentionPeriod", None)
+
+    @property
+    def has_cloud_recording(self) -> bool:
+        """Return the city id."""
+        return (
+            not self.recording_retention_period or self.recording_retention_period <= 0
+        )
+
+    @property
     def assigned_devices(self) -> list[str]:
         """Return the assigned set-top boxes."""
         return self._json_payload.get("assignedDevices", [])

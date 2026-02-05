@@ -1,6 +1,7 @@
 """LG Horizon API client."""
 
 import logging
+import json
 from typing import Any, Dict, cast, Callable, Optional
 
 from .lghorizon_device import LGHorizonDevice
@@ -261,6 +262,8 @@ class LGHorizonApi:
 
     async def get_all_recordings(self) -> LGHorizonRecordingList:
         """Retrieve all recordings."""
+        if not self._customer.has_cloud_recording:
+            return LGHorizonRecordingList([])
         _LOGGER.debug("Retrieving recordings...")
         service_url = await self._service_config.get_service_url("recordingService")
         lang = await self._customer.get_profile_lang(self._profile_id)
@@ -275,6 +278,8 @@ class LGHorizonApi:
         self, show_id: str, channel_id: str
     ) -> LGHorizonShowRecordingList:  # type: ignore[valid-type]
         """Retrieve all recordings."""
+        if not self._customer.has_cloud_recording:
+            return LGHorizonShowRecordingList(None, None, [])
         _LOGGER.debug("Retrieving recordings fro show...")
         service_url = await self._service_config.get_service_url("recordingService")
         lang = await self._customer.get_profile_lang(self._profile_id)
@@ -288,6 +293,8 @@ class LGHorizonApi:
     async def get_recording_quota(self) -> LGHorizonRecordingQuota:
         """Refresh recording quota."""
         _LOGGER.debug("Refreshing recording quota...")
+        if not self._customer.has_cloud_recording:
+            return LGHorizonRecordingQuota({})
         service_url = await self._service_config.get_service_url("recordingService")
         quota_json = await self.auth.request(
             service_url,
