@@ -95,7 +95,7 @@ class LGHorizonApi:
         return self._customer.profiles
 
     @property
-    async def has_cloud_recording(self) -> bool:
+    def has_cloud_recording(self) -> bool:
         """Get profile IDs."""
         if not self._initialized:
             raise RuntimeError("LGHorizonApi not initialized")
