@@ -846,9 +846,7 @@ class LGHorizonCustomer:
     @property
     def has_cloud_recording(self) -> bool:
         """Return the city id."""
-        return (
-            not self.recording_retention_period or self.recording_retention_period > 0
-        )
+        return self.recording_retention_period and self.recording_retention_period > 0
 
     @property
     def assigned_devices(self) -> list[str]:
