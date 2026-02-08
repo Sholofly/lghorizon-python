@@ -28,6 +28,7 @@ class LGHorizonRunningState(Enum):
     UNKNOWN = "UNKNOWN"
     ONLINE_RUNNING = "ONLINE_RUNNING"
     ONLINE_STANDBY = "ONLINE_STANDBY"
+    OFFLINE = "OFFLINE"
 
 
 class LGHorizonMessageType(Enum):
