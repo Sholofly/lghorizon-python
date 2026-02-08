@@ -491,6 +491,7 @@ class LGHorizonAuth:
         refresh_token: str = "",
         username: str = "",
         password: str = "",
+        token_refresh_callback: Callable[str, None] | None = None,  # pyright: ignore[reportInvalidTypeForm]
     ) -> None:
         """Initialize the auth with refresh token."""
         self._websession = websession
@@ -504,7 +505,7 @@ class LGHorizonAuth:
         self._host = COUNTRY_SETTINGS[country_code]["api_url"]
         self._use_refresh_token = COUNTRY_SETTINGS[country_code]["use_refreshtoken"]
         self._service_config = None
-        self._token_refresh_callback = None
+        self._token_refresh_callback = token_refresh_callback
 
     @property
     def websession(self) -> ClientSession:
@@ -624,6 +625,10 @@ class LGHorizonAuth:
             self._token_refresh_callback(self.refresh_token)
         self.username = auth_json["username"]
         self.token_expiry = auth_json["refreshTokenExpiry"]
+        _LOGGER.debug(
+            "Access token and refresh token fetched. refresh token expires: %s",
+            datetime.fromtimestamp(int(self.token_expiry)).ctime(),
+        )
 
     @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3)
     async def request(self, host: str, path: str, params=None, **kwargs) -> Any:
