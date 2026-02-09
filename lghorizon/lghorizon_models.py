@@ -614,6 +614,8 @@ class LGHorizonAuth:
                 error = auth_json["error"]
             if error and error["statusCode"] == 97401:
                 raise LGHorizonApiUnauthorizedError("Invalid credentials")
+            elif error and error["statusCode"] == 97402:
+                raise LGHorizonApiUnauthorizedError("Invalid token")
             elif error:
                 raise LGHorizonApiConnectionError(error["message"])
             else:

@@ -76,10 +76,17 @@ async def main():
         secrets = json.load(f)
         username = secrets.get("username")
         password = secrets.get("password")
+        refresh_token = secrets.get("refresh_token")
         country = secrets.get("country", "nl")
 
     async with aiohttp.ClientSession() as session:
-        auth = LGHorizonAuth(session, country, username=username, password=password)
+        auth = LGHorizonAuth(
+            session,
+            country,
+            username=username,
+            password=password,
+            refresh_token=refresh_token,
+        )
         api = LGHorizonApi(auth, profile_id=None)
 
         # Start the input reader task
