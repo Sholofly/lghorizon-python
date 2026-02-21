@@ -1,11 +1,5 @@
 """Python client for LGHorizon."""
 
-# flake8: noqa
-# Box states
-ONLINE_RUNNING = "ONLINE_RUNNING"
-ONLINE_STANDBY = "ONLINE_STANDBY"
-UNKNOWN = "UNKNOWN"
-
 BOX_PLAY_STATE_CHANNEL = "linear"
 BOX_PLAY_STATE_REPLAY = "replay"
 BOX_PLAY_STATE_DVR = "nDVR"

@@ -14,7 +14,6 @@ from .lghorizon_models import (
     LGHorizonChannel,
 )
 
-from .exceptions import LGHorizonApiConnectionError
 from .helpers import make_id
 from .lghorizon_device_state_processor import LGHorizonDeviceStateProcessor
 from .lghorizon_mqtt_client import LGHorizonMqttClient
@@ -28,7 +27,6 @@ from .const import (
     MEDIA_KEY_RECORD,
     MEDIA_KEY_REWIND,
     MEDIA_KEY_STOP,
-    ONLINE_RUNNING,
     PLATFORM_TYPES,
 )
 
@@ -150,7 +148,7 @@ class LGHorizonDevice:
         topic = f"{self._auth.household_id}/{self._mqtt_client.client_id}/status"
         payload = {
             "source": self._mqtt_client.client_id,
-            "state": ONLINE_RUNNING,
+            "state": LGHorizonRunningState.ONLINE_RUNNING.value,
             "deviceType": "HGO",
         }
         await self._mqtt_client.publish_message(topic, json.dumps(payload))
