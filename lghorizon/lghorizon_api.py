@@ -1,7 +1,6 @@
 """LG Horizon API client."""
 
 import logging
-import json
 from typing import Any, Dict, cast, Callable, Optional
 
 from .lghorizon_device import LGHorizonDevice
