@@ -169,7 +169,7 @@ async def main():
             # ── Channels ──
             channels = await api.get_profile_channels()
             print_header(f"CHANNELS ({len(channels)} total)")
-            for ch in sorted(channels.values(), key=lambda c: int(c.channel_number) if c.channel_number.isdigit() else 9999):
+            for ch in sorted(channels.values(), key=lambda c: int(c.channel_number) if str(c.channel_number).isdigit() else 9999):
                 radio_tag = " [Radio]" if ch.is_radio else ""
                 print(f"  {ch.channel_number:>4}  {ch.title}{radio_tag}")
 
