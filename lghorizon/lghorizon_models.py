@@ -146,6 +146,7 @@ class LGHorizonSourceType(Enum):
     LINEAR = "linear"
     REVIEWBUFFER = "reviewBuffer"
     NDVR = "nDVR"
+    LOCALDVR = "localDVR"
     REPLAY = "replay"
     VOD = "VOD"
     UNKNOWN = "unknown"
@@ -273,7 +274,11 @@ class LGHorizonPlayerState:
     @property
     def source_type(self) -> LGHorizonSourceType:
         """Return the source type."""
-        return LGHorizonSourceType[self._raw_json.get("sourceType", "unknown").upper()]
+        type_str = self._raw_json.get("sourceType", "unknown").upper()
+        try:
+            return LGHorizonSourceType[type_str]
+        except KeyError:
+            return LGHorizonSourceType.UNKNOWN
 
     @property
     def speed(self) -> int:

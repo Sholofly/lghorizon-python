@@ -128,12 +128,13 @@ class TestLGHorizonSourceType:
         assert LGHorizonSourceType.LINEAR.value == "linear"
         assert LGHorizonSourceType.REVIEWBUFFER.value == "reviewBuffer"
         assert LGHorizonSourceType.NDVR.value == "nDVR"
+        assert LGHorizonSourceType.LOCALDVR.value == "localDVR"
         assert LGHorizonSourceType.REPLAY.value == "replay"
         assert LGHorizonSourceType.VOD.value == "VOD"
         assert LGHorizonSourceType.UNKNOWN.value == "unknown"
 
     def test_all_members_count(self):
-        assert len(LGHorizonSourceType) == 6
+        assert len(LGHorizonSourceType) == 7
 
 
 class TestLGHorizonVODType:
