@@ -1405,12 +1405,14 @@ class LGHorizonEpgEvent:
     @property
     def start_time(self) -> Optional[float]:
         """Return the start time as Unix timestamp in seconds."""
-        return self._event_json.get("startTime")
+        val = self._event_json.get("startTime")
+        return val / 1000 if val is not None else None
 
     @property
     def end_time(self) -> Optional[float]:
         """Return the end time as Unix timestamp in seconds."""
-        return self._event_json.get("endTime")
+        val = self._event_json.get("endTime")
+        return val / 1000 if val is not None else None
 
     @property
     def minimum_age(self) -> int:
@@ -1556,12 +1558,14 @@ class LGHorizonEventDetail:
     @property
     def start_time(self) -> Optional[float]:
         """Return the start time as Unix timestamp in seconds."""
-        return self._detail_json.get("startTime")
+        val = self._detail_json.get("startTime")
+        return val / 1000 if val is not None else None
 
     @property
     def end_time(self) -> Optional[float]:
         """Return the end time as Unix timestamp in seconds."""
-        return self._detail_json.get("endTime")
+        val = self._detail_json.get("endTime")
+        return val / 1000 if val is not None else None
 
     @property
     def actors(self) -> List[str]:
