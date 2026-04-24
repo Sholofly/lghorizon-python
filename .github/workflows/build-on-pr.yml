@@ -1,15 +1,32 @@
-name: Build Python 🐍 distribution 📦
+name: Build & Test Python 🐍 distribution 📦
 on:
   pull_request:
     branches:
       - dev
 
 jobs:
-  build:
-    name: Build Python 🐍 distribution 📦
+  test:
+    name: Run Tests 🧪
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@master
+      - uses: actions/checkout@v4
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pytest pytest-asyncio aiohttp paho-mqtt backoff
+      - name: Run tests
+        run: python -m pytest tests/ -v --tb=short
+
+  build:
+    name: Build Python 🐍 distribution 📦
+    needs: test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
       - name: Set up Python 3.13
         uses: actions/setup-python@v6
         with:
