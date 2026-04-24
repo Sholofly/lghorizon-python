@@ -1248,11 +1248,11 @@ class TestLGHorizonEpgEvent:
 
     def test_start_time(self):
         ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
-        assert ev.start_time == 1.0
+        assert ev.start_time == 1000
 
     def test_end_time(self):
         ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
-        assert ev.end_time == 2.0
+        assert ev.end_time == 2000
 
     def test_minimum_age(self):
         ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
@@ -1435,11 +1435,11 @@ class TestLGHorizonEventDetail:
 
     def test_start_time(self):
         d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
-        assert d.start_time == 1.0
+        assert d.start_time == 1000
 
     def test_end_time(self):
         d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
-        assert d.end_time == 2.0
+        assert d.end_time == 2000
 
     def test_actors(self):
         d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
