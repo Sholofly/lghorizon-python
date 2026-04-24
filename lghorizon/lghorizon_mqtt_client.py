@@ -67,12 +67,12 @@ class LGHorizonMqttClient:
 
         # Service config ophalen
         service_config = await auth.get_service_config()
-        mqtt_broker_url = await service_config.get_service_url("mqttBroker")
+        mqtt_broker_url = service_config.get_service_url("mqttBroker")
         instance._mqtt_broker_url = mqtt_broker_url.replace("wss://", "").replace(
             ":443/mqtt", ""
         )
 
-        instance.client_id = await make_id()
+        instance.client_id = make_id()
 
         # Paho client
         instance._mqtt_client = mqtt.Client(

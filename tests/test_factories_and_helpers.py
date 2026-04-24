@@ -25,28 +25,28 @@ pytestmark = pytest.mark.asyncio
 
 
 async def test_make_id_default_length():
-    result = await make_id()
+    result = make_id()
     assert len(result) == 10
 
 
 async def test_make_id_custom_length_8():
-    result = await make_id(8)
+    result = make_id(8)
     assert len(result) == 8
 
 
 async def test_make_id_custom_length_20():
-    result = await make_id(20)
+    result = make_id(20)
     assert len(result) == 20
 
 
 async def test_make_id_alphanumeric_only():
-    result = await make_id(50)
+    result = make_id(50)
     assert result.isalnum()
 
 
 async def test_make_id_unique():
-    id1 = await make_id()
-    id2 = await make_id()
+    id1 = make_id()
+    id2 = make_id()
     # With 62^10 possible values the probability of a collision is negligible
     assert id1 != id2
 

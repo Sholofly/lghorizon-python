@@ -225,7 +225,7 @@ class LGHorizonApi:
                 await device.handle_ui_status_message(ui_status_message)
 
     async def _get_customer_info(self) -> LGHorizonCustomer:
-        service_url = await self._service_config.get_service_url(
+        service_url = self._service_config.get_service_url(
             "personalizationService"
         )
         result = await self.auth.request(
@@ -237,7 +237,7 @@ class LGHorizonApi:
     async def _refresh_entitlements(self) -> Any:
         """Retrieve entitlements."""
         _LOGGER.debug("Retrieving entitlements...")
-        service_url = await self._service_config.get_service_url("purchaseService")
+        service_url = self._service_config.get_service_url("purchaseService")
         result = await self.auth.request(
             service_url,
             f"/v2/customers/{self.auth.household_id}/entitlements?enableDaypass=true",
@@ -247,8 +247,8 @@ class LGHorizonApi:
     async def _refresh_channels(self):
         """Retrieve channels."""
         _LOGGER.debug("Retrieving channels...")
-        service_url = await self._service_config.get_service_url("linearService")
-        lang = await self._customer.get_profile_lang(self._profile_id)
+        service_url = self._service_config.get_service_url("linearService")
+        lang = self._customer.get_profile_lang(self._profile_id)
         channels_json = await self.auth.request(
             service_url,
             f"/v2/channels?cityId={self._customer.city_id}&language={lang}&productClass=Orion-DASH",
@@ -269,8 +269,8 @@ class LGHorizonApi:
         if not self._customer.has_cloud_recording:
             return LGHorizonRecordingList([])
         _LOGGER.debug("Retrieving recordings...")
-        service_url = await self._service_config.get_service_url("recordingService")
-        lang = await self._customer.get_profile_lang(self._profile_id)
+        service_url = self._service_config.get_service_url("recordingService")
+        lang = self._customer.get_profile_lang(self._profile_id)
         recordings_json = await self.auth.request(
             service_url,
             f"/customers/{self.auth.household_id}/recordings?isAdult=false&offset=0&limit=100&sort=time&sortOrder=desc&profileId={self._profile_id}&language={lang}",
@@ -285,8 +285,8 @@ class LGHorizonApi:
         if not self._customer.has_cloud_recording:
             return LGHorizonShowRecordingList(None, None, [])
         _LOGGER.debug("Retrieving recordings fro show...")
-        service_url = await self._service_config.get_service_url("recordingService")
-        lang = await self._customer.get_profile_lang(self._profile_id)
+        service_url = self._service_config.get_service_url("recordingService")
+        lang = self._customer.get_profile_lang(self._profile_id)
         episodes_json = await self.auth.request(
             service_url,
             f"/customers/{self.auth.household_id}/episodes/shows/{show_id}?source=recording&isAdult=false&offset=0&limit=100&profileId={self._profile_id}&language={lang}&channelId={channel_id}&sort=time&sortOrder=asc",
@@ -299,7 +299,7 @@ class LGHorizonApi:
         _LOGGER.debug("Refreshing recording quota...")
         if not self._customer.has_cloud_recording:
             return LGHorizonRecordingQuota({})
-        service_url = await self._service_config.get_service_url("recordingService")
+        service_url = self._service_config.get_service_url("recordingService")
         quota_json = await self.auth.request(
             service_url,
             f"/customers/{self.auth.household_id}/quota",

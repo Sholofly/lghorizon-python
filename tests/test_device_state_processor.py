@@ -44,9 +44,9 @@ def customer(sample_customer_json):
 
 @pytest.fixture
 def mock_service_config():
-    """Return a mock service config whose get_service_url is an AsyncMock."""
+    """Return a mock service config whose get_service_url is a MagicMock."""
     config = MagicMock()
-    config.get_service_url = AsyncMock(return_value="https://service.example.com")
+    config.get_service_url = MagicMock(return_value="https://service.example.com")
     return config
 
 

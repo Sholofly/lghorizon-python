@@ -242,7 +242,7 @@ class TestGetAllRecordings:
         api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
         # Provide a service config mock so get_service_url works
         service_config = MagicMock()
-        service_config.get_service_url = AsyncMock(return_value="https://recording.example.com")
+        service_config.get_service_url = MagicMock(return_value="https://recording.example.com")
         api._service_config = service_config
 
         recordings_payload = {"recordings": [], "total": 0}
@@ -285,7 +285,7 @@ class TestGetRecordingQuota:
     ):
         api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
         service_config = MagicMock()
-        service_config.get_service_url = AsyncMock(return_value="https://recording.example.com")
+        service_config.get_service_url = MagicMock(return_value="https://recording.example.com")
         api._service_config = service_config
 
         quota_payload = {"used": 10, "total": 100}

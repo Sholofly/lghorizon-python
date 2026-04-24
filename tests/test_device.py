@@ -65,13 +65,13 @@ def device(mqtt_client, processor, mock_auth, channels):
 
 @pytest.fixture
 def running_device(device):
-    device._device_state._state = LGHorizonRunningState.ONLINE_RUNNING
+    device._device_state.state = LGHorizonRunningState.ONLINE_RUNNING
     return device
 
 
 @pytest.fixture
 def standby_device(device):
-    device._device_state._state = LGHorizonRunningState.ONLINE_STANDBY
+    device._device_state.state = LGHorizonRunningState.ONLINE_STANDBY
     return device
 
 
@@ -117,22 +117,22 @@ def test_model_unknown(mqtt_client, processor, mock_auth, channels):
 
 
 def test_is_available_online_running(device):
-    device._device_state._state = LGHorizonRunningState.ONLINE_RUNNING
+    device._device_state.state = LGHorizonRunningState.ONLINE_RUNNING
     assert device.is_available is True
 
 
 def test_is_available_online_standby(device):
-    device._device_state._state = LGHorizonRunningState.ONLINE_STANDBY
+    device._device_state.state = LGHorizonRunningState.ONLINE_STANDBY
     assert device.is_available is True
 
 
 def test_is_available_offline(device):
-    device._device_state._state = LGHorizonRunningState.OFFLINE
+    device._device_state.state = LGHorizonRunningState.OFFLINE
     assert device.is_available is False
 
 
 def test_is_available_unknown(device):
-    device._device_state._state = LGHorizonRunningState.UNKNOWN
+    device._device_state.state = LGHorizonRunningState.UNKNOWN
     assert device.is_available is False
 
 
@@ -198,7 +198,7 @@ async def test_handle_status_message_requests_state_when_online_running(
 ):
     # Simulate processor updating state to ONLINE_RUNNING
     async def set_running(state, msg):
-        state._state = LGHorizonRunningState.ONLINE_RUNNING
+        state.state = LGHorizonRunningState.ONLINE_RUNNING
 
     processor.process_state.side_effect = set_running
     msg = _make_status_message("ONLINE_RUNNING")
@@ -213,7 +213,7 @@ async def test_handle_status_message_requests_state_when_online_running(
 
 @pytest.mark.asyncio
 async def test_handle_status_message_no_op_when_same_state(device, processor):
-    device._device_state._state = LGHorizonRunningState.ONLINE_RUNNING
+    device._device_state.state = LGHorizonRunningState.ONLINE_RUNNING
     msg = _make_status_message("ONLINE_RUNNING")
     await device.handle_status_message(msg)
     processor.process_state.assert_not_called()
@@ -309,8 +309,8 @@ async def test_turn_off_sends_power_key(running_device, mqtt_client, mock_auth):
 @pytest.mark.asyncio
 async def test_turn_off_resets_device_state(running_device):
     # Set some media fields so we can verify reset clears them
-    running_device._device_state._channel_id = "ch-99"
-    running_device._device_state._speed = 1
+    running_device._device_state.channel_id = "ch-99"
+    running_device._device_state.speed = 1
     await running_device.turn_off()
     # reset() clears media fields (channel_id, speed) but does not change running state
     assert running_device.device_state.channel_id is None
@@ -326,7 +326,7 @@ async def test_turn_off_no_op_when_standby(standby_device, mqtt_client):
 @pytest.mark.asyncio
 async def test_pause_sends_play_pause(running_device, mqtt_client, mock_auth):
     # paused is computed from speed==0; ensure speed != 0 so not paused
-    running_device._device_state._speed = 1
+    running_device._device_state.speed = 1
     await _assert_key_sent(
         running_device, mqtt_client, mock_auth, running_device.pause(), MEDIA_KEY_PLAY_PAUSE
     )
@@ -335,7 +335,7 @@ async def test_pause_sends_play_pause(running_device, mqtt_client, mock_auth):
 @pytest.mark.asyncio
 async def test_pause_no_op_when_already_paused(running_device, mqtt_client):
     # paused when speed == 0
-    running_device._device_state._speed = 0
+    running_device._device_state.speed = 0
     await running_device.pause()
     mqtt_client.publish_message.assert_not_called()
 
@@ -343,7 +343,7 @@ async def test_pause_no_op_when_already_paused(running_device, mqtt_client):
 @pytest.mark.asyncio
 async def test_play_sends_play_pause(running_device, mqtt_client, mock_auth):
     # paused when speed == 0
-    running_device._device_state._speed = 0
+    running_device._device_state.speed = 0
     await _assert_key_sent(
         running_device, mqtt_client, mock_auth, running_device.play(), MEDIA_KEY_PLAY_PAUSE
     )
@@ -352,7 +352,7 @@ async def test_play_sends_play_pause(running_device, mqtt_client, mock_auth):
 @pytest.mark.asyncio
 async def test_play_no_op_when_not_paused(running_device, mqtt_client):
     # speed=1 means not paused
-    running_device._device_state._speed = 1
+    running_device._device_state.speed = 1
     await running_device.play()
     mqtt_client.publish_message.assert_not_called()
 

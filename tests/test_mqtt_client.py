@@ -23,7 +23,7 @@ def _make_mock_auth():
     auth.household_id = HOUSEHOLD_ID
 
     service_config = MagicMock()
-    service_config.get_service_url = AsyncMock(return_value=BROKER_URL_RAW)
+    service_config.get_service_url = MagicMock(return_value=BROKER_URL_RAW)
 
     auth.get_service_config = AsyncMock(return_value=service_config)
     auth.get_mqtt_token = AsyncMock(return_value=MQTT_TOKEN)

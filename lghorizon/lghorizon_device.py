@@ -224,7 +224,7 @@ class LGHorizonDevice:
         """Turn the settop box off."""
         if self._device_state.state == LGHorizonRunningState.ONLINE_RUNNING:
             await self.send_key_to_box(MEDIA_KEY_POWER)
-            await self._device_state.reset()
+            self._device_state.reset()
 
     async def pause(self) -> None:
         """Pause the given settopbox."""
@@ -283,7 +283,7 @@ class LGHorizonDevice:
             "source": self.device_id,
             "type": "CPE.setPlayerPosition",
             "runtimeType": "setPlayerposition",
-            "id": await make_id(),
+            "id": make_id(),
             "version": "1.3.11",
             "status": {"relativePosition": position},
         }
@@ -307,7 +307,7 @@ class LGHorizonDevice:
         """
         for i in range(3):
             payload = {
-                "id": await make_id(8),
+                "id": make_id(8),
                 "type": "CPE.pushToTV",
                 "source": {
                     "clientId": self._mqtt_client.client_id,
@@ -339,7 +339,7 @@ class LGHorizonDevice:
         if channel is None:
             raise ValueError(f"Channel '{source}' not found")
         payload = {
-            "id": await make_id(8),
+            "id": make_id(8),
             "type": "CPE.pushToTV",
             "source": {
                 "clientId": self._mqtt_client.client_id,
@@ -360,7 +360,7 @@ class LGHorizonDevice:
     async def play_recording(self, recording_id):
         """Play recording."""
         payload = {
-            "id": await make_id(8),
+            "id": make_id(8),
             "type": "CPE.pushToTV",
             "source": {
                 "clientId": self._mqtt_client.client_id,
@@ -395,7 +395,7 @@ class LGHorizonDevice:
         """Send mqtt message to receive state from settop box."""
         topic = f"{self._auth.household_id}/{self.device_id}"
         payload = {
-            "id": await make_id(8),
+            "id": make_id(8),
             "type": "CPE.getUiStatus",
             "source": self._mqtt_client.client_id,
         }
@@ -405,7 +405,7 @@ class LGHorizonDevice:
         """Send mqtt message to receive state from settop box."""
         topic = f"{self._auth.household_id}/{self.device_id}"
         payload = {
-            "id": await make_id(8),
+            "id": make_id(8),
             "type": "CPE.capacity",
             "source": self._mqtt_client.client_id,
         }

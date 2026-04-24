@@ -292,12 +292,12 @@ class TestLGHorizonCustomer:
 
     async def test_get_profile_lang_known(self, sample_customer_json):
         c = LGHorizonCustomer(sample_customer_json)
-        lang = await c.get_profile_lang("profile-2")
+        lang = c.get_profile_lang("profile-2")
         assert lang == "en"
 
     async def test_get_profile_lang_default_nl(self, sample_customer_json):
         c = LGHorizonCustomer(sample_customer_json)
-        lang = await c.get_profile_lang("nonexistent-profile")
+        lang = c.get_profile_lang("nonexistent-profile")
         assert lang == "nl"
 
     def test_profiles_not_shared_between_instances(self, sample_customer_json):
@@ -415,7 +415,7 @@ class TestLGHorizonDeviceState:
         ds.speed = None
         assert ds.paused is False
 
-    async def test_reset_clears_all_fields(self):
+    def test_reset_clears_all_fields(self):
         ds = LGHorizonDeviceState()
         ds.channel_id = "ch-1"
         ds.show_title = "Show"
@@ -434,7 +434,7 @@ class TestLGHorizonDeviceState:
         ds.source_type = LGHorizonSourceType.LINEAR
         ds.media_type = LGHorizonMediaType.CHANNEL
 
-        await ds.reset()
+        ds.reset()
 
         assert ds.channel_id is None
         assert ds.show_title is None
@@ -453,14 +453,14 @@ class TestLGHorizonDeviceState:
         assert ds.source_type == LGHorizonSourceType.UNKNOWN
         assert ds.media_type == LGHorizonMediaType.UNKNOWN
 
-    async def test_reset_progress_clears_only_progress(self):
+    def test_reset_progress_clears_only_progress(self):
         ds = LGHorizonDeviceState()
         ds.channel_id = "ch-1"
         ds.duration = 1800.0
         ds.position = 900.0
         ds.last_position_update = 12345
 
-        await ds.reset_progress()
+        ds.reset_progress()
 
         # Progress fields cleared
         assert ds.duration is None
@@ -1148,15 +1148,15 @@ class TestLGHorizonVOD:
 
 class TestLGHorizonServicesConfig:
     async def test_get_service_url(self, sample_service_config):
-        url = await sample_service_config.get_service_url("linearService")
+        url = sample_service_config.get_service_url("linearService")
         assert url == "https://linear.example.com"
 
     async def test_get_service_url_raises_for_unknown(self, sample_service_config):
         with pytest.raises(ValueError):
-            await sample_service_config.get_service_url("nonExistentService")
+            sample_service_config.get_service_url("nonExistentService")
 
     async def test_get_all_services(self, sample_service_config):
-        services = await sample_service_config.get_all_services()
+        services = sample_service_config.get_all_services()
         assert isinstance(services, dict)
         assert "linearService" in services
         assert "recordingService" in services
