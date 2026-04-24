@@ -276,7 +276,7 @@ async def test_handle_ui_status_message_calls_process_ui_state(device, processor
 async def test_handle_ui_status_message_sets_timestamp(device):
     msg = _make_ui_status_message(timestamp=9999)
     await device.handle_ui_status_message(msg)
-    assert device.last_ui_message_timestamp == 9999
+    assert device.last_ui_message_timestamp == 9.999
 
 
 @pytest.mark.asyncio

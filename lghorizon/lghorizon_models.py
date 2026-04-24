@@ -306,9 +306,10 @@ class LGHorizonPlayerState:
     @property
     def last_speed_change_time(
         self,
-    ) -> int:
+    ) -> Optional[float]:
         """Return the last speed change time."""
-        return self._raw_json.get("lastSpeedChangeTime", 0.0)
+        val = self._raw_json.get("lastSpeedChangeTime")
+        return val / 1000 if val is not None else None
 
     @property
     def relative_position(
@@ -427,9 +428,10 @@ class LGHorizonUIStatusMessage(LGHorizonMessage):
         return self._payload.get("source", "unknown")
 
     @property
-    def message_timestamp(self) -> int:
+    def message_timestamp(self) -> float:
         """Return the message timestamp from the payload."""
-        return self._payload.get("messageTimeStamp", 0)
+        val = self._payload.get("messageTimeStamp", 0)
+        return val / 1000 if val else 0
 
     @property
     def ui_state(self) -> LGHorizonUIState | None:
@@ -992,14 +994,16 @@ class LGHorizonReplayEvent:
         return self._raw_json.get("seasonNumber")
 
     @property
-    def start_time(self) -> Optional[int]:
-        """Return the start time."""
-        return self._raw_json.get("startTime", None)
+    def start_time(self) -> Optional[float]:
+        """Return the start time as Unix timestamp in seconds."""
+        val = self._raw_json.get("startTime")
+        return val / 1000 if val is not None else None
 
     @property
-    def end_time(self) -> Optional[int]:
-        """Return the end time."""
-        return self._raw_json.get("endTime", None)
+    def end_time(self) -> Optional[float]:
+        """Return the end time as Unix timestamp in seconds."""
+        val = self._raw_json.get("endTime")
+        return val / 1000 if val is not None else None
 
     @property
     def title(self) -> str:
@@ -1401,14 +1405,16 @@ class LGHorizonEpgEvent:
         return self._event_json.get("title", "")
 
     @property
-    def start_time(self) -> Optional[int]:
+    def start_time(self) -> Optional[float]:
         """Return the start time as Unix timestamp in seconds."""
-        return self._event_json.get("startTime")
+        val = self._event_json.get("startTime")
+        return val / 1000 if val is not None else None
 
     @property
-    def end_time(self) -> Optional[int]:
+    def end_time(self) -> Optional[float]:
         """Return the end time as Unix timestamp in seconds."""
-        return self._event_json.get("endTime")
+        val = self._event_json.get("endTime")
+        return val / 1000 if val is not None else None
 
     @property
     def minimum_age(self) -> int:
@@ -1552,14 +1558,16 @@ class LGHorizonEventDetail:
         return self._detail_json.get("episodeNumber")
 
     @property
-    def start_time(self) -> Optional[int]:
+    def start_time(self) -> Optional[float]:
         """Return the start time as Unix timestamp in seconds."""
-        return self._detail_json.get("startTime")
+        val = self._detail_json.get("startTime")
+        return val / 1000 if val is not None else None
 
     @property
-    def end_time(self) -> Optional[int]:
+    def end_time(self) -> Optional[float]:
         """Return the end time as Unix timestamp in seconds."""
-        return self._detail_json.get("endTime")
+        val = self._detail_json.get("endTime")
+        return val / 1000 if val is not None else None
 
     @property
     def actors(self) -> List[str]:
