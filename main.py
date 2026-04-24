@@ -110,6 +110,9 @@ async def main():
         # Start the input reader task
         input_task = asyncio.create_task(read_input_and_signal_shutdown())
 
+        # EPG cache for now/next in state callbacks
+        epg_cache = {"epg": None}
+
         async def device_callback(device_id: str):
             device = devices[device_id]
             s = device.device_state
@@ -151,6 +154,32 @@ async def main():
                 filled = int(bar_len * pct)
                 bar = "█" * filled + "░" * (bar_len - filled)
                 print(f"  Progress:       [{bar}] {pct:.0%}")
+
+            # EPG now/next (simulates HA media_player extra_state_attributes)
+            epg = epg_cache.get("epg")
+            if epg and s.channel_id:
+                import time as _time
+                now_ts = _time.time()
+                events = epg.get_channel_events(s.channel_id)
+                current = None
+                next_up = None
+                for i, ev in enumerate(events):
+                    if ev.start_time and ev.end_time and ev.start_time <= now_ts < ev.end_time:
+                        current = ev
+                        if i + 1 < len(events):
+                            next_up = events[i + 1]
+                        break
+                if current:
+                    print(f"  {SEPARATOR}")
+                    print(f"  📺 EPG Now:     {current.title}")
+                    if current.start_time and current.end_time:
+                        dur = current.end_time - current.start_time
+                        if dur > 0:
+                            elapsed = now_ts - current.start_time
+                            prog = min(elapsed / dur * 100, 100)
+                            print(f"     Time:        {format_timestamp(current.start_time)} - {format_timestamp(current.end_time)}  ({prog:.0f}%)")
+                    if next_up:
+                        print(f"  📺 EPG Next:    {next_up.title} ({format_timestamp(next_up.start_time)})")
 
             print()
 
@@ -199,6 +228,7 @@ async def main():
             from datetime import date as date_type
             print_header("EPG (Today)")
             epg = await api.get_epg()
+            epg_cache["epg"] = epg  # Store for state change callbacks
             print(f"  {len(epg.entries)} channels with EPG data")
             now_ts = int(_time.time())
             shown = 0
