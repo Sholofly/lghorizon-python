@@ -203,7 +203,7 @@ class LGHorizonDeviceStateProcessor:
         device_state.episode_number = replay_event.episode_number
         device_state.show_title = replay_event.title
         device_state.last_position_update = int(
-            player_state.last_speed_change_time / 1000
+            player_state.last_speed_change_time
         )
         device_state.position = int(player_state.relative_position / 1000)
         device_state.start_time = replay_event.start_time
@@ -250,7 +250,7 @@ class LGHorizonDeviceStateProcessor:
         device_state.episode_number = replay_event.episode_number
         device_state.show_title = replay_event.title
         device_state.last_position_update = int(
-            player_state.last_speed_change_time / 1000
+            player_state.last_speed_change_time
         )
         device_state.start_time = replay_event.start_time
         device_state.end_time = replay_event.end_time
@@ -321,7 +321,7 @@ class LGHorizonDeviceStateProcessor:
         device_state.season_number = recording.season_number
         device_state.episode_number = recording.episode_number
         device_state.last_position_update = int(
-            player_state.last_speed_change_time / 1000
+            player_state.last_speed_change_time
         )
         device_state.position = int(player_state.relative_position / 1000)
         if recording.start_time:
