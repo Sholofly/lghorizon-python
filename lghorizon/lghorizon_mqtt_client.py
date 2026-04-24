@@ -21,7 +21,6 @@ class LGHorizonMqttClient:
         on_message_callback: Callable[[dict, str], Coroutine[Any, Any, Any]],
         loop: asyncio.AbstractEventLoop,
     ) -> None:
-        self._auth = auth
         """Initialize the LGHorizonMqttClient.
 
         Args:
@@ -30,6 +29,7 @@ class LGHorizonMqttClient:
             on_message_callback: An async callback function for MQTT message events.
             loop: The asyncio event loop.
         """
+        self._auth = auth
         self._on_connected_callback = on_connected_callback
         self._on_message_callback = on_message_callback
         self._loop = loop
@@ -129,6 +129,12 @@ class LGHorizonMqttClient:
         # Start Paho thread
         self._mqtt_client.loop_start()
 
+        # Stop existing workers before starting new ones
+        if self._message_worker_task and not self._message_worker_task.done():
+            self._message_worker_task.cancel()
+        if self._publish_worker_task and not self._publish_worker_task.done():
+            self._publish_worker_task.cancel()
+
         # Start workers
         self._message_worker_task = asyncio.create_task(self._message_worker())
         self._publish_worker_task = asyncio.create_task(self._publish_worker())
@@ -137,6 +143,8 @@ class LGHorizonMqttClient:
         """Disconnect the MQTT client from the broker asynchronously."""
         if not self._mqtt_client:
             return
+
+        self._disconnect_requested = True
 
         # Stop workers
         if self._message_worker_task:
@@ -258,13 +266,15 @@ class LGHorizonMqttClient:
         if not self._disconnect_requested:
             _logger.debug("Unexpected MQTT disconnection. Initiating reconnect loop.")
             if not self._reconnect_task or self._reconnect_task.done():
-                self._reconnect_task = asyncio.run_coroutine_threadsafe(
-                    self._reconnect_loop(), self._loop
-                )
+                self._loop.call_soon_threadsafe(self._start_reconnect_task)
             else:
                 _logger.debug("Reconnect loop already active.")
         else:
             _logger.debug("MQTT disconnected as requested.")
+
+    def _start_reconnect_task(self):
+        """Start the reconnect loop as an asyncio.Task (must be called from the event loop thread)."""
+        self._reconnect_task = asyncio.create_task(self._reconnect_loop())
 
     async def _reconnect_loop(self):
         """Manages the MQTT reconnection process with exponential backoff."""

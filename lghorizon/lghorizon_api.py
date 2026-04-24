@@ -37,11 +37,7 @@ class LGHorizonApi:
     _channels: Dict[str, LGHorizonChannel]
     _entitlements: LGHorizonEntitlements
     _profile_id: Optional[str]
-    _initialized: bool = False
-    _devices: Dict[str, LGHorizonDevice] = {}
-    _message_factory: LGHorizonMessageFactory = LGHorizonMessageFactory()
     _device_state_processor: LGHorizonDeviceStateProcessor | None
-    _recording_factory: LGHorizonRecordingFactory = LGHorizonRecordingFactory()
 
     def __init__(self, auth: LGHorizonAuth, profile_id: Optional[str]) -> None:
         """Initialize LG Horizon API client.
@@ -53,6 +49,9 @@ class LGHorizonApi:
         self.auth = auth
         self._profile_id = profile_id
         self._channels = {}
+        self._devices: Dict[str, LGHorizonDevice] = {}
+        self._message_factory = LGHorizonMessageFactory()
+        self._recording_factory = LGHorizonRecordingFactory()
         self._device_state_processor = None
         self._mqtt_client = None
         self._initialized = False
@@ -74,7 +73,7 @@ class LGHorizonApi:
         self._initialized = True
 
     async def set_token_refresh_callback(
-        self, token_refresh_callback: Callable[str, None]
+        self, token_refresh_callback: Callable[[str], None]
     ) -> None:
         """Set the token refresh callback."""
         self.auth.token_refresh_callback = token_refresh_callback
@@ -208,14 +207,12 @@ class LGHorizonApi:
         message = await self._message_factory.create_message(mqtt_topic, mqtt_message)
         match message.message_type:
             case LGHorizonMessageType.STATUS:
-                message.__class__ = LGHorizonStatusMessage
                 status_message = cast(LGHorizonStatusMessage, message)
                 device = self._devices.get(status_message.source, None)
                 if not device:
                     return
                 await device.handle_status_message(status_message)
             case LGHorizonMessageType.UI_STATUS:
-                message.__class__ = LGHorizonUIStatusMessage
                 ui_status_message = cast(LGHorizonUIStatusMessage, message)
                 device = self._devices.get(ui_status_message.source, None)
                 if not device:

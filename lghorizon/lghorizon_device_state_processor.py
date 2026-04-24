@@ -135,7 +135,6 @@ class LGHorizonDeviceStateProcessor:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
             return
-        player_state.source.__class__ = LGHorizonLinearSource
         source = cast(LGHorizonLinearSource, player_state.source)
         service_config = await self._auth.get_service_config()
         service_url = await service_config.get_service_url("linearService")
@@ -181,7 +180,6 @@ class LGHorizonDeviceStateProcessor:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
             return
-        player_state.source.__class__ = LGHorizonReviewBufferSource
         source = cast(LGHorizonReviewBufferSource, player_state.source)
         service_config = await self._auth.get_service_config()
         service_url = await service_config.get_service_url("linearService")
@@ -229,7 +227,6 @@ class LGHorizonDeviceStateProcessor:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
             return
-        player_state.source.__class__ = LGHorizonReplaySource
         source = cast(LGHorizonReplaySource, player_state.source)
         service_config = await self._auth.get_service_config()
         service_url = await service_config.get_service_url("linearService")
@@ -270,7 +267,6 @@ class LGHorizonDeviceStateProcessor:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
             return
-        player_state.source.__class__ = LGHorizonVODSource
         source = cast(LGHorizonVODSource, player_state.source)
         service_config = await self._auth.get_service_config()
         service_url = await service_config.get_service_url("vodService")
@@ -305,7 +301,6 @@ class LGHorizonDeviceStateProcessor:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
             return
-        player_state.source.__class__ = LGHorizonNDVRSource
         source = cast(LGHorizonNDVRSource, player_state.source)
         service_config = await self._auth.get_service_config()
         service_url = await service_config.get_service_url("recordingService")

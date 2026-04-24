@@ -102,14 +102,13 @@ class LGHorizonMessage(ABC):
 
     @abstractmethod
     def __init__(self, topic: str, payload: dict) -> None:
-        """Abstract base class for LG Horizon messages."""
-        self._topic = topic
         """Initialize the abstract base class for LG Horizon messages.
 
         Args:
             topic: The MQTT topic of the message.
             payload: The dictionary payload of the message.
         """
+        self._topic = topic
         self._payload = payload
 
     def __repr__(self) -> str:
@@ -310,7 +309,7 @@ class LGHorizonPlayerState:
                 case LGHorizonSourceType.REVIEWBUFFER:
                     return LGHorizonReviewBufferSource(self._raw_json["source"])
 
-        return LGHorizonUnknownSource(self._raw_json["source"])
+        return None
 
 
 class LGHorizonAppsState:
@@ -343,13 +342,12 @@ class LGHorizonUIState:
     _apps_state: LGHorizonAppsState | None = None
 
     def __init__(self, raw_json: dict) -> None:
-        """Initialize the State."""
-        self._raw_json = raw_json
         """Initialize the UI State.
 
         Args:
             raw_json: The raw JSON dictionary containing UI state information.
         """
+        self._raw_json = raw_json
 
     @property
     def ui_status(self) -> LGHorizonUIStateType:
@@ -484,7 +482,7 @@ class LGHorizonAuth:
     _country_code: str
     _host: str
     _use_refresh_token: bool
-    _token_refresh_callback: Callable[str, None] | None  # pyright: ignore[reportInvalidTypeForm]
+    _token_refresh_callback: Callable[[str], None] | None
 
     def __init__(
         self,
@@ -493,7 +491,7 @@ class LGHorizonAuth:
         refresh_token: str = "",
         username: str = "",
         password: str = "",
-        token_refresh_callback: Callable[str, None] | None = None,  # pyright: ignore[reportInvalidTypeForm]
+        token_refresh_callback: Callable[[str], None] | None = None,
     ) -> None:
         """Initialize the auth with refresh token."""
         self._websession = websession
@@ -795,23 +793,6 @@ class LGHorizonServicesConfig:
             if isinstance(service, dict) and (url := service.get("URL"))
         }
 
-    async def __getattr__(self, name: str) -> Optional[str]:
-        """Access service URLs as attributes.
-
-        Example: config.authService returns the auth service URL
-
-        Args:
-            name: Service name
-
-        Returns:
-            URL for the service or None if not found
-        """
-        if name.startswith("_"):
-            raise AttributeError(
-                f"'{type(self).__name__}' object has no attribute '{name}'"
-            )
-        return await self.get_service_url(name)
-
     def __repr__(self) -> str:
         """Return string representation."""
         services = list(self._config.keys())
@@ -821,11 +802,10 @@ class LGHorizonServicesConfig:
 class LGHorizonCustomer:
     """LGHorizon customer."""
 
-    _profiles: Dict[str, LGHorizonProfile] = {}
-
     def __init__(self, json_payload: dict):
         """Initialize a customer."""
         self._json_payload = json_payload
+        self._profiles: Dict[str, LGHorizonProfile] = {}
 
     @property
     def customer_id(self) -> str:
@@ -855,7 +835,7 @@ class LGHorizonCustomer:
     @property
     def has_cloud_recording(self) -> bool:
         """Return the city id."""
-        return self.recording_retention_period and self.recording_retention_period > 0
+        return bool(self.recording_retention_period and self.recording_retention_period > 0)
 
     @property
     def assigned_devices(self) -> list[str]:
@@ -894,7 +874,7 @@ class LGHorizonDeviceState:
     _paused: bool
     _duration: Optional[float]
     _position: Optional[float]
-    _last_position_update: Optional[datetime]
+    _last_position_update: Optional[int]
     _state: LGHorizonRunningState
     _speed: Optional[int]
     _start_time: Optional[int]
@@ -904,6 +884,7 @@ class LGHorizonDeviceState:
     def __init__(self) -> None:
         """Initialize the playing info."""
         self._channel_id = None
+        self._app_name = None
         self._show_title = None
         self._episode_title = None
         self._season_number = None
@@ -1411,13 +1392,13 @@ class LGHorizonRecordingSingle(LGHorizonRecording):
         return self.recording_payload.get("duration", None)
 
     @property
-    def start_time(self) -> Optional[int]:
-        """Return the title."""
+    def start_time(self) -> Optional[str]:
+        """Return the start time as ISO-8601 string."""
         return self.recording_payload.get("startTime", None)
 
     @property
-    def end_time(self) -> Optional[int]:
-        """Return the title."""
+    def end_time(self) -> Optional[str]:
+        """Return the end time as ISO-8601 string."""
         return self.recording_payload.get("endTime", None)
 
 
@@ -1432,6 +1413,8 @@ class LGHorizonRecordingSeason(LGHorizonRecording):
         episode_payload = payload.get("mostRelevantEpisode")
         if episode_payload:
             self._most_relevant_epsode = LGHOrizonRelevantEpisode(episode_payload)
+        else:
+            self._most_relevant_epsode = None
 
     @property
     def no_of_episodes(self) -> int:
@@ -1465,6 +1448,8 @@ class LGHorizonRecordingShow(LGHorizonRecording):
         episode_payload = payload.get("mostRelevantEpisode")
         if episode_payload:
             self._most_relevant_epsode = LGHOrizonRelevantEpisode(episode_payload)
+        else:
+            self._most_relevant_epsode = None
 
     @property
     def no_of_episodes(self) -> int:

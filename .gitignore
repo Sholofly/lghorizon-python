@@ -15,10 +15,9 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-/tests/*
 logs/
-/tests/*.py
 /tests/logs/*
+/tests/__pycache__/
 __pycache__/
 __pycache__/*
 test/nl.py

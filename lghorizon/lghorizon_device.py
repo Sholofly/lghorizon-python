@@ -333,7 +333,11 @@ class LGHorizonDevice:
 
     async def set_channel(self, source: str) -> None:
         """Change te channel from the settopbox."""
-        channel = [src for src in self._channels.values() if src.title == source][0]
+        channel = next(
+            (src for src in self._channels.values() if src.title == source), None
+        )
+        if channel is None:
+            raise ValueError(f"Channel '{source}' not found")
         payload = {
             "id": await make_id(8),
             "type": "CPE.pushToTV",
