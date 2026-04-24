@@ -73,10 +73,12 @@ class TestLGHorizonMessageType:
 class TestLGHorizonRecordingSource:
     def test_members(self):
         assert LGHorizonRecordingSource.SHOW.value == "show"
+        assert LGHorizonRecordingSource.SINGLE.value == "single"
+        assert LGHorizonRecordingSource.SEASON.value == "season"
         assert LGHorizonRecordingSource.UNKNOWN.value == "unknown"
 
     def test_all_members_count(self):
-        assert len(LGHorizonRecordingSource) == 2
+        assert len(LGHorizonRecordingSource) == 4
 
 
 class TestLGHorizonRecordingState:

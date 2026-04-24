@@ -44,6 +44,8 @@ class LGHorizonRecordingSource(Enum):
     """LGHorizon recording."""
 
     SHOW = "show"
+    SINGLE = "single"
+    SEASON = "season"
     UNKNOWN = "unknown"
 
 
@@ -137,7 +139,11 @@ class LGHorizonStatusMessage(LGHorizonMessage):
     @property
     def running_state(self) -> LGHorizonRunningState:
         """Return the device ID from the payload, if available."""
-        return LGHorizonRunningState[self._payload.get("state", "unknown").upper()]
+        state_str = self._payload.get("state", "unknown").upper()
+        try:
+            return LGHorizonRunningState[state_str]
+        except KeyError:
+            return LGHorizonRunningState.UNKNOWN
 
 
 class LGHorizonSourceType(Enum):
@@ -358,7 +364,11 @@ class LGHorizonUIState:
     @property
     def ui_status(self) -> LGHorizonUIStateType:
         """Return the UI status dictionary."""
-        return LGHorizonUIStateType[self._raw_json.get("uiStatus", "unknown").upper()]
+        status_str = self._raw_json.get("uiStatus", "unknown").upper()
+        try:
+            return LGHorizonUIStateType[status_str]
+        except KeyError:
+            return LGHorizonUIStateType.UNKNOWN
 
     @property
     def player_state(
@@ -1231,7 +1241,11 @@ class LGHorizonVOD:
     @property
     def vod_type(self) -> LGHorizonVODType:
         """Return the ID of the VOD."""
-        return LGHorizonVODType[self._vod_json.get("type", "unknown").upper()]
+        type_str = self._vod_json.get("type", "unknown").upper()
+        try:
+            return LGHorizonVODType[type_str]
+        except KeyError:
+            return LGHorizonVODType.UNKNOWN
 
     @property
     def id(self) -> str:
@@ -1274,9 +1288,11 @@ class LGHOrizonRelevantEpisode:
     @property
     def recording_state(self) -> LGHorizonRecordingState:
         """Return the recording state."""
-        return LGHorizonRecordingState[
-            self._episode_json.get("recordingState", "unknown").upper()
-        ]
+        state_str = self._episode_json.get("recordingState", "unknown").upper()
+        try:
+            return LGHorizonRecordingState[state_str]
+        except KeyError:
+            return LGHorizonRecordingState.UNKNOWN
 
     @property
     def season_number(self) -> Optional[int]:
@@ -1309,16 +1325,20 @@ class LGHorizonRecording(ABC):
     @property
     def source(self) -> LGHorizonRecordingSource:
         """Return the recording source."""
-        return LGHorizonRecordingSource[
-            self._recording_payload.get("source", "unknown").upper()
-        ]
+        source_str = self._recording_payload.get("source", "unknown").upper()
+        try:
+            return LGHorizonRecordingSource[source_str]
+        except KeyError:
+            return LGHorizonRecordingSource.UNKNOWN
 
     @property
     def type(self) -> LGHorizonRecordingType:
         """Return the recording source."""
-        return LGHorizonRecordingType[
-            self._recording_payload.get("type", "unknown").upper()
-        ]
+        type_str = self._recording_payload.get("type", "unknown").upper()
+        try:
+            return LGHorizonRecordingType[type_str]
+        except KeyError:
+            return LGHorizonRecordingType.UNKNOWN
 
     @property
     def id(self) -> str:
