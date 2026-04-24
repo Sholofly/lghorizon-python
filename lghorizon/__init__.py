@@ -28,6 +28,13 @@ from .lghorizon_models import (
     LGHorizonProfileOptions,
     LGHorizonServicesConfig,
     LGHorizonMediaType,
+    LGHorizonEpg,
+    LGHorizonEpgEntry,
+    LGHorizonEpgEvent,
+    LGHorizonEventDetail,
+    LGHorizonReplayChannel,
+    LGHorizonManagedRecording,
+    LGHorizonManagedRecordingList,
 )
 from .exceptions import (
     LGHorizonApiError,
@@ -70,5 +77,12 @@ __all__ = [
     "LGHorizonProfileOptions",
     "LGHorizonServicesConfig",
     "LGHorizonMediaType",
+    "LGHorizonEpg",
+    "LGHorizonEpgEntry",
+    "LGHorizonEpgEvent",
+    "LGHorizonEventDetail",
+    "LGHorizonReplayChannel",
+    "LGHorizonManagedRecording",
+    "LGHorizonManagedRecordingList",
     "COUNTRY_SETTINGS",
 ]

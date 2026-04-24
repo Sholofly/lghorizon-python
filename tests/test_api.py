@@ -9,7 +9,11 @@ from lghorizon.lghorizon_models import (
     LGHorizonAuth,
     LGHorizonChannel,
     LGHorizonCustomer,
+    LGHorizonEpg,
+    LGHorizonEventDetail,
+    LGHorizonManagedRecordingList,
     LGHorizonMessageType,
+    LGHorizonReplayChannel,
     LGHorizonRunningState,
     LGHorizonStatusMessage,
     LGHorizonUIStatusMessage,
@@ -413,3 +417,176 @@ class TestDisconnect:
         # _mqtt_client is None — must not raise
         await api.disconnect()
         assert api._initialized is False
+
+
+# ---------------------------------------------------------------------------
+# get_epg()
+# ---------------------------------------------------------------------------
+
+
+class TestGetEpg:
+    def _make_api(self, mock_auth, sample_customer_json, sample_channel_json):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        service_config = MagicMock()
+        service_config.get_service_url = MagicMock(return_value="https://epg.example.com")
+        api._service_config = service_config
+        return api
+
+    async def test_returns_lghorizonepg_with_merged_segments(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = self._make_api(mock_auth, sample_customer_json, sample_channel_json)
+
+        segment_response = {
+            "entries": [
+                {"channelId": "NL_001", "events": [{"id": "e1", "title": "Show1"}]},
+            ]
+        }
+        mock_auth.request = AsyncMock(return_value=segment_response)
+
+        from datetime import date
+        result = await api.get_epg(epg_date=date(2026, 4, 24))
+
+        assert isinstance(result, LGHorizonEpg)
+        # 4 segments requested, each returning 1 entry for NL_001 — they should merge
+        assert mock_auth.request.call_count == 4
+        events = result.get_channel_events("NL_001")
+        # 4 segments × 1 event = 4 events merged
+        assert len(events) == 4
+
+    async def test_returns_empty_epg_when_all_segments_fail(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = self._make_api(mock_auth, sample_customer_json, sample_channel_json)
+        mock_auth.request = AsyncMock(side_effect=Exception("network error"))
+
+        from datetime import date
+        result = await api.get_epg(epg_date=date(2026, 4, 24))
+
+        assert isinstance(result, LGHorizonEpg)
+        assert result.entries == []
+
+    async def test_defaults_to_today_when_no_date_given(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = self._make_api(mock_auth, sample_customer_json, sample_channel_json)
+        mock_auth.request = AsyncMock(return_value={"entries": []})
+
+        from datetime import date
+        with patch("lghorizon.lghorizon_api.date_type") as _mock_date:
+            # Just verify it runs without raising and returns LGHorizonEpg
+            result = await api.get_epg()
+        assert isinstance(result, LGHorizonEpg)
+
+
+# ---------------------------------------------------------------------------
+# get_event_detail()
+# ---------------------------------------------------------------------------
+
+
+class TestGetEventDetail:
+    async def test_returns_lghorizoneventdetail(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        service_config = MagicMock()
+        service_config.get_service_url = MagicMock(return_value="https://linear.example.com")
+        api._service_config = service_config
+
+        detail_payload = {
+            "eventId": "e1",
+            "channelId": "CH1",
+            "title": "Movie Title",
+        }
+        mock_auth.request = AsyncMock(return_value=detail_payload)
+
+        result = await api.get_event_detail("e1")
+
+        assert isinstance(result, LGHorizonEventDetail)
+        assert result.event_id == "e1"
+        assert result.title == "Movie Title"
+        mock_auth.request.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# get_replay_channels()
+# ---------------------------------------------------------------------------
+
+
+class TestGetReplayChannels:
+    async def test_returns_list_of_replay_channels(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        service_config = MagicMock()
+        service_config.get_service_url = MagicMock(return_value="https://replay.example.com")
+        api._service_config = service_config
+
+        channels_payload = {
+            "replayChannels": [
+                {"id": "NL_001", "name": "NPO 1", "logo": "http://logo1.png"},
+                {"id": "NL_002", "name": "NPO 2", "logo": "http://logo2.png"},
+            ]
+        }
+        mock_auth.request = AsyncMock(return_value=channels_payload)
+
+        result = await api.get_replay_channels()
+
+        assert isinstance(result, list)
+        assert len(result) == 2
+        for ch in result:
+            assert isinstance(ch, LGHorizonReplayChannel)
+        assert result[0].id == "NL_001"
+        assert result[1].name == "NPO 2"
+        mock_auth.request.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# get_managed_recordings()
+# ---------------------------------------------------------------------------
+
+
+class TestGetManagedRecordings:
+    async def test_returns_managed_recording_list(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        service_config = MagicMock()
+        service_config.get_service_url = MagicMock(return_value="https://recmgmt.example.com")
+        api._service_config = service_config
+
+        recordings_payload = {
+            "total": 2,
+            "limit": 500,
+            "offset": 0,
+            "data": [
+                {"id": "r1", "diskSpace": 0.5},
+                {"id": "r2", "diskSpace": 1.0},
+            ],
+        }
+        mock_auth.request = AsyncMock(return_value=recordings_payload)
+
+        result = await api.get_managed_recordings()
+
+        assert isinstance(result, LGHorizonManagedRecordingList)
+        assert result.total == 2
+        assert len(result.recordings) == 2
+        mock_auth.request.assert_called_once()
+
+    async def test_passes_limit_and_offset_params(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        service_config = MagicMock()
+        service_config.get_service_url = MagicMock(return_value="https://recmgmt.example.com")
+        api._service_config = service_config
+
+        mock_auth.request = AsyncMock(return_value={"total": 0, "limit": 10, "offset": 20, "data": []})
+
+        await api.get_managed_recordings(limit=10, offset=20)
+
+        call_args = mock_auth.request.call_args
+        # Second positional arg is the path
+        path = call_args[0][1]
+        assert "limit=10" in path
+        assert "offset=20" in path

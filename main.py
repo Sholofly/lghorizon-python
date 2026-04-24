@@ -10,7 +10,10 @@ from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
 from lghorizon.lghorizon_api import LGHorizonApi
-from lghorizon.lghorizon_models import LGHorizonAuth, LGHorizonRecordingType
+from lghorizon.lghorizon_models import (
+    LGHorizonAuth,
+    LGHorizonRecordingType,
+)
 
 # Define an asyncio Event to signal shutdown
 shutdown_event = asyncio.Event()
@@ -182,6 +185,42 @@ async def main():
                 radio_tag = " [Radio]" if ch.is_radio else ""
                 print(f"  {ch.channel_number:>4}  {ch.title}{radio_tag}")
 
+            # ── Replay Channels ──
+            print_header("REPLAY CHANNELS")
+            replay_channels = await api.get_replay_channels()
+            print(f"  {len(replay_channels)} channels with replay/catch-up support")
+            for rc in replay_channels[:10]:
+                print(f"    {rc.name} ({rc.id})")
+            if len(replay_channels) > 10:
+                print(f"    ... and {len(replay_channels) - 10} more")
+
+            # ── EPG (Today) ──
+            import time as _time
+            from datetime import date as date_type
+            print_header("EPG (Today)")
+            epg = await api.get_epg()
+            print(f"  {len(epg.entries)} channels with EPG data")
+            now_ts = int(_time.time())
+            shown = 0
+            for entry in epg.entries:
+                if shown >= 5:
+                    break
+                current = None
+                next_up = None
+                for ev in entry.events:
+                    if ev.start_time and ev.end_time:
+                        if ev.start_time <= now_ts < ev.end_time:
+                            current = ev
+                        elif ev.start_time > now_ts and next_up is None:
+                            next_up = ev
+                if current:
+                    ch_name = entry.channel_id
+                    print(f"  {ch_name}:")
+                    print(f"    Now:  {current.title}")
+                    if next_up:
+                        print(f"    Next: {next_up.title}")
+                    shown += 1
+
             # ── Recordings ──
             if api.has_cloud_recording:
                 quota = await api.get_recording_quota()
@@ -195,6 +234,18 @@ async def main():
                 bar = "█" * filled + "░" * (bar_len - filled)
                 print(f"  [{bar}] {pct:.1f}%")
                 print(f"  Used: {used_gb:.1f} GB / {total_gb:.1f} GB  —  Free: {free_gb:.1f} GB")
+
+                # ── Managed Recordings ──
+                print_header("MANAGED RECORDINGS (extended)")
+                managed = await api.get_managed_recordings(limit=10)
+                print(f"  Total: {managed.total} recordings ({managed.total_disk_space:.1f} hours disk space)")
+                for rec in managed.recordings[:5]:
+                    state_icon = {"recorded": "✅", "planned": "📅", "partiallyRecorded": "⚠️"}.get(rec.recording_state, "❓")
+                    ep_info = ""
+                    if rec.season_number is not None:
+                        ep_info = f" S{rec.season_number}E{rec.episode_number}"
+                    delete_info = f" (expires: {rec.delete_time[:10]})" if rec.delete_time else ""
+                    print(f"  {state_icon} {rec.title}{ep_info} [{rec.recording_state}]{delete_info}")
 
                 recordings = await api.get_all_recordings()
                 print_header(f"RECORDINGS ({recordings.total} total)")

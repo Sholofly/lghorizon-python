@@ -2,6 +2,7 @@
 
 import logging
 from typing import Any, Dict, cast, Callable, Optional
+from datetime import date as date_type
 
 from .lghorizon_device import LGHorizonDevice
 from .lghorizon_models import LGHorizonChannel
@@ -19,6 +20,11 @@ from .lghorizon_models import (
     LGHorizonRecordingList,
     LGHorizonRecordingQuota,
     LGHorizonShowRecordingList,
+    LGHorizonEpg,
+    LGHorizonEpgEntry,
+    LGHorizonEventDetail,
+    LGHorizonReplayChannel,
+    LGHorizonManagedRecordingList,
 )
 from .lghorizon_recording_factory import LGHorizonRecordingFactory
 from .lghorizon_device_state_processor import LGHorizonDeviceStateProcessor
@@ -305,6 +311,100 @@ class LGHorizonApi:
             f"/customers/{self.auth.household_id}/quota",
         )
         return LGHorizonRecordingQuota(quota_json)
+
+    async def get_epg(self, epg_date: date_type | None = None, language: str = "en") -> LGHorizonEpg:
+        """Retrieve the EPG (Electronic Program Guide) for a given date.
+
+        Fetches all 4 six-hour segments (00, 06, 12, 18) and merges the entries.
+
+        Args:
+            epg_date: The date to fetch EPG for. Defaults to today.
+            language: Language code for the EPG data (default: 'en').
+
+        Returns:
+            An LGHorizonEpg containing all channel entries with their events.
+        """
+        if epg_date is None:
+            from datetime import date as _date
+            epg_date = _date.today()
+
+        base_country_code = self.auth.country_code[0:2]
+        epg_base = self._service_config.get_service_url("epgPackager-lite")
+        date_str = epg_date.strftime("%Y%m%d")
+
+        # Merge entries from all 4 segments (00, 06, 12, 18)
+        all_entries: dict[str, list] = {}  # channel_id -> events
+        for segment in ("00", "06", "12", "18"):
+            path = f"/{base_country_code}/{language}/events/segments/{date_str}{segment}0000"
+            try:
+                result = await self.auth.request(epg_base, path)
+                for entry in result.get("entries", []):
+                    ch_id = entry.get("channelId", "")
+                    if ch_id not in all_entries:
+                        all_entries[ch_id] = []
+                    all_entries[ch_id].extend(entry.get("events", []))
+            except Exception:
+                _LOGGER.debug("EPG segment %s%s0000 not available", date_str, segment)
+
+        # Build merged EpgEntry objects
+        entries = [
+            LGHorizonEpgEntry({"channelId": ch_id, "events": events})
+            for ch_id, events in all_entries.items()
+        ]
+        return LGHorizonEpg(entries)
+
+    async def get_event_detail(self, event_id: str, language: str = "nl") -> LGHorizonEventDetail:
+        """Retrieve detailed program information for a specific event.
+
+        Args:
+            event_id: The event ID (crid) to look up.
+            language: Language code for the response (default: 'nl').
+
+        Returns:
+            An LGHorizonEventDetail with full program information.
+        """
+        linear_url = self._service_config.get_service_url("linearService")
+        result = await self.auth.request(
+            linear_url,
+            f"/v2/replayEvent/{event_id}?returnLinearContent=true&forceLinearResponse=true&language={language}",
+        )
+        return LGHorizonEventDetail(result)
+
+    async def get_replay_channels(self, language: str = "nl") -> list[LGHorizonReplayChannel]:
+        """Retrieve channels that support replay/catch-up TV.
+
+        Args:
+            language: Language code for channel names (default: 'nl').
+
+        Returns:
+            A list of LGHorizonReplayChannel objects.
+        """
+        replay_url = self._service_config.get_service_url("replayCatalogService")
+        result = await self.auth.request(replay_url, f"/channels?language={language}")
+        return [
+            LGHorizonReplayChannel(ch)
+            for ch in result.get("replayChannels", [])
+        ]
+
+    async def get_managed_recordings(self, limit: int = 500, offset: int = 0) -> LGHorizonManagedRecordingList:
+        """Retrieve recordings from the recording management service.
+
+        This provides more detailed recording information than get_all_recordings(),
+        including disk space usage, delete times, booking times, and retention periods.
+
+        Args:
+            limit: Maximum number of recordings to return (default: 500).
+            offset: Offset for pagination (default: 0).
+
+        Returns:
+            An LGHorizonManagedRecordingList with detailed recording information.
+        """
+        rec_url = self._service_config.get_service_url("recordingManagementService")
+        result = await self.auth.request(
+            rec_url,
+            f"/customers/{self.auth.household_id}/recordings?limit={limit}&offset={offset}",
+        )
+        return LGHorizonManagedRecordingList(result)
 
 
 __all__ = ["LGHorizonApi", "LGHorizonAuth"]

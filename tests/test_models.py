@@ -10,12 +10,19 @@ from lghorizon.lghorizon_models import (
     LGHorizonCustomer,
     LGHorizonDeviceState,
     LGHorizonEntitlements,
+    LGHorizonEpg,
+    LGHorizonEpgEntry,
+    LGHorizonEpgEvent,
+    LGHorizonEventDetail,
     LGHorizonLinearSource,
+    LGHorizonManagedRecording,
+    LGHorizonManagedRecordingList,
     LGHorizonMediaType,
     LGHorizonMessageType,
     LGHorizonNDVRSource,
     LGHorizonPlayerState,
     LGHorizonProfile,
+    LGHorizonReplayChannel,
     LGHorizonReplayEvent,
     LGHorizonReplaySource,
     LGHorizonRecordingList,
@@ -1208,3 +1215,560 @@ class TestLGHorizonEntitlements:
         }
         e = LGHorizonEntitlements(data)
         assert e.entitlement_ids == ["ent-1"]
+
+
+# ---------------------------------------------------------------------------
+# LGHorizonEpgEvent
+# ---------------------------------------------------------------------------
+
+_EPG_EVENT_JSON = {
+    "id": "crid:test",
+    "title": "Test Show",
+    "startTime": 1000,
+    "endTime": 2000,
+    "minimumAge": 12,
+    "isPlaceHolder": True,
+    "mergedId": "123|nl",
+    "audioLanguages": [{"lang": "nl"}, {"lang": "en"}],
+}
+
+
+class TestLGHorizonEpgEvent:
+    def test_event_id(self):
+        ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
+        assert ev.event_id == "crid:test"
+
+    def test_channel_id(self):
+        ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
+        assert ev.channel_id == "NL_001"
+
+    def test_title(self):
+        ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
+        assert ev.title == "Test Show"
+
+    def test_start_time(self):
+        ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
+        assert ev.start_time == 1000
+
+    def test_end_time(self):
+        ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
+        assert ev.end_time == 2000
+
+    def test_minimum_age(self):
+        ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
+        assert ev.minimum_age == 12
+
+    def test_is_placeholder(self):
+        ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
+        assert ev.is_placeholder is True
+
+    def test_merged_id(self):
+        ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
+        assert ev.merged_id == "123|nl"
+
+    def test_audio_languages(self):
+        ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
+        assert ev.audio_languages == ["nl", "en"]
+
+    def test_defaults_with_empty_dict(self):
+        ev = LGHorizonEpgEvent({}, "CH_X")
+        assert ev.event_id == ""
+        assert ev.channel_id == "CH_X"
+        assert ev.title == ""
+        assert ev.start_time is None
+        assert ev.end_time is None
+        assert ev.minimum_age == 0
+        assert ev.is_placeholder is False
+        assert ev.merged_id is None
+        assert ev.audio_languages == []
+
+
+# ---------------------------------------------------------------------------
+# LGHorizonEpgEntry
+# ---------------------------------------------------------------------------
+
+
+class TestLGHorizonEpgEntry:
+    def _make_entry(self):
+        return LGHorizonEpgEntry({
+            "channelId": "NL_001",
+            "events": [
+                {"id": "e1", "title": "Show1"},
+                {"id": "e2", "title": "Show2"},
+            ],
+        })
+
+    def test_channel_id(self):
+        entry = self._make_entry()
+        assert entry.channel_id == "NL_001"
+
+    def test_events_count(self):
+        entry = self._make_entry()
+        assert len(entry.events) == 2
+
+    def test_events_are_epg_event_instances(self):
+        entry = self._make_entry()
+        for ev in entry.events:
+            assert isinstance(ev, LGHorizonEpgEvent)
+
+    def test_events_inherit_channel_id(self):
+        entry = self._make_entry()
+        for ev in entry.events:
+            assert ev.channel_id == "NL_001"
+
+    def test_empty_events(self):
+        entry = LGHorizonEpgEntry({"channelId": "NL_002", "events": []})
+        assert entry.events == []
+
+
+# ---------------------------------------------------------------------------
+# LGHorizonEpg
+# ---------------------------------------------------------------------------
+
+
+class TestLGHorizonEpg:
+    def _make_epg(self):
+        entry1 = LGHorizonEpgEntry({
+            "channelId": "NL_001",
+            "events": [{"id": "e1", "title": "Show1"}],
+        })
+        entry2 = LGHorizonEpgEntry({
+            "channelId": "NL_002",
+            "events": [{"id": "e2", "title": "Show2"}, {"id": "e3", "title": "Show3"}],
+        })
+        return LGHorizonEpg([entry1, entry2])
+
+    def test_entries_property(self):
+        epg = self._make_epg()
+        assert len(epg.entries) == 2
+        for entry in epg.entries:
+            assert isinstance(entry, LGHorizonEpgEntry)
+
+    def test_get_channel_events_known_channel(self):
+        epg = self._make_epg()
+        events = epg.get_channel_events("NL_002")
+        assert len(events) == 2
+        assert events[0].event_id == "e2"
+        assert events[1].event_id == "e3"
+
+    def test_get_channel_events_unknown_channel(self):
+        epg = self._make_epg()
+        events = epg.get_channel_events("UNKNOWN_CH")
+        assert events == []
+
+
+# ---------------------------------------------------------------------------
+# LGHorizonEventDetail
+# ---------------------------------------------------------------------------
+
+_EVENT_DETAIL_JSON = {
+    "eventId": "e1",
+    "channelId": "CH1",
+    "title": "Movie Title",
+    "episodeName": "Ep1",
+    "shortDescription": "Short",
+    "longDescription": "Long desc",
+    "genres": ["Drama", "Action"],
+    "seasonNumber": 2,
+    "episodeNumber": 5,
+    "startTime": 1000,
+    "endTime": 2000,
+    "actors": ["Actor1"],
+    "directors": ["Dir1"],
+    "producers": ["Prod1"],
+    "countryOfOrigin": "NL",
+    "productionDate": "2024",
+    "minimumAge": "12",
+    "imageVersion": "abc",
+    "seriesId": "s1",
+    "parentSeriesId": "ps1",
+    "audioLanguages": [{"lang": "nl"}],
+    "captionLanguages": [{"lang": "en"}],
+}
+
+
+class TestLGHorizonEventDetail:
+    def test_event_id(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.event_id == "e1"
+
+    def test_channel_id(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.channel_id == "CH1"
+
+    def test_title(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.title == "Movie Title"
+
+    def test_episode_name(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.episode_name == "Ep1"
+
+    def test_short_description(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.short_description == "Short"
+
+    def test_long_description(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.long_description == "Long desc"
+
+    def test_description_returns_long_when_both_present(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.description == "Long desc"
+
+    def test_description_returns_short_when_long_is_none(self):
+        json_data = {**_EVENT_DETAIL_JSON, "longDescription": None}
+        d = LGHorizonEventDetail(json_data)
+        assert d.description == "Short"
+
+    def test_genres(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.genres == ["Drama", "Action"]
+
+    def test_season_number(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.season_number == 2
+
+    def test_episode_number(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.episode_number == 5
+
+    def test_start_time(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.start_time == 1000
+
+    def test_end_time(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.end_time == 2000
+
+    def test_actors(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.actors == ["Actor1"]
+
+    def test_directors(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.directors == ["Dir1"]
+
+    def test_producers(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.producers == ["Prod1"]
+
+    def test_country_of_origin(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.country_of_origin == "NL"
+
+    def test_production_date(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.production_date == "2024"
+
+    def test_minimum_age(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.minimum_age == "12"
+
+    def test_image_version(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.image_version == "abc"
+
+    def test_series_id(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.series_id == "s1"
+
+    def test_parent_series_id(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.parent_series_id == "ps1"
+
+    def test_audio_languages(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.audio_languages == ["nl"]
+
+    def test_caption_languages(self):
+        d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
+        assert d.caption_languages == ["en"]
+
+    def test_defaults_with_empty_dict(self):
+        d = LGHorizonEventDetail({})
+        assert d.event_id == ""
+        assert d.channel_id == ""
+        assert d.title == ""
+        assert d.episode_name is None
+        assert d.short_description is None
+        assert d.long_description is None
+        assert d.description is None
+        assert d.genres == []
+        assert d.season_number is None
+        assert d.episode_number is None
+        assert d.start_time is None
+        assert d.end_time is None
+        assert d.actors == []
+        assert d.directors == []
+        assert d.producers == []
+        assert d.country_of_origin is None
+        assert d.production_date is None
+        assert d.minimum_age is None
+        assert d.image_version is None
+        assert d.series_id is None
+        assert d.parent_series_id is None
+        assert d.audio_languages == []
+        assert d.caption_languages == []
+
+
+# ---------------------------------------------------------------------------
+# LGHorizonReplayChannel
+# ---------------------------------------------------------------------------
+
+
+class TestLGHorizonReplayChannel:
+    def test_id(self):
+        ch = LGHorizonReplayChannel({"id": "NL_001", "name": "NPO 1", "logo": "http://logo.png"})
+        assert ch.id == "NL_001"
+
+    def test_name(self):
+        ch = LGHorizonReplayChannel({"id": "NL_001", "name": "NPO 1", "logo": "http://logo.png"})
+        assert ch.name == "NPO 1"
+
+    def test_logo(self):
+        ch = LGHorizonReplayChannel({"id": "NL_001", "name": "NPO 1", "logo": "http://logo.png"})
+        assert ch.logo == "http://logo.png"
+
+    def test_defaults(self):
+        ch = LGHorizonReplayChannel({})
+        assert ch.id == ""
+        assert ch.name == ""
+        assert ch.logo == ""
+
+
+# ---------------------------------------------------------------------------
+# LGHorizonManagedRecording
+# ---------------------------------------------------------------------------
+
+_MANAGED_RECORDING_JSON = {
+    "id": "r1",
+    "title": "Show",
+    "showName": "ShowName",
+    "seasonName": "S1",
+    "itemType": "single",
+    "recordingState": "recorded",
+    "recordingType": "nDVR",
+    "channelId": "CH1",
+    "seasonNumber": 1,
+    "episodeNumber": 3,
+    "seasonId": "sid",
+    "showId": "shid",
+    "source": "show",
+    "diskSpace": 0.5,
+    "recDuration": 3600,
+    "displayStartTime": "2026-01-01T00:00:00Z",
+    "displayEndTime": "2026-01-01T01:00:00Z",
+    "recStartTime": "2025-12-31T23:55:00Z",
+    "recEndTime": "2026-01-01T01:10:00Z",
+    "deleteTime": "2027-01-01T00:00:00Z",
+    "bookingTime": "2025-12-01T00:00:00Z",
+    "retentionPeriod": 365,
+    "prePaddingOffset": 300,
+    "postPaddingOffset": 600,
+    "isPremiere": True,
+    "isAdult": False,
+    "minimumAge": "12",
+    "autoDeletionProtected": True,
+}
+
+
+class TestLGHorizonManagedRecording:
+    def test_id(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.id == "r1"
+
+    def test_title(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.title == "Show"
+
+    def test_show_name(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.show_name == "ShowName"
+
+    def test_season_name(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.season_name == "S1"
+
+    def test_item_type(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.item_type == "single"
+
+    def test_recording_state(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.recording_state == "recorded"
+
+    def test_recording_type(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.recording_type == "nDVR"
+
+    def test_channel_id(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.channel_id == "CH1"
+
+    def test_season_number(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.season_number == 1
+
+    def test_episode_number(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.episode_number == 3
+
+    def test_season_id(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.season_id == "sid"
+
+    def test_show_id(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.show_id == "shid"
+
+    def test_source(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.source == "show"
+
+    def test_disk_space(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.disk_space == 0.5
+
+    def test_duration(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.duration == 3600
+
+    def test_start_time(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.start_time == "2026-01-01T00:00:00Z"
+
+    def test_end_time(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.end_time == "2026-01-01T01:00:00Z"
+
+    def test_rec_start_time(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.rec_start_time == "2025-12-31T23:55:00Z"
+
+    def test_rec_end_time(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.rec_end_time == "2026-01-01T01:10:00Z"
+
+    def test_delete_time(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.delete_time == "2027-01-01T00:00:00Z"
+
+    def test_booking_time(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.booking_time == "2025-12-01T00:00:00Z"
+
+    def test_retention_period(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.retention_period == 365
+
+    def test_pre_padding_offset(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.pre_padding_offset == 300
+
+    def test_post_padding_offset(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.post_padding_offset == 600
+
+    def test_is_premiere(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.is_premiere is True
+
+    def test_is_adult(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.is_adult is False
+
+    def test_minimum_age(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.minimum_age == "12"
+
+    def test_auto_deletion_protected(self):
+        r = LGHorizonManagedRecording(_MANAGED_RECORDING_JSON)
+        assert r.auto_deletion_protected is True
+
+    def test_defaults_with_empty_dict(self):
+        r = LGHorizonManagedRecording({})
+        assert r.id == ""
+        assert r.title == ""
+        assert r.show_name is None
+        assert r.season_name is None
+        assert r.item_type == ""
+        assert r.recording_state == ""
+        assert r.recording_type == ""
+        assert r.channel_id is None
+        assert r.season_number is None
+        assert r.episode_number is None
+        assert r.season_id is None
+        assert r.show_id is None
+        assert r.source is None
+        assert r.disk_space == 0.0
+        assert r.duration is None
+        assert r.start_time is None
+        assert r.end_time is None
+        assert r.rec_start_time is None
+        assert r.rec_end_time is None
+        assert r.delete_time is None
+        assert r.booking_time is None
+        assert r.retention_period is None
+        assert r.pre_padding_offset is None
+        assert r.post_padding_offset is None
+        assert r.is_premiere is False
+        assert r.is_adult is False
+        assert r.minimum_age is None
+        assert r.auto_deletion_protected is False
+
+
+# ---------------------------------------------------------------------------
+# LGHorizonManagedRecordingList
+# ---------------------------------------------------------------------------
+
+
+class TestLGHorizonManagedRecordingList:
+    def _make_list(self):
+        return LGHorizonManagedRecordingList({
+            "total": 100,
+            "limit": 50,
+            "offset": 0,
+            "data": [
+                {"diskSpace": 0.5, "id": "r1"},
+                {"diskSpace": 1.0, "id": "r2"},
+            ],
+        })
+
+    def test_total(self):
+        lst = self._make_list()
+        assert lst.total == 100
+
+    def test_limit(self):
+        lst = self._make_list()
+        assert lst.limit == 50
+
+    def test_offset(self):
+        lst = self._make_list()
+        assert lst.offset == 0
+
+    def test_recordings_count(self):
+        lst = self._make_list()
+        assert len(lst.recordings) == 2
+
+    def test_recordings_are_managed_recording_instances(self):
+        lst = self._make_list()
+        for r in lst.recordings:
+            assert isinstance(r, LGHorizonManagedRecording)
+
+    def test_total_disk_space(self):
+        lst = self._make_list()
+        assert lst.total_disk_space == pytest.approx(1.5)
+
+    def test_empty_data(self):
+        lst = LGHorizonManagedRecordingList({"total": 0, "limit": 50, "offset": 0, "data": []})
+        assert lst.recordings == []
+        assert lst.total_disk_space == 0.0
+
+    def test_defaults_with_empty_dict(self):
+        lst = LGHorizonManagedRecordingList({})
+        assert lst.total == 0
+        assert lst.limit == 0
+        assert lst.offset == 0
+        assert lst.recordings == []
+        assert lst.total_disk_space == 0.0
