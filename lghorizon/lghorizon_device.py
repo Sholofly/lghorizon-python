@@ -164,6 +164,10 @@ class LGHorizonDevice:
         """
         self._change_callback = change_callback
         await self.register_mqtt()  # type: ignore [assignment] # Callback can be None
+        # Always request current state from the box so we get an initial
+        # UI status even when the box is already ONLINE_RUNNING at startup.
+        await self._request_settop_box_state()
+        await self._request_settop_box_recording_capacity()
 
     async def handle_status_message(
         self, status_message: LGHorizonStatusMessage

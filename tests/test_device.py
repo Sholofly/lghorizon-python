@@ -157,11 +157,31 @@ async def test_set_callback_stores_callback(device):
 async def test_set_callback_calls_register_mqtt(device, mqtt_client, mock_auth):
     callback = AsyncMock()
     await device.set_callback(callback)
-    mqtt_client.publish_message.assert_called_once()
-    topic, payload_str = mqtt_client.publish_message.call_args[0]
+    # register_mqtt + _request_settop_box_state + _request_settop_box_recording_capacity
+    assert mqtt_client.publish_message.call_count == 3
+    # First call: register our own HGO status
+    topic, payload_str = mqtt_client.publish_message.call_args_list[0][0]
     assert topic == f"{mock_auth.household_id}/{mqtt_client.client_id}/status"
     payload = json.loads(payload_str)
     assert payload["state"] == LGHorizonRunningState.ONLINE_RUNNING.value
+
+
+@pytest.mark.asyncio
+async def test_set_callback_requests_initial_state(device, mqtt_client, mock_auth):
+    """set_callback should request UI state and recording capacity from the box."""
+    callback = AsyncMock()
+    await device.set_callback(callback)
+    calls = mqtt_client.publish_message.call_args_list
+    # Second call: CPE.getUiStatus
+    state_topic, state_payload_str = calls[1][0]
+    assert state_topic == f"{mock_auth.household_id}/{device.device_id}"
+    state_payload = json.loads(state_payload_str)
+    assert state_payload["type"] == "CPE.getUiStatus"
+    # Third call: CPE.capacity
+    cap_topic, cap_payload_str = calls[2][0]
+    assert cap_topic == f"{mock_auth.household_id}/{device.device_id}"
+    cap_payload = json.loads(cap_payload_str)
+    assert cap_payload["type"] == "CPE.capacity"
 
 
 # ---------------------------------------------------------------------------
