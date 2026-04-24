@@ -51,6 +51,7 @@ class LGHorizonRecordingState(Enum):
     """Enumeration of LG Horizon recording states."""
 
     RECORDED = "recorded"
+    ONGOING = "ongoing"
     UNKNOWN = "unknown"
 
 
@@ -1294,9 +1295,11 @@ class LGHorizonRecording(ABC):
     @property
     def recording_state(self) -> LGHorizonRecordingState:
         """Return the recording state."""
-        return LGHorizonRecordingState[
-            self._recording_payload.get("recordingState", "unknown").upper()
-        ]
+        state_str = self._recording_payload.get("recordingState", "unknown").upper()
+        try:
+            return LGHorizonRecordingState[state_str]
+        except KeyError:
+            return LGHorizonRecordingState.UNKNOWN
 
     @property
     def source(self) -> LGHorizonRecordingSource:

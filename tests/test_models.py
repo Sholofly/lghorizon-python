@@ -82,10 +82,11 @@ class TestLGHorizonRecordingSource:
 class TestLGHorizonRecordingState:
     def test_members(self):
         assert LGHorizonRecordingState.RECORDED.value == "recorded"
+        assert LGHorizonRecordingState.ONGOING.value == "ongoing"
         assert LGHorizonRecordingState.UNKNOWN.value == "unknown"
 
     def test_all_members_count(self):
-        assert len(LGHorizonRecordingState) == 2
+        assert len(LGHorizonRecordingState) == 3
 
 
 class TestLGHorizonRecordingType:
