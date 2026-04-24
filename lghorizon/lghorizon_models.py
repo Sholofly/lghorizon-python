@@ -996,14 +996,12 @@ class LGHorizonReplayEvent:
     @property
     def start_time(self) -> Optional[float]:
         """Return the start time as Unix timestamp in seconds."""
-        val = self._raw_json.get("startTime")
-        return val / 1000 if val is not None else None
+        return self._raw_json.get("startTime")
 
     @property
     def end_time(self) -> Optional[float]:
         """Return the end time as Unix timestamp in seconds."""
-        val = self._raw_json.get("endTime")
-        return val / 1000 if val is not None else None
+        return self._raw_json.get("endTime")
 
     @property
     def title(self) -> str:

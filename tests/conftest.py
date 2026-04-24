@@ -102,8 +102,8 @@ def sample_replay_event_json():
         "episodeName": "Pilot",
         "seasonNumber": 1,
         "episodeNumber": 1,
-        "startTime": 1700000000000,
-        "endTime": 1700003600000,
+        "startTime": 1700000000,
+        "endTime": 1700003600,
     }
 
 
