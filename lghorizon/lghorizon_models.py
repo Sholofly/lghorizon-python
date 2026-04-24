@@ -6,6 +6,7 @@ import json
 import logging
 import time
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional, Callable
@@ -20,6 +21,17 @@ from .exceptions import LGHorizonApiConnectionError, LGHorizonApiUnauthorizedErr
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _redact_sensitive(data):
+    """Redact sensitive fields from data before logging."""
+    if not isinstance(data, dict):
+        return data
+    redacted = dict(data)
+    for key in ("accessToken", "access_token", "refreshToken", "refresh_token", "token", "password"):
+        if key in redacted:
+            redacted[key] = "***REDACTED***"
+    return redacted
 
 
 class LGHorizonRunningState(Enum):
@@ -44,6 +56,8 @@ class LGHorizonRecordingSource(Enum):
     """LGHorizon recording."""
 
     SHOW = "show"
+    SINGLE = "single"
+    SEASON = "season"
     UNKNOWN = "unknown"
 
 
@@ -51,6 +65,7 @@ class LGHorizonRecordingState(Enum):
     """Enumeration of LG Horizon recording states."""
 
     RECORDED = "recorded"
+    ONGOING = "ongoing"
     UNKNOWN = "unknown"
 
 
@@ -102,14 +117,13 @@ class LGHorizonMessage(ABC):
 
     @abstractmethod
     def __init__(self, topic: str, payload: dict) -> None:
-        """Abstract base class for LG Horizon messages."""
-        self._topic = topic
         """Initialize the abstract base class for LG Horizon messages.
 
         Args:
             topic: The MQTT topic of the message.
             payload: The dictionary payload of the message.
         """
+        self._topic = topic
         self._payload = payload
 
     def __repr__(self) -> str:
@@ -136,8 +150,12 @@ class LGHorizonStatusMessage(LGHorizonMessage):
 
     @property
     def running_state(self) -> LGHorizonRunningState:
-        """Return the device ID from the payload, if available."""
-        return LGHorizonRunningState[self._payload.get("state", "unknown").upper()]
+        """Return the running state from the payload."""
+        state_str = self._payload.get("state", "unknown").upper()
+        try:
+            return LGHorizonRunningState[state_str]
+        except KeyError:
+            return LGHorizonRunningState.UNKNOWN
 
 
 class LGHorizonSourceType(Enum):
@@ -146,6 +164,7 @@ class LGHorizonSourceType(Enum):
     LINEAR = "linear"
     REVIEWBUFFER = "reviewBuffer"
     NDVR = "nDVR"
+    LOCALDVR = "localDVR"
     REPLAY = "replay"
     VOD = "VOD"
     UNKNOWN = "unknown"
@@ -169,7 +188,7 @@ class LGHorizonLinearSource(LGHorizonSource):
 
     @property
     def channel_id(self) -> str:
-        """Return the source type."""
+        """Return the channel ID."""
         return self._raw_json.get("channelId", "")
 
     @property
@@ -187,7 +206,7 @@ class LGHorizonReviewBufferSource(LGHorizonSource):
 
     @property
     def channel_id(self) -> str:
-        """Return the source type."""
+        """Return the channel ID."""
         return self._raw_json.get("channelId", "")
 
     @property
@@ -246,7 +265,7 @@ class LGHorizonReplaySource(LGHorizonSource):
 
     @property
     def event_id(self) -> str:
-        """Return the title ID."""
+        """Return the event ID."""
         return self._raw_json.get("eventId", "")
 
     @property
@@ -273,11 +292,15 @@ class LGHorizonPlayerState:
     @property
     def source_type(self) -> LGHorizonSourceType:
         """Return the source type."""
-        return LGHorizonSourceType[self._raw_json.get("sourceType", "unknown").upper()]
+        type_str = self._raw_json.get("sourceType", "unknown").upper()
+        try:
+            return LGHorizonSourceType[type_str]
+        except KeyError:
+            return LGHorizonSourceType.UNKNOWN
 
     @property
     def speed(self) -> int:
-        """Return the Player State dictionary."""
+        """Return the playback speed."""
         return self._raw_json.get("speed", 0)
 
     @property
@@ -291,12 +314,12 @@ class LGHorizonPlayerState:
     def relative_position(
         self,
     ) -> int:
-        """Return the last speed change time."""
+        """Return the relative position."""
         return self._raw_json.get("relativePosition", 0.0)
 
     @property
     def source(self) -> LGHorizonSource | None:  # Added None to the return type
-        """Return the last speed change time."""
+        """Return the source."""
         if "source" in self._raw_json:
             match self.source_type:
                 case LGHorizonSourceType.LINEAR:
@@ -310,7 +333,7 @@ class LGHorizonPlayerState:
                 case LGHorizonSourceType.REVIEWBUFFER:
                     return LGHorizonReviewBufferSource(self._raw_json["source"])
 
-        return LGHorizonUnknownSource(self._raw_json["source"])
+        return None
 
 
 class LGHorizonAppsState:
@@ -343,24 +366,27 @@ class LGHorizonUIState:
     _apps_state: LGHorizonAppsState | None = None
 
     def __init__(self, raw_json: dict) -> None:
-        """Initialize the State."""
-        self._raw_json = raw_json
         """Initialize the UI State.
 
         Args:
             raw_json: The raw JSON dictionary containing UI state information.
         """
+        self._raw_json = raw_json
 
     @property
     def ui_status(self) -> LGHorizonUIStateType:
-        """Return the UI status dictionary."""
-        return LGHorizonUIStateType[self._raw_json.get("uiStatus", "unknown").upper()]
+        """Return the UI status type."""
+        status_str = self._raw_json.get("uiStatus", "unknown").upper()
+        try:
+            return LGHorizonUIStateType[status_str]
+        except KeyError:
+            return LGHorizonUIStateType.UNKNOWN
 
     @property
     def player_state(
         self,
     ) -> LGHorizonPlayerState | None:  # Added None to the return type
-        """Return the UI status dictionary."""
+        """Return the player state."""
         # Check if _player_state is None and if "playerState" key exists in raw_json
         if self._player_state is None and "playerState" in self._raw_json:
             self._player_state = LGHorizonPlayerState(
@@ -372,7 +398,7 @@ class LGHorizonUIState:
     def apps_state(
         self,
     ) -> LGHorizonAppsState | None:  # Added None to the return type
-        """Return the UI status dictionary."""
+        """Return the apps state."""
         # Check if _player_state is None and if "playerState" key exists in raw_json
         if self._apps_state is None and "appsState" in self._raw_json:
             self._apps_state = LGHorizonAppsState(
@@ -402,12 +428,12 @@ class LGHorizonUIStatusMessage(LGHorizonMessage):
 
     @property
     def message_timestamp(self) -> int:
-        """Return the device ID from the payload, if available."""
+        """Return the message timestamp from the payload."""
         return self._payload.get("messageTimeStamp", 0)
 
     @property
     def ui_state(self) -> LGHorizonUIState | None:
-        """Return the device ID from the payload, if available."""
+        """Return the UI state from the payload."""
         if not self._status and "status" in self._payload:
             self._status = LGHorizonUIState(self._payload["status"])
         return self._status
@@ -484,7 +510,7 @@ class LGHorizonAuth:
     _country_code: str
     _host: str
     _use_refresh_token: bool
-    _token_refresh_callback: Callable[str, None] | None  # pyright: ignore[reportInvalidTypeForm]
+    _token_refresh_callback: Callable[[str], None] | None
 
     def __init__(
         self,
@@ -493,7 +519,7 @@ class LGHorizonAuth:
         refresh_token: str = "",
         username: str = "",
         password: str = "",
-        token_refresh_callback: Callable[str, None] | None = None,  # pyright: ignore[reportInvalidTypeForm]
+        token_refresh_callback: Callable[[str], None] | None = None,
     ) -> None:
         """Initialize the auth with refresh token."""
         self._websession = websession
@@ -579,7 +605,7 @@ class LGHorizonAuth:
         """Return the country code."""
         return self._country_code
 
-    async def is_token_expiring(self) -> bool:
+    def is_token_expiring(self) -> bool:
         """Check if the token is expiring within one day."""
         if not self.access_token or not self.token_expiry:
             return True
@@ -640,7 +666,7 @@ class LGHorizonAuth:
         if headers := kwargs.pop("headers", {}):
             headers = dict(headers)
         request_url = f"{host}{path}"
-        if await self.is_token_expiring():  # Use property
+        if self.is_token_expiring():  # Use property
             _LOGGER.debug("Access token is expiring, fetching a new one")
             await self.fetch_access_token()
         try:
@@ -652,7 +678,7 @@ class LGHorizonAuth:
             _LOGGER.debug(
                 "Response from %s:\n %s",
                 request_url,
-                json.dumps(json_response, indent=2),
+                json.dumps(_redact_sensitive(json_response), indent=2),
             )
             return json_response
         except ClientResponseError as cre:
@@ -673,7 +699,7 @@ class LGHorizonAuth:
         """Get the MQTT token."""
         _LOGGER.debug("Fetching MQTT token")
         config = await self.get_service_config()
-        service_url = await config.get_service_url("authorizationService")
+        service_url = config.get_service_url("authorizationService")
         result = await self.request(
             service_url,
             "/v1/mqtt/token",
@@ -713,12 +739,12 @@ class LGHorizonChannel:
 
     @property
     def replay_pre_padding(self) -> int:
-        """Returns the channel number."""
+        """Returns the replay pre-padding."""
         return self.channel_json.get("replayPrePadding", 0)
 
     @property
     def replay_post_padding(self) -> int:
-        """Returns the channel number."""
+        """Returns the replay post-padding."""
         return self.channel_json.get("replayPostPadding", 0)
 
     @property
@@ -767,7 +793,7 @@ class LGHorizonServicesConfig:
         """
         self._config = config_data
 
-    async def get_service_url(self, service_name: str) -> str:
+    def get_service_url(self, service_name: str) -> str:
         """Get the URL for a specific service.
 
         Args:
@@ -783,7 +809,7 @@ class LGHorizonServicesConfig:
             return self._config[service_name]["URL"]
         raise ValueError(f"Service URL for '{service_name}' not found in configuration")
 
-    async def get_all_services(self) -> dict[str, str]:
+    def get_all_services(self) -> dict[str, str]:
         """Get all available services and their URLs.
 
         Returns:
@@ -795,23 +821,6 @@ class LGHorizonServicesConfig:
             if isinstance(service, dict) and (url := service.get("URL"))
         }
 
-    async def __getattr__(self, name: str) -> Optional[str]:
-        """Access service URLs as attributes.
-
-        Example: config.authService returns the auth service URL
-
-        Args:
-            name: Service name
-
-        Returns:
-            URL for the service or None if not found
-        """
-        if name.startswith("_"):
-            raise AttributeError(
-                f"'{type(self).__name__}' object has no attribute '{name}'"
-            )
-        return await self.get_service_url(name)
-
     def __repr__(self) -> str:
         """Return string representation."""
         services = list(self._config.keys())
@@ -821,11 +830,10 @@ class LGHorizonServicesConfig:
 class LGHorizonCustomer:
     """LGHorizon customer."""
 
-    _profiles: Dict[str, LGHorizonProfile] = {}
-
     def __init__(self, json_payload: dict):
         """Initialize a customer."""
         self._json_payload = json_payload
+        self._profiles: Dict[str, LGHorizonProfile] = {}
 
     @property
     def customer_id(self) -> str:
@@ -849,13 +857,13 @@ class LGHorizonCustomer:
 
     @property
     def recording_retention_period(self) -> Optional[int]:
-        """Return the city id."""
+        """Return the recording retention period."""
         return self._json_payload.get("recordingRetentionPeriod", None)
 
     @property
     def has_cloud_recording(self) -> bool:
-        """Return the city id."""
-        return self.recording_retention_period and self.recording_retention_period > 0
+        """Return whether the customer has cloud recording."""
+        return bool(self.recording_retention_period and self.recording_retention_period > 0)
 
     @property
     def assigned_devices(self) -> list[str]:
@@ -872,206 +880,37 @@ class LGHorizonCustomer:
             }
         return self._profiles
 
-    async def get_profile_lang(self, profile_id: str) -> str:
+    def get_profile_lang(self, profile_id: str) -> str:
         """Return the profile language."""
         if profile_id not in self.profiles:
             return "nl"
         return self.profiles[profile_id].options.lang
 
 
+
+@dataclass
 class LGHorizonDeviceState:
     """Represent current state of a box."""
 
-    _id: Optional[str]
-    _channel_id: Optional[str]
-    _channel_name: Optional[str]
-    _show_title: Optional[str]
-    _episode_title: Optional[str]
-    _season_number: Optional[int]
-    _episode_number: Optional[int]
-    _image: Optional[str]
-    _source_type: LGHorizonSourceType
-    _paused: bool
-    _duration: Optional[float]
-    _position: Optional[float]
-    _last_position_update: Optional[datetime]
-    _state: LGHorizonRunningState
-    _speed: Optional[int]
-    _start_time: Optional[int]
-    _end_time: Optional[int]
-    _media_type: LGHorizonMediaType
-
-    def __init__(self) -> None:
-        """Initialize the playing info."""
-        self._channel_id = None
-        self._show_title = None
-        self._episode_title = None
-        self._season_number = None
-        self._episode_number = None
-        self._image = None
-        self._source_type = LGHorizonSourceType.UNKNOWN
-        self._ui_state_type = LGHorizonUIStateType.UNKNOWN
-        self._paused = False
-        self._duration = None
-        self._position = None
-        self._last_position_update = None
-        self._state = LGHorizonRunningState.UNKNOWN
-        self._speed = None
-        self._channel_name = None
-        self._id = None
-        self._start_time = None
-        self._end_time = None
-        self._media_type = LGHorizonMediaType.UNKNOWN
-
-    @property
-    def state(self) -> LGHorizonRunningState:
-        """Return the channel ID."""
-        return self._state
-
-    @state.setter
-    def state(self, value: LGHorizonRunningState) -> None:
-        """Set the channel ID."""
-        self._state = value
-
-    @property
-    def channel_id(self) -> Optional[str]:
-        """Return the channel ID."""
-        return self._channel_id
-
-    @channel_id.setter
-    def channel_id(self, value: Optional[str]) -> None:
-        """Set the channel ID."""
-        self._channel_id = value
-
-    @property
-    def id(self) -> Optional[str]:
-        """Return the channel ID."""
-        return self._id
-
-    @id.setter
-    def id(self, value: Optional[str]) -> None:
-        """Set the channel ID."""
-        self._id = value
-
-    @property
-    def channel_name(self) -> Optional[str]:
-        """Return the channel ID."""
-        return self._channel_name
-
-    @channel_name.setter
-    def channel_name(self, value: Optional[str]) -> None:
-        """Set the channel ID."""
-        self._channel_name = value
-
-    @property
-    def show_title(self) -> Optional[str]:
-        """Return the title."""
-        return self._show_title
-
-    @show_title.setter
-    def show_title(self, value: Optional[str]) -> None:
-        """Set the title."""
-        self._show_title = value
-
-    @property
-    def app_name(self) -> Optional[str]:
-        """Return the title."""
-        return self._app_name
-
-    @app_name.setter
-    def app_name(self, value: Optional[str]) -> None:
-        """Set the title."""
-        self._app_name = value
-
-    @property
-    def episode_title(self) -> Optional[str]:
-        """Return the title."""
-        return self._episode_title
-
-    @episode_title.setter
-    def episode_title(self, value: Optional[str]) -> None:
-        """Set the title."""
-        self._episode_title = value
-
-    @property
-    def episode_number(self) -> Optional[int]:
-        """Return the title."""
-        return self._episode_number
-
-    @episode_number.setter
-    def episode_number(self, value: Optional[int]) -> None:
-        """Set the title."""
-        self._episode_number = value
-
-    @property
-    def season_number(self) -> Optional[int]:
-        """Return the title."""
-        return self._season_number
-
-    @season_number.setter
-    def season_number(self, value: Optional[int]) -> None:
-        """Set the title."""
-        self._season_number = value
-
-    @property
-    def start_time(self) -> Optional[int]:
-        """Return the title."""
-        return self._start_time
-
-    @start_time.setter
-    def start_time(self, value: Optional[int]) -> None:
-        """Set the title."""
-        self._start_time = value
-
-    @property
-    def end_time(self) -> Optional[int]:
-        """Return the title."""
-        return self._end_time
-
-    @end_time.setter
-    def end_time(self, value: Optional[int]) -> None:
-        """Set the title."""
-        self._end_time = value
-
-    @property
-    def image(self) -> Optional[str]:
-        """Return the image URL."""
-        return self._image
-
-    @image.setter
-    def image(self, value: Optional[str]) -> None:
-        """Set the image URL."""
-        self._image = value
-
-    @property
-    def source_type(self) -> LGHorizonSourceType:
-        """Return the source type."""
-        return self._source_type
-
-    @source_type.setter
-    def source_type(self, value: LGHorizonSourceType) -> None:
-        """Set the source type."""
-        self._source_type = value
-
-    @property
-    def ui_state_type(self) -> LGHorizonUIStateType:
-        """Return the source type."""
-        return self._ui_state_type
-
-    @ui_state_type.setter
-    def ui_state_type(self, value: LGHorizonUIStateType) -> None:
-        """Set the source type."""
-        self._ui_state_type = value
-
-    @property
-    def media_type(self) -> LGHorizonMediaType:
-        """Return the source type."""
-        return self._media_type
-
-    @media_type.setter
-    def media_type(self, value: LGHorizonMediaType) -> None:
-        """Set the source type."""
-        self._media_type = value
+    state: LGHorizonRunningState = field(default_factory=lambda: LGHorizonRunningState.UNKNOWN)
+    source_type: LGHorizonSourceType = field(default_factory=lambda: LGHorizonSourceType.UNKNOWN)
+    ui_state_type: LGHorizonUIStateType = field(default_factory=lambda: LGHorizonUIStateType.UNKNOWN)
+    media_type: LGHorizonMediaType = field(default_factory=lambda: LGHorizonMediaType.UNKNOWN)
+    id: Optional[str] = None
+    channel_id: Optional[str] = None
+    channel_name: Optional[str] = None
+    show_title: Optional[str] = None
+    app_name: Optional[str] = None
+    episode_title: Optional[str] = None
+    episode_number: Optional[int] = None
+    season_number: Optional[int] = None
+    image: Optional[str] = None
+    speed: Optional[int] = None
+    position: Optional[float] = None
+    duration: Optional[float] = None
+    start_time: Optional[int] = None
+    end_time: Optional[int] = None
+    last_position_update: Optional[int] = None
 
     @property
     def paused(self) -> bool:
@@ -1080,69 +919,31 @@ class LGHorizonDeviceState:
             return False
         return self.speed == 0
 
-    @property
-    def duration(self) -> Optional[float]:
-        """Return the duration of the media."""
-        return self._duration
-
-    @duration.setter
-    def duration(self, value: Optional[float]) -> None:
-        """Set the duration of the media."""
-        self._duration = value
-
-    @property
-    def position(self) -> Optional[float]:
-        """Return the current position in the media."""
-        return self._position
-
-    @position.setter
-    def position(self, value: Optional[float]) -> None:
-        """Set the current position in the media."""
-        self._position = value
-
-    @property
-    def last_position_update(self) -> Optional[int]:
-        """Return the last time the position was updated."""
-        return self._last_position_update
-
-    @last_position_update.setter
-    def last_position_update(self, value: Optional[int]) -> None:
-        """Set the last position update time."""
-        self._last_position_update = value
-
-    async def reset_progress(self) -> None:
+    def reset_progress(self) -> None:
         """Reset the progress-related attributes."""
-        self.last_position_update = None
-        self.duration = None
         self.position = None
-
-    @property
-    def speed(self) -> Optional[int]:
-        """Return the speed."""
-        return self._speed
-
-    @speed.setter
-    def speed(self, value: int | None) -> None:
-        """Set the channel ID."""
-        self._speed = value
-
-    async def reset(self) -> None:
-        """Reset all playing information."""
-        self.channel_id = None
-        self.episode_number = None
-        self.season_number = None
-        self.episode_title = None
-        self.show_title = None
-        self.app_name = None
-        self.image = None
-        self.source_type = LGHorizonSourceType.UNKNOWN
-        self.speed = None
-        self.channel_name = None
-        self.id = None
+        self.duration = None
         self.start_time = None
         self.end_time = None
+        self.last_position_update = None
+
+    def reset(self) -> None:
+        """Reset all playing information."""
+        self.id = None
+        self.channel_id = None
+        self.channel_name = None
+        self.show_title = None
+        self.app_name = None
+        self.episode_title = None
+        self.episode_number = None
+        self.season_number = None
+        self.image = None
+        self.speed = None
+        self.source_type = LGHorizonSourceType.UNKNOWN
+        self.ui_state_type = LGHorizonUIStateType.UNKNOWN
         self.media_type = LGHorizonMediaType.UNKNOWN
-        await self.reset_progress()
+        self.reset_progress()
+
 
 
 class LGHorizonEntitlements:
@@ -1192,12 +993,12 @@ class LGHorizonReplayEvent:
 
     @property
     def start_time(self) -> Optional[int]:
-        """Return the season number."""
+        """Return the start time."""
         return self._raw_json.get("startTime", None)
 
     @property
     def end_time(self) -> Optional[int]:
-        """Return the season number."""
+        """Return the end time."""
         return self._raw_json.get("endTime", None)
 
     @property
@@ -1243,8 +1044,12 @@ class LGHorizonVOD:
 
     @property
     def vod_type(self) -> LGHorizonVODType:
-        """Return the ID of the VOD."""
-        return LGHorizonVODType[self._vod_json.get("type", "unknown").upper()]
+        """Return the type of the VOD."""
+        type_str = self._vod_json.get("type", "unknown").upper()
+        try:
+            return LGHorizonVODType[type_str]
+        except KeyError:
+            return LGHorizonVODType.UNKNOWN
 
     @property
     def id(self) -> str:
@@ -1263,7 +1068,7 @@ class LGHorizonVOD:
 
     @property
     def title(self) -> str:
-        """Return the ID of the VOD."""
+        """Return the title of the VOD."""
         return self._vod_json["title"]
 
     @property
@@ -1287,9 +1092,11 @@ class LGHOrizonRelevantEpisode:
     @property
     def recording_state(self) -> LGHorizonRecordingState:
         """Return the recording state."""
-        return LGHorizonRecordingState[
-            self._episode_json.get("recordingState", "unknown").upper()
-        ]
+        state_str = self._episode_json.get("recordingState", "unknown").upper()
+        try:
+            return LGHorizonRecordingState[state_str]
+        except KeyError:
+            return LGHorizonRecordingState.UNKNOWN
 
     @property
     def season_number(self) -> Optional[int]:
@@ -1307,29 +1114,35 @@ class LGHorizonRecording(ABC):
 
     @property
     def recording_payload(self) -> dict:
-        """Return the payload of the message."""
+        """Return the recording payload."""
         return self._recording_payload
 
     @property
     def recording_state(self) -> LGHorizonRecordingState:
         """Return the recording state."""
-        return LGHorizonRecordingState[
-            self._recording_payload.get("recordingState", "unknown").upper()
-        ]
+        state_str = self._recording_payload.get("recordingState", "unknown").upper()
+        try:
+            return LGHorizonRecordingState[state_str]
+        except KeyError:
+            return LGHorizonRecordingState.UNKNOWN
 
     @property
     def source(self) -> LGHorizonRecordingSource:
         """Return the recording source."""
-        return LGHorizonRecordingSource[
-            self._recording_payload.get("source", "unknown").upper()
-        ]
+        source_str = self._recording_payload.get("source", "unknown").upper()
+        try:
+            return LGHorizonRecordingSource[source_str]
+        except KeyError:
+            return LGHorizonRecordingSource.UNKNOWN
 
     @property
     def type(self) -> LGHorizonRecordingType:
-        """Return the recording source."""
-        return LGHorizonRecordingType[
-            self._recording_payload.get("type", "unknown").upper()
-        ]
+        """Return the recording type."""
+        type_str = self._recording_payload.get("type", "unknown").upper()
+        try:
+            return LGHorizonRecordingType[type_str]
+        except KeyError:
+            return LGHorizonRecordingType.UNKNOWN
 
     @property
     def id(self) -> str:
@@ -1348,7 +1161,7 @@ class LGHorizonRecording(ABC):
 
     @property
     def poster_url(self) -> Optional[str]:
-        """Return the title of the recording."""
+        """Return the poster URL of the recording."""
         poster = self._recording_payload.get("poster")
         if poster:
             return poster.get("url")
@@ -1372,7 +1185,7 @@ class LGHorizonRecordingSingle(LGHorizonRecording):
 
     @property
     def episode_id(self) -> Optional[str]:
-        """Return the episode title of the recording."""
+        """Return the episode ID of the recording."""
         return self._recording_payload.get("episodeId", None)
 
     @property
@@ -1392,7 +1205,7 @@ class LGHorizonRecordingSingle(LGHorizonRecording):
 
     @property
     def show_title(self) -> Optional[str]:
-        """Return the show ID of the recording."""
+        """Return the show title of the recording."""
         return self._recording_payload.get("showTitle", None)
 
     @property
@@ -1407,17 +1220,17 @@ class LGHorizonRecordingSingle(LGHorizonRecording):
 
     @property
     def duration(self) -> Optional[int]:
-        """Return the title."""
+        """Return the duration of the recording."""
         return self.recording_payload.get("duration", None)
 
     @property
-    def start_time(self) -> Optional[int]:
-        """Return the title."""
+    def start_time(self) -> Optional[str]:
+        """Return the start time as ISO-8601 string."""
         return self.recording_payload.get("startTime", None)
 
     @property
-    def end_time(self) -> Optional[int]:
-        """Return the title."""
+    def end_time(self) -> Optional[str]:
+        """Return the end time as ISO-8601 string."""
         return self.recording_payload.get("endTime", None)
 
 
@@ -1432,6 +1245,8 @@ class LGHorizonRecordingSeason(LGHorizonRecording):
         episode_payload = payload.get("mostRelevantEpisode")
         if episode_payload:
             self._most_relevant_epsode = LGHOrizonRelevantEpisode(episode_payload)
+        else:
+            self._most_relevant_epsode = None
 
     @property
     def no_of_episodes(self) -> int:
@@ -1445,7 +1260,7 @@ class LGHorizonRecordingSeason(LGHorizonRecording):
 
     @property
     def show_id(self) -> str:
-        """Return the season title of the recording."""
+        """Return the show ID of the recording."""
         return self._recording_payload.get("showId", "")
 
     @property
@@ -1465,6 +1280,8 @@ class LGHorizonRecordingShow(LGHorizonRecording):
         episode_payload = payload.get("mostRelevantEpisode")
         if episode_payload:
             self._most_relevant_epsode = LGHOrizonRelevantEpisode(episode_payload)
+        else:
+            self._most_relevant_epsode = None
 
     @property
     def no_of_episodes(self) -> int:
@@ -1495,7 +1312,7 @@ class LGHorizonRecordingList:
 
     @property
     def recordings(self) -> List[LGHorizonRecording]:
-        """Return the total number of recordings."""
+        """Return the list of recordings."""
         return self._recordings
 
 
@@ -1553,3 +1370,472 @@ class LGHorizonRecordingQuota:
         if self.quota == 0:
             return 0.0
         return (self.occupied / self.quota) * 100
+
+
+class LGHorizonEpgEvent:
+    """A single EPG event (program) from the EPG service."""
+
+    def __init__(self, event_json: dict, channel_id: str) -> None:
+        """Initialize an EPG event.
+
+        Args:
+            event_json: Raw event data from the EPG segments API.
+            channel_id: The channel this event belongs to.
+        """
+        self._event_json = event_json
+        self._channel_id = channel_id
+
+    @property
+    def event_id(self) -> str:
+        """Return the event ID (crid)."""
+        return self._event_json.get("id", "")
+
+    @property
+    def channel_id(self) -> str:
+        """Return the channel ID this event belongs to."""
+        return self._channel_id
+
+    @property
+    def title(self) -> str:
+        """Return the event title."""
+        return self._event_json.get("title", "")
+
+    @property
+    def start_time(self) -> Optional[int]:
+        """Return the start time as Unix timestamp in seconds."""
+        return self._event_json.get("startTime")
+
+    @property
+    def end_time(self) -> Optional[int]:
+        """Return the end time as Unix timestamp in seconds."""
+        return self._event_json.get("endTime")
+
+    @property
+    def minimum_age(self) -> int:
+        """Return the minimum age rating."""
+        return self._event_json.get("minimumAge", 0)
+
+    @property
+    def is_placeholder(self) -> bool:
+        """Return whether this is a placeholder event."""
+        return self._event_json.get("isPlaceHolder", False)
+
+    @property
+    def merged_id(self) -> Optional[str]:
+        """Return the merged ID."""
+        return self._event_json.get("mergedId")
+
+    @property
+    def audio_languages(self) -> List[str]:
+        """Return list of audio language codes."""
+        langs = self._event_json.get("audioLanguages", [])
+        return [item.get("lang", "") for item in langs if isinstance(item, dict)]
+
+
+class LGHorizonEpgEntry:
+    """EPG data for a single channel containing multiple events."""
+
+    def __init__(self, entry_json: dict) -> None:
+        """Initialize an EPG channel entry.
+
+        Args:
+            entry_json: Raw entry data from the EPG segments API.
+        """
+        self._entry_json = entry_json
+        channel_id = entry_json.get("channelId", "")
+        self._events = [
+            LGHorizonEpgEvent(ev, channel_id)
+            for ev in entry_json.get("events", [])
+        ]
+
+    @property
+    def channel_id(self) -> str:
+        """Return the channel ID."""
+        return self._entry_json.get("channelId", "")
+
+    @property
+    def events(self) -> List[LGHorizonEpgEvent]:
+        """Return the list of EPG events for this channel."""
+        return self._events
+
+
+class LGHorizonEpg:
+    """Full EPG response containing entries for multiple channels."""
+
+    def __init__(self, entries: List[LGHorizonEpgEntry]) -> None:
+        """Initialize the EPG.
+
+        Args:
+            entries: List of EPG channel entries (merged from all segments).
+        """
+        self._entries = entries
+
+    @property
+    def entries(self) -> List[LGHorizonEpgEntry]:
+        """Return all channel entries."""
+        return self._entries
+
+    def get_channel_events(self, channel_id: str) -> List[LGHorizonEpgEvent]:
+        """Return EPG events for a specific channel.
+
+        Args:
+            channel_id: The channel ID to filter by.
+
+        Returns:
+            List of EPG events for the channel, or empty list if not found.
+        """
+        for entry in self._entries:
+            if entry.channel_id == channel_id:
+                return entry.events
+        return []
+
+
+class LGHorizonEventDetail:
+    """Detailed program information from the replay event API."""
+
+    def __init__(self, detail_json: dict) -> None:
+        """Initialize an event detail.
+
+        Args:
+            detail_json: Raw data from the replayEvent API.
+        """
+        self._detail_json = detail_json
+
+    @property
+    def event_id(self) -> str:
+        """Return the event ID."""
+        return self._detail_json.get("eventId", "")
+
+    @property
+    def channel_id(self) -> str:
+        """Return the channel ID."""
+        return self._detail_json.get("channelId", "")
+
+    @property
+    def title(self) -> str:
+        """Return the program title."""
+        return self._detail_json.get("title", "")
+
+    @property
+    def episode_name(self) -> Optional[str]:
+        """Return the episode name."""
+        return self._detail_json.get("episodeName")
+
+    @property
+    def short_description(self) -> Optional[str]:
+        """Return the short description."""
+        return self._detail_json.get("shortDescription")
+
+    @property
+    def long_description(self) -> Optional[str]:
+        """Return the long description."""
+        return self._detail_json.get("longDescription")
+
+    @property
+    def description(self) -> Optional[str]:
+        """Return the best available description (long preferred over short)."""
+        return self.long_description or self.short_description
+
+    @property
+    def genres(self) -> List[str]:
+        """Return list of genre names."""
+        return self._detail_json.get("genres", [])
+
+    @property
+    def season_number(self) -> Optional[int]:
+        """Return the season number."""
+        return self._detail_json.get("seasonNumber")
+
+    @property
+    def episode_number(self) -> Optional[int]:
+        """Return the episode number."""
+        return self._detail_json.get("episodeNumber")
+
+    @property
+    def start_time(self) -> Optional[int]:
+        """Return the start time as Unix timestamp in seconds."""
+        return self._detail_json.get("startTime")
+
+    @property
+    def end_time(self) -> Optional[int]:
+        """Return the end time as Unix timestamp in seconds."""
+        return self._detail_json.get("endTime")
+
+    @property
+    def actors(self) -> List[str]:
+        """Return list of actor names."""
+        return self._detail_json.get("actors", [])
+
+    @property
+    def directors(self) -> List[str]:
+        """Return list of director names."""
+        return self._detail_json.get("directors", [])
+
+    @property
+    def producers(self) -> List[str]:
+        """Return list of producer names."""
+        return self._detail_json.get("producers", [])
+
+    @property
+    def country_of_origin(self) -> Optional[str]:
+        """Return the country of origin code."""
+        return self._detail_json.get("countryOfOrigin")
+
+    @property
+    def production_date(self) -> Optional[str]:
+        """Return the production date."""
+        return self._detail_json.get("productionDate")
+
+    @property
+    def minimum_age(self) -> Optional[str]:
+        """Return the minimum age rating."""
+        return self._detail_json.get("minimumAge")
+
+    @property
+    def image_version(self) -> Optional[str]:
+        """Return the image version identifier."""
+        return self._detail_json.get("imageVersion")
+
+    @property
+    def series_id(self) -> Optional[str]:
+        """Return the series ID."""
+        return self._detail_json.get("seriesId")
+
+    @property
+    def parent_series_id(self) -> Optional[str]:
+        """Return the parent series ID."""
+        return self._detail_json.get("parentSeriesId")
+
+    @property
+    def audio_languages(self) -> List[str]:
+        """Return list of audio language codes."""
+        langs = self._detail_json.get("audioLanguages", [])
+        return [item.get("lang", "") for item in langs if isinstance(item, dict)]
+
+    @property
+    def caption_languages(self) -> List[str]:
+        """Return list of caption/subtitle language codes."""
+        langs = self._detail_json.get("captionLanguages", [])
+        return [item.get("lang", "") for item in langs if isinstance(item, dict)]
+
+
+class LGHorizonReplayChannel:
+    """A channel that supports replay/catch-up TV."""
+
+    def __init__(self, channel_json: dict) -> None:
+        """Initialize a replay channel.
+
+        Args:
+            channel_json: Raw channel data from the replay catalog API.
+        """
+        self._channel_json = channel_json
+
+    @property
+    def id(self) -> str:
+        """Return the channel ID."""
+        return self._channel_json.get("id", "")
+
+    @property
+    def name(self) -> str:
+        """Return the channel name."""
+        return self._channel_json.get("name", "")
+
+    @property
+    def logo(self) -> str:
+        """Return the channel logo URL."""
+        return self._channel_json.get("logo", "")
+
+
+class LGHorizonManagedRecording:
+    """A recording from the recording management service with extended details."""
+
+    def __init__(self, recording_json: dict) -> None:
+        """Initialize a managed recording.
+
+        Args:
+            recording_json: Raw recording data from the recording management API.
+        """
+        self._recording_json = recording_json
+
+    @property
+    def id(self) -> str:
+        """Return the recording ID."""
+        return self._recording_json.get("id", "")
+
+    @property
+    def title(self) -> str:
+        """Return the recording title."""
+        return self._recording_json.get("title", "")
+
+    @property
+    def show_name(self) -> Optional[str]:
+        """Return the show name."""
+        return self._recording_json.get("showName")
+
+    @property
+    def season_name(self) -> Optional[str]:
+        """Return the season name."""
+        return self._recording_json.get("seasonName")
+
+    @property
+    def item_type(self) -> str:
+        """Return the item type (e.g. 'single')."""
+        return self._recording_json.get("itemType", "")
+
+    @property
+    def recording_state(self) -> str:
+        """Return the recording state (recorded, planned, partiallyRecorded)."""
+        return self._recording_json.get("recordingState", "")
+
+    @property
+    def recording_type(self) -> str:
+        """Return the recording type (e.g. 'nDVR')."""
+        return self._recording_json.get("recordingType", "")
+
+    @property
+    def channel_id(self) -> Optional[str]:
+        """Return the channel ID."""
+        return self._recording_json.get("channelId")
+
+    @property
+    def season_number(self) -> Optional[int]:
+        """Return the season number."""
+        return self._recording_json.get("seasonNumber")
+
+    @property
+    def episode_number(self) -> Optional[int]:
+        """Return the episode number."""
+        return self._recording_json.get("episodeNumber")
+
+    @property
+    def season_id(self) -> Optional[str]:
+        """Return the season ID."""
+        return self._recording_json.get("seasonId")
+
+    @property
+    def show_id(self) -> Optional[str]:
+        """Return the show ID."""
+        return self._recording_json.get("showId")
+
+    @property
+    def source(self) -> Optional[str]:
+        """Return the recording source (e.g. 'show')."""
+        return self._recording_json.get("source")
+
+    @property
+    def disk_space(self) -> float:
+        """Return the disk space used in hours."""
+        return self._recording_json.get("diskSpace", 0.0)
+
+    @property
+    def duration(self) -> Optional[int]:
+        """Return the recording duration in seconds."""
+        return self._recording_json.get("recDuration")
+
+    @property
+    def start_time(self) -> Optional[str]:
+        """Return the display start time (ISO 8601)."""
+        return self._recording_json.get("displayStartTime") or self._recording_json.get("startTime")
+
+    @property
+    def end_time(self) -> Optional[str]:
+        """Return the display end time (ISO 8601)."""
+        return self._recording_json.get("displayEndTime") or self._recording_json.get("endTime")
+
+    @property
+    def rec_start_time(self) -> Optional[str]:
+        """Return the actual recording start time including padding (ISO 8601)."""
+        return self._recording_json.get("recStartTime")
+
+    @property
+    def rec_end_time(self) -> Optional[str]:
+        """Return the actual recording end time including padding (ISO 8601)."""
+        return self._recording_json.get("recEndTime")
+
+    @property
+    def delete_time(self) -> Optional[str]:
+        """Return when this recording will be auto-deleted (ISO 8601)."""
+        return self._recording_json.get("deleteTime")
+
+    @property
+    def booking_time(self) -> Optional[str]:
+        """Return when this recording was scheduled (ISO 8601)."""
+        return self._recording_json.get("bookingTime")
+
+    @property
+    def retention_period(self) -> Optional[int]:
+        """Return the retention period in days."""
+        return self._recording_json.get("retentionPeriod")
+
+    @property
+    def pre_padding_offset(self) -> Optional[int]:
+        """Return the pre-recording padding in seconds."""
+        return self._recording_json.get("prePaddingOffset")
+
+    @property
+    def post_padding_offset(self) -> Optional[int]:
+        """Return the post-recording padding in seconds."""
+        return self._recording_json.get("postPaddingOffset")
+
+    @property
+    def is_premiere(self) -> bool:
+        """Return whether this is a premiere."""
+        return self._recording_json.get("isPremiere", False)
+
+    @property
+    def is_adult(self) -> bool:
+        """Return whether this is adult content."""
+        return self._recording_json.get("isAdult", False)
+
+    @property
+    def minimum_age(self) -> Optional[str]:
+        """Return the minimum age rating."""
+        return self._recording_json.get("minimumAge")
+
+    @property
+    def auto_deletion_protected(self) -> bool:
+        """Return whether auto-deletion is prevented."""
+        return self._recording_json.get("autoDeletionProtected", False)
+
+
+class LGHorizonManagedRecordingList:
+    """List of managed recordings with pagination info."""
+
+    def __init__(self, response_json: dict) -> None:
+        """Initialize the managed recording list.
+
+        Args:
+            response_json: Raw response from the recording management API.
+        """
+        self._total = response_json.get("total", 0)
+        self._limit = response_json.get("limit", 0)
+        self._offset = response_json.get("offset", 0)
+        self._recordings = [
+            LGHorizonManagedRecording(item)
+            for item in response_json.get("data", [])
+        ]
+
+    @property
+    def total(self) -> int:
+        """Return the total number of recordings available."""
+        return self._total
+
+    @property
+    def limit(self) -> int:
+        """Return the page size limit used."""
+        return self._limit
+
+    @property
+    def offset(self) -> int:
+        """Return the offset used."""
+        return self._offset
+
+    @property
+    def recordings(self) -> List[LGHorizonManagedRecording]:
+        """Return the list of managed recordings."""
+        return self._recordings
+
+    @property
+    def total_disk_space(self) -> float:
+        """Return total disk space used in hours."""
+        return sum(r.disk_space for r in self._recordings)

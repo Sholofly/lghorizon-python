@@ -1,151 +1,265 @@
 # LG Horizon API Python Library
 
-A Python library to interact with and control LG Horizon set-top boxes. This library provides functionalities for authentication, real-time device status monitoring via MQTT, and various control commands for your Horizon devices.
+A Python library to interact with and control LG Horizon set-top boxes (Ziggo, Telenet, Virgin Media, UPC, BASE TV). Provides authentication, real-time device monitoring via MQTT, and remote control capabilities.
+
+## Supported Providers
+
+| Code | Provider | Country |
+|------|----------|---------|
+| `nl` | Ziggo | Netherlands |
+| `be-nl` | Telenet | Belgium |
+| `be-basetv` | BASE TV | Belgium |
+| `ch` | UPC Switzerland | Switzerland |
+| `gb` | Virgin Media | United Kingdom |
+| `ie` | Virgin Media | Ireland |
+| `pl` | UPC | Poland |
 
 ## Features
 
-- **Authentication**: Supports authentication using username/password or a refresh token. The library automatically handles access token refreshing.
-- **Device Management**: Discover and manage multiple LG Horizon set-top boxes associated with your account.
-- **Real-time Status**: Monitor device status (online/running/standby) and current playback information (channel, show, VOD, recording, app) through MQTT.
-- **Channel Information**: Retrieve a list of available channels and profile-specific favorite channels.
-- **Recording Management**:
-  - Get a list of all recordings.
-  - Retrieve recordings for specific shows.
-  - Check recording quota and usage.
-- **Device Control**: Send various commands to your set-top box:
-  - Power on/off.
-  - Play, pause, stop, rewind, fast forward.
-  - Change channels (up/down, direct channel selection).
-  - Record current program.
-  - Set player position for VOD/recordings.
-  - Display custom messages on the TV screen.
-  - Send emulated remote control key presses.
-- **Robustness**: Includes automatic MQTT reconnection with exponential backoff and token refresh logic to maintain a stable connection.
+### Authentication
+- Username/password and refresh token authentication
+- Automatic access token refreshing
+- Token refresh callback for persisting new tokens
+- Support for provider-specific auth flows
+
+### Device Management
+- Discover all set-top boxes on your account
+- Device info: manufacturer, model, platform type
+- Real-time availability monitoring (online/standby/offline)
+
+### Real-time Status via MQTT
+- Live device state changes via callback
+- Playback info: channel, show title, episode, season/episode numbers
+- Source types: linear TV, replay, VOD, nDVR, localDVR, review buffer, apps
+- Media types: channel, movie, episode, app
+- Playback position, duration, speed, paused state
+- Channel and program images
+- Automatic MQTT reconnection with exponential backoff
+
+### Channel Information
+- Full channel list with logos and stream images
+- Channel number, radio flag, linear products
+- Replay pre/post padding info
+- Profile-specific favorite channels
+
+### Recording Management
+- List all recordings (single, season, show)
+- Recording states: recorded, ongoing
+- Episode details for season/show recordings
+- Recording quota and usage percentage
+- Play recordings on a set-top box
+
+### Device Control
+- Power on/off
+- Play, pause, stop
+- Rewind, fast forward
+- Channel up/down and direct channel selection
+- Record current program
+- Set player position (seek)
+- Send any remote control key press
+- Display custom messages on the TV screen
 
 ## Installation
 
 ```bash
-pip install lghorizon-python # (Replace with actual package name if different)
+pip install lghorizon
 ```
 
-## Usage
+**Requirements**: Python 3.10+, aiohttp, paho-mqtt, backoff
 
-Here's a basic example of how to use the library to connect to your LG Horizon devices and monitor their state:
+## Quick Start
 
-First, create a `secrets.json` file in the root of your project with your LG Horizon credentials:
+Create a `secrets.json` file:
 
 ```json
 {
   "username": "your_username",
   "password": "your_password",
-  "country": "nl" // e.g., "nl" for Netherlands, "be" for Belgium
+  "country": "nl",
+  "timezone": "Europe/Amsterdam"
 }
 ```
 
-Then, you can use the library as follows:
+> For providers with refresh token auth (Telenet, UPC CH, Virgin Media GB), use `"refresh_token"` instead of username/password.
+
+### Basic usage
 
 ```python
 import asyncio
-import json
-import logging
 import aiohttp
-
-from lghorizon.lghorizon_api import LGHorizonApi
-from lghorizon.lghorizon_models import LGHorizonAuth
-
-_LOGGER = logging.getLogger(__name__)
+from lghorizon import LGHorizonApi, LGHorizonAuth
 
 async def main():
-    logging.basicConfig(level=logging.INFO) # Set to DEBUG for more verbose output
-
-    with open("secrets.json", encoding="utf-8") as f:
-        secrets = json.load(f)
-        username = secrets.get("username")
-        password = secrets.get("password")
-        country = secrets.get("country", "nl")
-
     async with aiohttp.ClientSession() as session:
-        auth = LGHorizonAuth(session, country, username=username, password=password)
-        api = LGHorizonApi(auth)
-
-        async def device_state_changed_callback(device_id: str):
-            device = devices[device_id]
-            _LOGGER.info(
-                f"Device {device.device_friendly_name} ({device.device_id}) state changed:\n"
-                f"  State: {device.device_state.state.value}\n"
-                f"  UI State: {device.device_state.ui_state_type.value}\n"
-                f"  Source Type: {device.device_state.source_type.value}\n"
-                f"  Channel: {device.device_state.channel_name or 'N/A'} ({device.device_state.channel_id or 'N/A'})\n"
-                f"  Show: {device.device_state.show_title or 'N/A'}\n"
-                f"  Episode: {device.device_state.episode_title or 'N/A'}\n"
-                f"  Position: {device.device_state.position or 'N/A'} / {device.device_state.duration or 'N/A'}\n"
-            )
+        auth = LGHorizonAuth(session, "nl", username="user", password="pass")
+        api = LGHorizonApi(auth, profile_id=None)
 
         try:
-            _LOGGER.info("Initializing LG Horizon API...")
             await api.initialize()
             devices = await api.get_devices()
 
+            # Print all devices
             for device in devices.values():
-                _LOGGER.info(f"Registering callback for device: {device.device_friendly_name}")
-                await device.set_callback(device_state_changed_callback)
+                print(f"{device.device_friendly_name} ({device.manufacturer} {device.model})")
+                print(f"  State: {device.device_state.state.value}")
+                print(f"  Available: {device.is_available}")
 
-            _LOGGER.info("API initialized. Monitoring device states. Press Ctrl+C to exit.")
-            # Keep the script running to receive MQTT updates
-            while True:
-                await asyncio.sleep(3600) # Sleep for a long time, MQTT callbacks will still fire
+            # Get channels
+            channels = await api.get_profile_channels()
+            for ch in channels.values():
+                print(f"  {ch.channel_number} - {ch.title}")
 
-        except Exception as e:
-            _LOGGER.error(f"An error occurred: {e}", exc_info=True)
+            # Monitor state changes
+            async def on_state_change(device_id: str):
+                device = devices[device_id]
+                s = device.device_state
+                print(f"{device.device_friendly_name}: {s.channel_name} - {s.show_title}")
+                print(f"  Source: {s.source_type.value}, Position: {s.position}/{s.duration}")
+
+            for device in devices.values():
+                await device.set_callback(on_state_change)
+
+            # Keep running to receive MQTT updates
+            await asyncio.Event().wait()
+
         finally:
-            _LOGGER.info("Disconnecting from LG Horizon API.")
             await api.disconnect()
-            _LOGGER.info("Disconnected.")
 
-if __name__ == "__main__":
-    asyncio.run(main())
+asyncio.run(main())
 ```
 
-## Authentication
-
-The `LGHorizonAuth` class handles authentication. You can initialize it with a username and password, or directly with a refresh token if you have one. The library automatically refreshes access tokens as needed.
+### Device control
 
 ```python
-# Using username and password
-auth = LGHorizonAuth(session, "nl", username="your_username", password="your_password")
+device = devices["device-id"]
 
-# Using a refresh token (e.g., if you've saved it from a previous session)
-# auth = LGHorizonAuth(session, "nl", refresh_token="your_refresh_token")
+# Power
+await device.turn_on()
+await device.turn_off()
+
+# Playback
+await device.play()
+await device.pause()
+await device.stop()
+await device.rewind()
+await device.fast_forward()
+
+# Channels
+await device.next_channel()
+await device.previous_channel()
+await device.set_channel("NPO 1")
+
+# Recording
+await device.record()
+await device.play_recording("recording-id")
+
+# Position (milliseconds)
+await device.set_player_position(60000)
+
+# Display message on screen
+await device.display_message("linear", "Hello from Python!")
 ```
 
-You can also set a callback to receive the updated refresh token when it's refreshed, allowing you to persist it for future sessions:
+### Recordings & quota
 
 ```python
-def token_updated_callback(new_refresh_token: str):
-    print(f"New refresh token received: {new_refresh_token}")
-    # Here you would typically save this new_refresh_token
-    # to your secrets.json or other persistent storage.
+if api.has_cloud_recording:
+    # Quota
+    quota = await api.get_recording_quota()
+    print(f"Used: {quota.occupied}/{quota.quota} MB ({quota.percentage_used:.1f}%)")
 
-# After initializing LGHorizonApi:
-# api.set_token_refresh_callback(token_updated_callback)
+    # All recordings
+    recordings = await api.get_all_recordings()
+    for rec in recordings.recordings:
+        print(f"[{rec.type.value}] {rec.title} ({rec.recording_state.value})")
+
+    # Episodes of a show recording
+    episodes = await api.get_show_recording_episodes("show-recording-id")
+    for ep in episodes.recordings:
+        print(f"  S{ep.season_number}E{ep.episode_number}: {ep.episode_title}")
 ```
+
+### Token refresh callback
+
+```python
+async def on_token_refresh(new_token: str):
+    # Persist the new refresh token for next session
+    save_to_storage(new_token)
+
+await api.set_token_refresh_callback(on_token_refresh)
+```
+
+## Device State Properties
+
+When monitoring a device, `device.device_state` exposes:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `state` | `LGHorizonRunningState` | ONLINE_RUNNING, ONLINE_STANDBY, OFFLINE, etc. |
+| `ui_state_type` | `LGHorizonUIStateType` | MAINUI, APPS, UNKNOWN |
+| `source_type` | `LGHorizonSourceType` | LINEAR, VOD, NDVR, LOCALDVR, REPLAY, REVIEWBUFFER |
+| `media_type` | `LGHorizonMediaType` | CHANNEL, MOVIE, EPISODE, APP |
+| `channel_id` | `str \| None` | Current channel ID |
+| `channel_name` | `str \| None` | Current channel name |
+| `show_title` | `str \| None` | Current show/movie/app title |
+| `episode_title` | `str \| None` | Current episode title |
+| `season_number` | `int \| None` | Season number |
+| `episode_number` | `int \| None` | Episode number |
+| `position` | `int \| None` | Playback position in seconds |
+| `duration` | `int \| None` | Content duration in seconds |
+| `start_time` | `int \| None` | Program start (Unix timestamp) |
+| `end_time` | `int \| None` | Program end (Unix timestamp) |
+| `speed` | `int \| None` | Playback speed (0 = paused, 1 = normal) |
+| `paused` | `bool` | Whether playback is paused |
+| `image` | `str \| None` | Content/channel image URL |
+| `app_name` | `str \| None` | Active app name (when source is APPS) |
 
 ## Error Handling
 
-The library defines custom exceptions for common error scenarios:
+```python
+from lghorizon import (
+    LGHorizonApiError,              # Base exception
+    LGHorizonApiConnectionError,    # Network/connection issues
+    LGHorizonApiUnauthorizedError,  # Invalid credentials
+    LGHorizonApiLockedError,        # Account locked
+)
 
-- `LGHorizonApiError`: Base exception for all API-related errors.
-- `LGHorizonApiConnectionError`: Raised for network or connection issues.
-- `LGHorizonApiUnauthorizedError`: Raised when authentication fails (e.g., invalid credentials).
-- `LGHorizonApiLockedError`: A specific type of `LGHorizonApiUnauthorizedError` indicating a locked account.
-
-These exceptions allow for more granular error handling in your application.
+try:
+    await api.initialize()
+except LGHorizonApiLockedError:
+    print("Account is locked, try again later")
+except LGHorizonApiUnauthorizedError:
+    print("Invalid credentials")
+except LGHorizonApiConnectionError:
+    print("Could not connect to the API")
+except LGHorizonApiError as e:
+    print(f"API error: {e}")
+```
 
 ## Development
 
-To run the example script (`main.py`) from the repository:
+### Setup
 
-1.  Clone this repository.
-2.  Install dependencies: `pip install -r requirements.txt` (ensure `requirements.txt` is up-to-date).
-3.  Create a `secrets.json` file as described in the Usage section.
-4.  Run `python main.py`.
+```bash
+git clone https://github.com/Sholofly/lghorizon-python.git
+cd lghorizon-python
+pip install -e .
+pip install pytest pytest-asyncio
+```
+
+### Running tests
+
+```bash
+python -m pytest tests/ -v
+```
+
+### Running the demo script
+
+1. Create a `secrets.json` (see Quick Start)
+2. Run `python main.py`
+
+The demo script prints all profiles, devices, channels, recordings, and then monitors live state changes with a visual progress bar.
+
+## License
+
+MIT License

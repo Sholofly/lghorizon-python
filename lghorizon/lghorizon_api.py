@@ -2,6 +2,7 @@
 
 import logging
 from typing import Any, Dict, cast, Callable, Optional
+from datetime import date as date_type
 
 from .lghorizon_device import LGHorizonDevice
 from .lghorizon_models import LGHorizonChannel
@@ -19,6 +20,11 @@ from .lghorizon_models import (
     LGHorizonRecordingList,
     LGHorizonRecordingQuota,
     LGHorizonShowRecordingList,
+    LGHorizonEpg,
+    LGHorizonEpgEntry,
+    LGHorizonEventDetail,
+    LGHorizonReplayChannel,
+    LGHorizonManagedRecordingList,
 )
 from .lghorizon_recording_factory import LGHorizonRecordingFactory
 from .lghorizon_device_state_processor import LGHorizonDeviceStateProcessor
@@ -37,11 +43,7 @@ class LGHorizonApi:
     _channels: Dict[str, LGHorizonChannel]
     _entitlements: LGHorizonEntitlements
     _profile_id: Optional[str]
-    _initialized: bool = False
-    _devices: Dict[str, LGHorizonDevice] = {}
-    _message_factory: LGHorizonMessageFactory = LGHorizonMessageFactory()
     _device_state_processor: LGHorizonDeviceStateProcessor | None
-    _recording_factory: LGHorizonRecordingFactory = LGHorizonRecordingFactory()
 
     def __init__(self, auth: LGHorizonAuth, profile_id: Optional[str]) -> None:
         """Initialize LG Horizon API client.
@@ -53,6 +55,9 @@ class LGHorizonApi:
         self.auth = auth
         self._profile_id = profile_id
         self._channels = {}
+        self._devices: Dict[str, LGHorizonDevice] = {}
+        self._message_factory = LGHorizonMessageFactory()
+        self._recording_factory = LGHorizonRecordingFactory()
         self._device_state_processor = None
         self._mqtt_client = None
         self._initialized = False
@@ -74,7 +79,7 @@ class LGHorizonApi:
         self._initialized = True
 
     async def set_token_refresh_callback(
-        self, token_refresh_callback: Callable[str, None]
+        self, token_refresh_callback: Callable[[str], None]
     ) -> None:
         """Set the token refresh callback."""
         self.auth.token_refresh_callback = token_refresh_callback
@@ -208,14 +213,12 @@ class LGHorizonApi:
         message = await self._message_factory.create_message(mqtt_topic, mqtt_message)
         match message.message_type:
             case LGHorizonMessageType.STATUS:
-                message.__class__ = LGHorizonStatusMessage
                 status_message = cast(LGHorizonStatusMessage, message)
                 device = self._devices.get(status_message.source, None)
                 if not device:
                     return
                 await device.handle_status_message(status_message)
             case LGHorizonMessageType.UI_STATUS:
-                message.__class__ = LGHorizonUIStatusMessage
                 ui_status_message = cast(LGHorizonUIStatusMessage, message)
                 device = self._devices.get(ui_status_message.source, None)
                 if not device:
@@ -228,7 +231,7 @@ class LGHorizonApi:
                 await device.handle_ui_status_message(ui_status_message)
 
     async def _get_customer_info(self) -> LGHorizonCustomer:
-        service_url = await self._service_config.get_service_url(
+        service_url = self._service_config.get_service_url(
             "personalizationService"
         )
         result = await self.auth.request(
@@ -240,7 +243,7 @@ class LGHorizonApi:
     async def _refresh_entitlements(self) -> Any:
         """Retrieve entitlements."""
         _LOGGER.debug("Retrieving entitlements...")
-        service_url = await self._service_config.get_service_url("purchaseService")
+        service_url = self._service_config.get_service_url("purchaseService")
         result = await self.auth.request(
             service_url,
             f"/v2/customers/{self.auth.household_id}/entitlements?enableDaypass=true",
@@ -250,8 +253,8 @@ class LGHorizonApi:
     async def _refresh_channels(self):
         """Retrieve channels."""
         _LOGGER.debug("Retrieving channels...")
-        service_url = await self._service_config.get_service_url("linearService")
-        lang = await self._customer.get_profile_lang(self._profile_id)
+        service_url = self._service_config.get_service_url("linearService")
+        lang = self._customer.get_profile_lang(self._profile_id)
         channels_json = await self.auth.request(
             service_url,
             f"/v2/channels?cityId={self._customer.city_id}&language={lang}&productClass=Orion-DASH",
@@ -272,8 +275,8 @@ class LGHorizonApi:
         if not self._customer.has_cloud_recording:
             return LGHorizonRecordingList([])
         _LOGGER.debug("Retrieving recordings...")
-        service_url = await self._service_config.get_service_url("recordingService")
-        lang = await self._customer.get_profile_lang(self._profile_id)
+        service_url = self._service_config.get_service_url("recordingService")
+        lang = self._customer.get_profile_lang(self._profile_id)
         recordings_json = await self.auth.request(
             service_url,
             f"/customers/{self.auth.household_id}/recordings?isAdult=false&offset=0&limit=100&sort=time&sortOrder=desc&profileId={self._profile_id}&language={lang}",
@@ -288,8 +291,8 @@ class LGHorizonApi:
         if not self._customer.has_cloud_recording:
             return LGHorizonShowRecordingList(None, None, [])
         _LOGGER.debug("Retrieving recordings fro show...")
-        service_url = await self._service_config.get_service_url("recordingService")
-        lang = await self._customer.get_profile_lang(self._profile_id)
+        service_url = self._service_config.get_service_url("recordingService")
+        lang = self._customer.get_profile_lang(self._profile_id)
         episodes_json = await self.auth.request(
             service_url,
             f"/customers/{self.auth.household_id}/episodes/shows/{show_id}?source=recording&isAdult=false&offset=0&limit=100&profileId={self._profile_id}&language={lang}&channelId={channel_id}&sort=time&sortOrder=asc",
@@ -302,12 +305,106 @@ class LGHorizonApi:
         _LOGGER.debug("Refreshing recording quota...")
         if not self._customer.has_cloud_recording:
             return LGHorizonRecordingQuota({})
-        service_url = await self._service_config.get_service_url("recordingService")
+        service_url = self._service_config.get_service_url("recordingService")
         quota_json = await self.auth.request(
             service_url,
             f"/customers/{self.auth.household_id}/quota",
         )
         return LGHorizonRecordingQuota(quota_json)
+
+    async def get_epg(self, epg_date: date_type | None = None, language: str = "en") -> LGHorizonEpg:
+        """Retrieve the EPG (Electronic Program Guide) for a given date.
+
+        Fetches all 4 six-hour segments (00, 06, 12, 18) and merges the entries.
+
+        Args:
+            epg_date: The date to fetch EPG for. Defaults to today.
+            language: Language code for the EPG data (default: 'en').
+
+        Returns:
+            An LGHorizonEpg containing all channel entries with their events.
+        """
+        if epg_date is None:
+            from datetime import date as _date
+            epg_date = _date.today()
+
+        base_country_code = self.auth.country_code[0:2]
+        epg_base = self._service_config.get_service_url("epgPackager-lite")
+        date_str = epg_date.strftime("%Y%m%d")
+
+        # Merge entries from all 4 segments (00, 06, 12, 18)
+        all_entries: dict[str, list] = {}  # channel_id -> events
+        for segment in ("00", "06", "12", "18"):
+            path = f"/{base_country_code}/{language}/events/segments/{date_str}{segment}0000"
+            try:
+                result = await self.auth.request(epg_base, path)
+                for entry in result.get("entries", []):
+                    ch_id = entry.get("channelId", "")
+                    if ch_id not in all_entries:
+                        all_entries[ch_id] = []
+                    all_entries[ch_id].extend(entry.get("events", []))
+            except Exception:
+                _LOGGER.debug("EPG segment %s%s0000 not available", date_str, segment)
+
+        # Build merged EpgEntry objects
+        entries = [
+            LGHorizonEpgEntry({"channelId": ch_id, "events": events})
+            for ch_id, events in all_entries.items()
+        ]
+        return LGHorizonEpg(entries)
+
+    async def get_event_detail(self, event_id: str, language: str = "nl") -> LGHorizonEventDetail:
+        """Retrieve detailed program information for a specific event.
+
+        Args:
+            event_id: The event ID (crid) to look up.
+            language: Language code for the response (default: 'nl').
+
+        Returns:
+            An LGHorizonEventDetail with full program information.
+        """
+        linear_url = self._service_config.get_service_url("linearService")
+        result = await self.auth.request(
+            linear_url,
+            f"/v2/replayEvent/{event_id}?returnLinearContent=true&forceLinearResponse=true&language={language}",
+        )
+        return LGHorizonEventDetail(result)
+
+    async def get_replay_channels(self, language: str = "nl") -> list[LGHorizonReplayChannel]:
+        """Retrieve channels that support replay/catch-up TV.
+
+        Args:
+            language: Language code for channel names (default: 'nl').
+
+        Returns:
+            A list of LGHorizonReplayChannel objects.
+        """
+        replay_url = self._service_config.get_service_url("replayCatalogService")
+        result = await self.auth.request(replay_url, f"/channels?language={language}")
+        return [
+            LGHorizonReplayChannel(ch)
+            for ch in result.get("replayChannels", [])
+        ]
+
+    async def get_managed_recordings(self, limit: int = 500, offset: int = 0) -> LGHorizonManagedRecordingList:
+        """Retrieve recordings from the recording management service.
+
+        This provides more detailed recording information than get_all_recordings(),
+        including disk space usage, delete times, booking times, and retention periods.
+
+        Args:
+            limit: Maximum number of recordings to return (default: 500).
+            offset: Offset for pagination (default: 0).
+
+        Returns:
+            An LGHorizonManagedRecordingList with detailed recording information.
+        """
+        rec_url = self._service_config.get_service_url("recordingManagementService")
+        result = await self.auth.request(
+            rec_url,
+            f"/customers/{self.auth.household_id}/recordings?limit={limit}&offset={offset}",
+        )
+        return LGHorizonManagedRecordingList(result)
 
 
 __all__ = ["LGHorizonApi", "LGHorizonAuth"]

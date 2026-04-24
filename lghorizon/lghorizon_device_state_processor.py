@@ -53,7 +53,7 @@ class LGHorizonDeviceStateProcessor:
         self, device_state: LGHorizonDeviceState, status_message: LGHorizonStatusMessage
     ) -> None:
         """Process the device state based on the status message."""
-        await device_state.reset()
+        device_state.reset()
         device_state.state = status_message.running_state
 
     async def process_ui_state(
@@ -62,12 +62,12 @@ class LGHorizonDeviceStateProcessor:
         ui_status_message: LGHorizonUIStatusMessage,
     ) -> None:
         """Process the device state based on the UI status message."""
-        await device_state.reset()
+        device_state.reset()
         if (
             ui_status_message.ui_state is None
             or device_state.state == LGHorizonRunningState.ONLINE_STANDBY
         ):
-            await device_state.reset()
+            device_state.reset()
             return
 
         if ui_status_message.ui_state is None:
@@ -99,7 +99,7 @@ class LGHorizonDeviceStateProcessor:
     ) -> None:
         if player_state is None:
             return
-        await device_state.reset()
+        device_state.reset()
         device_state.source_type = player_state.source_type
         device_state.ui_state_type = LGHorizonUIStateType.MAINUI
         device_state.speed = player_state.speed
@@ -135,11 +135,10 @@ class LGHorizonDeviceStateProcessor:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
             return
-        player_state.source.__class__ = LGHorizonLinearSource
         source = cast(LGHorizonLinearSource, player_state.source)
         service_config = await self._auth.get_service_config()
-        service_url = await service_config.get_service_url("linearService")
-        lang = await self._customer.get_profile_lang(self._profile_id)
+        service_url = service_config.get_service_url("linearService")
+        lang = self._customer.get_profile_lang(self._profile_id)
         service_path = f"/v2/replayEvent/{source.event_id}?returnLinearContent=true&language={lang}"
 
         event_json = await self._auth.request(
@@ -181,11 +180,10 @@ class LGHorizonDeviceStateProcessor:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
             return
-        player_state.source.__class__ = LGHorizonReviewBufferSource
         source = cast(LGHorizonReviewBufferSource, player_state.source)
         service_config = await self._auth.get_service_config()
-        service_url = await service_config.get_service_url("linearService")
-        lang = await self._customer.get_profile_lang(self._profile_id)
+        service_url = service_config.get_service_url("linearService")
+        lang = self._customer.get_profile_lang(self._profile_id)
         service_path = f"/v2/replayEvent/{source.event_id}?returnLinearContent=true&language={lang}"
 
         event_json = await self._auth.request(
@@ -229,11 +227,10 @@ class LGHorizonDeviceStateProcessor:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
             return
-        player_state.source.__class__ = LGHorizonReplaySource
         source = cast(LGHorizonReplaySource, player_state.source)
         service_config = await self._auth.get_service_config()
-        service_url = await service_config.get_service_url("linearService")
-        lang = await self._customer.get_profile_lang(self._profile_id)
+        service_url = service_config.get_service_url("linearService")
+        lang = self._customer.get_profile_lang(self._profile_id)
         service_path = f"/v2/replayEvent/{source.event_id}?returnLinearContent=true&language={lang}"
 
         event_json = await self._auth.request(
@@ -270,11 +267,10 @@ class LGHorizonDeviceStateProcessor:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
             return
-        player_state.source.__class__ = LGHorizonVODSource
         source = cast(LGHorizonVODSource, player_state.source)
         service_config = await self._auth.get_service_config()
-        service_url = await service_config.get_service_url("vodService")
-        lang = await self._customer.get_profile_lang(self._profile_id)
+        service_url = service_config.get_service_url("vodService")
+        lang = self._customer.get_profile_lang(self._profile_id)
         service_path = f"/v2/detailscreen/{source.title_id}?language={lang}&profileId={self._profile_id}&cityId={self._customer.city_id}"
 
         vod_json = await self._auth.request(
@@ -305,11 +301,10 @@ class LGHorizonDeviceStateProcessor:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
             return
-        player_state.source.__class__ = LGHorizonNDVRSource
         source = cast(LGHorizonNDVRSource, player_state.source)
         service_config = await self._auth.get_service_config()
-        service_url = await service_config.get_service_url("recordingService")
-        lang = await self._customer.get_profile_lang(self._profile_id)
+        service_url = service_config.get_service_url("recordingService")
+        lang = self._customer.get_profile_lang(self._profile_id)
         service_path = f"/customers/{self._customer.customer_id}/details/single/{source.recording_id}?profileId={self._profile_id}&language={lang}"
         recording_json = await self._auth.request(
             service_url,
@@ -353,7 +348,7 @@ class LGHorizonDeviceStateProcessor:
     async def _get_intent_image_url(self, intent_id: str) -> Optional[str]:
         """Get intent image url."""
         service_config = await self._auth.get_service_config()
-        intents_url = await service_config.get_service_url("imageService")
+        intents_url = service_config.get_service_url("imageService")
         intents_path = "/intent"
         body_json = [
             {
