@@ -186,7 +186,15 @@ async def main():
             if api.has_cloud_recording:
                 quota = await api.get_recording_quota()
                 print_header("RECORDING QUOTA")
-                print(f"  Used:       {quota.occupied} MB / {quota.quota} MB ({quota.percentage_used:.1f}%)")
+                used_gb = quota.occupied / 1024
+                total_gb = quota.quota / 1024
+                free_gb = total_gb - used_gb
+                pct = quota.percentage_used
+                bar_len = 30
+                filled = int(bar_len * pct / 100)
+                bar = "█" * filled + "░" * (bar_len - filled)
+                print(f"  [{bar}] {pct:.1f}%")
+                print(f"  Used: {used_gb:.1f} GB / {total_gb:.1f} GB  —  Free: {free_gb:.1f} GB")
 
                 recordings = await api.get_all_recordings()
                 print_header(f"RECORDINGS ({recordings.total} total)")
