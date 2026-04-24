@@ -328,9 +328,9 @@ class TestProcessLinearState:
 
         await processor.process_ui_state(device_state, self._linear_ui_msg())
 
-        assert device_state.start_time == 1700000000.0
-        assert device_state.end_time == 1700003600.0
-        assert device_state.duration == 3600.0
+        assert device_state.start_time == 1700000000
+        assert device_state.end_time == 1700003600
+        assert device_state.duration == 3600
 
 
 # ---------------------------------------------------------------------------

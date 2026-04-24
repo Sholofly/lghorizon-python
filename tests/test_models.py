@@ -1064,11 +1064,11 @@ class TestLGHorizonReplayEvent:
 
     def test_start_time(self, sample_replay_event_json):
         ev = LGHorizonReplayEvent(sample_replay_event_json)
-        assert ev.start_time == 1700000000.0
+        assert ev.start_time == 1700000000
 
     def test_end_time(self, sample_replay_event_json):
         ev = LGHorizonReplayEvent(sample_replay_event_json)
-        assert ev.end_time == 1700003600.0
+        assert ev.end_time == 1700003600
 
     def test_full_episode_title_with_name(self, sample_replay_event_json):
         ev = LGHorizonReplayEvent(sample_replay_event_json)
@@ -1248,11 +1248,11 @@ class TestLGHorizonEpgEvent:
 
     def test_start_time(self):
         ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
-        assert ev.start_time == 1.0
+        assert ev.start_time == 1000
 
     def test_end_time(self):
         ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
-        assert ev.end_time == 2.0
+        assert ev.end_time == 2000
 
     def test_minimum_age(self):
         ev = LGHorizonEpgEvent(_EPG_EVENT_JSON, "NL_001")
@@ -1435,11 +1435,11 @@ class TestLGHorizonEventDetail:
 
     def test_start_time(self):
         d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
-        assert d.start_time == 1.0
+        assert d.start_time == 1000
 
     def test_end_time(self):
         d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
-        assert d.end_time == 2.0
+        assert d.end_time == 2000
 
     def test_actors(self):
         d = LGHorizonEventDetail(_EVENT_DETAIL_JSON)
