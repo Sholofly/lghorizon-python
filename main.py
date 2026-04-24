@@ -6,13 +6,17 @@ import logging
 import sys
 import aiohttp
 
-from datetime import datetime
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from lghorizon.lghorizon_api import LGHorizonApi
 from lghorizon.lghorizon_models import LGHorizonAuth, LGHorizonRecordingType
 
 # Define an asyncio Event to signal shutdown
 shutdown_event = asyncio.Event()
+
+# Default timezone, overridden by secrets.json "timezone" field
+LOCAL_TZ = ZoneInfo("Europe/Amsterdam")
 
 
 async def read_input_and_signal_shutdown():
@@ -50,10 +54,10 @@ def format_duration(total_seconds):
 
 
 def format_timestamp(timestamp):
-    """Convert a Unix timestamp to a readable datetime string."""
+    """Convert a Unix timestamp to a readable datetime string in local timezone."""
     if timestamp is None:
         return "—"
-    return datetime.fromtimestamp(timestamp).strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.fromtimestamp(timestamp, tz=LOCAL_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
 
 def val(value, default="—"):
@@ -84,6 +88,11 @@ async def main():
         password = secrets.get("password")
         refresh_token = secrets.get("refresh_token")
         country = secrets.get("country", "nl")
+
+    global LOCAL_TZ
+    tz_name = secrets.get("timezone", "Europe/Amsterdam")
+    LOCAL_TZ = ZoneInfo(tz_name)
+    print(f"Using timezone: {tz_name}")
 
     async with aiohttp.ClientSession() as session:
         auth = LGHorizonAuth(
