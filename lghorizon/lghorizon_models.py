@@ -684,9 +684,27 @@ class LGHorizonAuth:
             )
             return json_response
         except ClientResponseError as cre:
-            _LOGGER.error("Error response from %s: %s", request_url, str(cre))
             if cre.status == 401:
+                _LOGGER.debug("Got 401 from %s, refreshing token and retrying", request_url)
                 await self.fetch_access_token()
+                try:
+                    web_response = await self.websession.request(
+                        "GET", request_url, **kwargs, headers=headers, params=params
+                    )
+                    web_response.raise_for_status()
+                    json_response = await web_response.json()
+                    _LOGGER.debug(
+                        "Response from %s:\n %s",
+                        request_url,
+                        json.dumps(_redact_sensitive(json_response), indent=2),
+                    )
+                    return json_response
+                except ClientResponseError as retry_cre:
+                    _LOGGER.error("Retry failed for %s: %s", request_url, str(retry_cre))
+                    raise LGHorizonApiConnectionError(
+                        f"Unable to call {request_url}. Error:{str(retry_cre)}"
+                    ) from retry_cre
+            _LOGGER.error("Error response from %s: %s", request_url, str(cre))
             raise LGHorizonApiConnectionError(
                 f"Unable to call {request_url}. Error:{str(cre)}"
             ) from cre

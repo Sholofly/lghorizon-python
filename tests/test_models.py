@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+import asyncio
+from unittest.mock import AsyncMock, MagicMock, patch, call
 
 from lghorizon.lghorizon_models import (
     LGHorizonAppsState,
@@ -1772,3 +1774,166 @@ class TestLGHorizonManagedRecordingList:
         assert lst.offset == 0
         assert lst.recordings == []
         assert lst.total_disk_space == 0.0
+
+
+# ---------------------------------------------------------------------------
+# Helpers for TestAuthRequest
+# ---------------------------------------------------------------------------
+
+from aiohttp import ClientResponseError, RequestInfo
+from yarl import URL
+
+from lghorizon.lghorizon_models import LGHorizonAuth
+from lghorizon.exceptions import LGHorizonApiConnectionError
+
+
+def make_response_error(status: int) -> ClientResponseError:
+    request_info = RequestInfo(
+        url=URL("http://test"),
+        method="GET",
+        headers={},  # type: ignore[arg-type]
+        real_url=URL("http://test"),
+    )
+    return ClientResponseError(request_info, (), status=status, message="error")
+
+
+def make_auth() -> LGHorizonAuth:
+    """Return an LGHorizonAuth with a mocked websession."""
+    mock_session = MagicMock()
+    mock_session.request = AsyncMock()
+    auth = LGHorizonAuth(
+        websession=mock_session,
+        country_code="nl",
+        username="user",
+        password="pass",
+    )
+    # Prevent proactive token refresh from interfering
+    auth.is_token_expiring = MagicMock(return_value=False)
+    # Mock fetch_access_token so it doesn't hit the network
+    auth.fetch_access_token = AsyncMock()
+    return auth
+
+
+def make_ok_response(data=None):
+    resp = AsyncMock()
+    resp.raise_for_status = MagicMock()  # no-op — success
+    resp.json = AsyncMock(return_value=data or {"key": "value"})
+    return resp
+
+
+def make_error_response(status: int):
+    resp = AsyncMock()
+    resp.raise_for_status = MagicMock(side_effect=make_response_error(status))
+    resp.json = AsyncMock(return_value={})
+    return resp
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestAuthRequest:
+    """Tests for the 401 retry logic in LGHorizonAuth.request()."""
+
+    async def test_request_success(self):
+        """Normal successful request returns JSON response."""
+        auth = make_auth()
+        auth.websession.request = AsyncMock(return_value=make_ok_response({"result": "ok"}))
+
+        result = await auth.request("http://host", "/path")
+
+        assert result == {"result": "ok"}
+        auth.websession.request.assert_called_once()
+        auth.fetch_access_token.assert_not_called()
+
+    async def test_request_401_retries_and_succeeds(self):
+        """First request returns 401; after token refresh the retry succeeds."""
+        auth = make_auth()
+        auth.websession.request = AsyncMock(
+            side_effect=[make_error_response(401), make_ok_response({"retry": "ok"})]
+        )
+
+        result = await auth.request("http://host", "/path")
+
+        assert result == {"retry": "ok"}
+        auth.fetch_access_token.assert_called_once()
+        assert auth.websession.request.call_count == 2
+
+    async def test_request_401_retry_also_fails(self):
+        """First request returns 401; retry also fails → LGHorizonApiConnectionError.
+
+        The backoff decorator may re-invoke request() multiple times, but each
+        invocation should call fetch_access_token exactly once (for the 401),
+        so the total fetch_access_token call count equals the number of
+        top-level backoff attempts.
+        """
+        auth = make_auth()
+        # Every call to websession.request returns 401
+        auth.websession.request = AsyncMock(return_value=make_error_response(401))
+
+        with pytest.raises(LGHorizonApiConnectionError):
+            await auth.request("http://host", "/path")
+
+        # fetch_access_token must have been called at least once (once per backoff attempt)
+        auth.fetch_access_token.assert_called()
+
+    async def test_request_non_401_error_no_retry(self):
+        """Non-401 error is raised immediately without calling fetch_access_token.
+
+        Note: the @backoff decorator may retry up to max_tries=3 times on
+        LGHorizonApiConnectionError, but fetch_access_token must never be called
+        because the error is not a 401.
+        """
+        auth = make_auth()
+        # Always return 403 — no matter how many times backoff retries
+        auth.websession.request = AsyncMock(return_value=make_error_response(403))
+
+        with pytest.raises(LGHorizonApiConnectionError):
+            await auth.request("http://host", "/path")
+
+        # fetch_access_token must never be called for non-401 errors
+        auth.fetch_access_token.assert_not_called()
+        # backoff may call request up to max_tries (3) times, but never 0
+        assert auth.websession.request.call_count >= 1
+
+    async def test_request_401_refreshes_token_before_retry(self):
+        """fetch_access_token is called BEFORE the retry request."""
+        call_order: list[str] = []
+
+        auth = make_auth()
+
+        async def fake_fetch():
+            call_order.append("fetch_access_token")
+
+        auth.fetch_access_token = fake_fetch  # type: ignore[assignment]
+
+        async def fake_request(*args, **kwargs):
+            call_order.append(f"request_{len(call_order)}")
+            if call_order.count("request_0") == 1 and call_order[0] == "request_0":
+                return make_error_response(401)
+            return make_ok_response()
+
+        # Simpler: track via side_effect list
+        responses = [make_error_response(401), make_ok_response()]
+        request_calls: list[str] = []
+
+        async def tracking_request(*args, **kwargs):
+            resp = responses.pop(0)
+            request_calls.append("request")
+            call_order.append("request")
+            return resp
+
+        auth.websession.request = tracking_request  # type: ignore[assignment]
+
+        result = await auth.request("http://host", "/path")
+
+        assert result == {"key": "value"}
+        # Order must be: first request → fetch_access_token → retry request
+        assert call_order[0] == "request"
+        fetch_idx = call_order.index("fetch_access_token")
+        last_request_idx = len(call_order) - 1 - call_order[::-1].index("request")
+        assert fetch_idx < last_request_idx, (
+            f"fetch_access_token (idx {fetch_idx}) should come before retry request (idx {last_request_idx})"
+        )
