@@ -533,7 +533,7 @@ class LGHorizonAuth:
         self._token_expiry = None
         self._country_code = country_code
         self._host = COUNTRY_SETTINGS[country_code]["api_url"]
-        self._use_refresh_token = COUNTRY_SETTINGS[country_code]["use_refreshtoken"]
+        self._use_refresh_token = COUNTRY_SETTINGS[country_code]["use_refreshtoken"] or bool(refresh_token)
         self._service_config = None
         self._token_refresh_callback = token_refresh_callback
 
