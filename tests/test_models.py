@@ -1937,3 +1937,32 @@ class TestAuthRequest:
         assert fetch_idx < last_request_idx, (
             f"fetch_access_token (idx {fetch_idx}) should come before retry request (idx {last_request_idx})"
         )
+
+
+class TestNdvrTimestampParsing:
+    """Tests for LGHorizonDeviceStateProcessor._parse_timestamp helper."""
+
+    def _make_processor(self):
+        from lghorizon.lghorizon_device_state_processor import LGHorizonDeviceStateProcessor
+        return LGHorizonDeviceStateProcessor(None, {}, None, None)
+
+    def test_numeric_epoch_seconds(self):
+        proc = self._make_processor()
+        assert proc._parse_timestamp(1714060800) == 1714060800
+
+    def test_numeric_float(self):
+        proc = self._make_processor()
+        assert proc._parse_timestamp(1714060800.9) == 1714060800
+
+    def test_iso8601_string(self):
+        proc = self._make_processor()
+        result = proc._parse_timestamp("2024-04-25T20:00:00Z")
+        assert result == 1714075200
+
+    def test_none_returns_none(self):
+        proc = self._make_processor()
+        assert proc._parse_timestamp(None) is None
+
+    def test_invalid_string_returns_none(self):
+        proc = self._make_processor()
+        assert proc._parse_timestamp("not-a-date") is None

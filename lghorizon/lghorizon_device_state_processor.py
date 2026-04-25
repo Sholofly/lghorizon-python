@@ -324,18 +324,14 @@ class LGHorizonDeviceStateProcessor:
             player_state.last_speed_change_time
         )
         device_state.position = int(player_state.relative_position / 1000)
-        if recording.start_time:
-            device_state.start_time = int(
-                dt.fromisoformat(
-                    recording.start_time.replace("Z", "+00:00")
-                ).timestamp()
-            )
-        if recording.end_time:
-            device_state.end_time = int(
-                dt.fromisoformat(recording.end_time.replace("Z", "+00:00")).timestamp()
-            )
-        if recording.start_time and recording.end_time:
-            device_state.duration = device_state.end_time - device_state.start_time
+        parsed_start = self._parse_timestamp(recording.start_time)
+        parsed_end = self._parse_timestamp(recording.end_time)
+        if parsed_start is not None:
+            device_state.start_time = parsed_start
+        if parsed_end is not None:
+            device_state.end_time = parsed_end
+        if parsed_start is not None and parsed_end is not None:
+            device_state.duration = parsed_end - parsed_start
         if recording.source == LGHorizonRecordingSource.SHOW:
             device_state.show_title = recording.title
         else:
@@ -344,6 +340,17 @@ class LGHorizonDeviceStateProcessor:
         device_state.media_type = LGHorizonMediaType.CHANNEL
 
         device_state.image = await self._get_intent_image_url(recording.id)
+
+    def _parse_timestamp(self, value) -> Optional[int]:
+        """Parse a timestamp that may be numeric epoch seconds or an ISO-8601 string."""
+        if value is None:
+            return None
+        try:
+            if isinstance(value, (int, float)):
+                return int(value)
+            return int(dt.fromisoformat(value.replace("Z", "+00:00")).timestamp())
+        except Exception:
+            return None
 
     async def _get_intent_image_url(self, intent_id: str) -> Optional[str]:
         """Get intent image url."""
