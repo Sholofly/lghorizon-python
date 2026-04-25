@@ -312,14 +312,14 @@ class LGHorizonApi:
         )
         return LGHorizonRecordingQuota(quota_json)
 
-    async def get_epg(self, epg_date: date_type | None = None, language: str = "en") -> LGHorizonEpg:
+    async def get_epg(self, epg_date: date_type | None = None, language: str | None = None) -> LGHorizonEpg:
         """Retrieve the EPG (Electronic Program Guide) for a given date.
 
         Fetches all 4 six-hour segments (00, 06, 12, 18) and merges the entries.
 
         Args:
             epg_date: The date to fetch EPG for. Defaults to today.
-            language: Language code for the EPG data (default: 'en').
+            language: Language code for the EPG data. Defaults to profile language.
 
         Returns:
             An LGHorizonEpg containing all channel entries with their events.
@@ -328,6 +328,8 @@ class LGHorizonApi:
             from datetime import date as _date
             epg_date = _date.today()
 
+        if language is None:
+            language = self._customer.get_profile_lang(self._profile_id)
         base_country_code = self.auth.country_code[0:2]
         epg_base = self._service_config.get_service_url("epgPackager-lite")
         date_str = epg_date.strftime("%Y%m%d")
@@ -353,33 +355,37 @@ class LGHorizonApi:
         ]
         return LGHorizonEpg(entries)
 
-    async def get_event_detail(self, event_id: str, language: str = "nl") -> LGHorizonEventDetail:
+    async def get_event_detail(self, event_id: str, language: str | None = None) -> LGHorizonEventDetail:
         """Retrieve detailed program information for a specific event.
 
         Args:
             event_id: The event ID (crid) to look up.
-            language: Language code for the response (default: 'nl').
+            language: Language code for the response. Defaults to profile language.
 
         Returns:
             An LGHorizonEventDetail with full program information.
         """
         linear_url = self._service_config.get_service_url("linearService")
+        if language is None:
+            language = self._customer.get_profile_lang(self._profile_id)
         result = await self.auth.request(
             linear_url,
             f"/v2/replayEvent/{event_id}?returnLinearContent=true&forceLinearResponse=true&language={language}",
         )
         return LGHorizonEventDetail(result)
 
-    async def get_replay_channels(self, language: str = "nl") -> list[LGHorizonReplayChannel]:
+    async def get_replay_channels(self, language: str | None = None) -> list[LGHorizonReplayChannel]:
         """Retrieve channels that support replay/catch-up TV.
 
         Args:
-            language: Language code for channel names (default: 'nl').
+            language: Language code for channel names. Defaults to profile language.
 
         Returns:
             A list of LGHorizonReplayChannel objects.
         """
         replay_url = self._service_config.get_service_url("replayCatalogService")
+        if language is None:
+            language = self._customer.get_profile_lang(self._profile_id)
         result = await self.auth.request(replay_url, f"/channels?language={language}")
         return [
             LGHorizonReplayChannel(ch)
