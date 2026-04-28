@@ -155,6 +155,17 @@ async def main():
                 bar = "█" * filled + "░" * (bar_len - filled)
                 print(f"  Progress:       [{bar}] {pct:.0%}")
 
+            # Ad break info
+            if s.ad_breaks:
+                print(f"  {SEPARATOR}")
+                print(f"  🚫 Ad Breaks:   {len(s.ad_breaks)} detected")
+                for i, ab in enumerate(s.ad_breaks, 1):
+                    marker = " ◀ NOW" if (s.position and ab.start_ms <= s.position * 1000 < ab.end_ms) else ""
+                    print(f"    {i}. {format_duration(ab.start_ms // 1000)} - {format_duration(ab.end_ms // 1000)} ({format_duration(ab.duration_ms // 1000)}){marker}")
+                ad_break = device.get_current_ad_break()
+                if ad_break:
+                    print(f"  >>> IN AD BREAK - ends at {format_duration(int(ad_break.end_s))}")
+
             # EPG now/next (simulates HA media_player extra_state_attributes)
             epg = epg_cache.get("epg")
             if epg and s.channel_id:
