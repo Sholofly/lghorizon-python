@@ -3,6 +3,7 @@
 from .lghorizon_api import LGHorizonApi
 from .lghorizon_device import LGHorizonDevice
 from .lghorizon_models import (
+    LGHorizonAdBreak,
     LGHorizonAuth,
     LGHorizonChannel,
     LGHorizonCustomer,
@@ -46,6 +47,7 @@ from .exceptions import (
 from .const import COUNTRY_SETTINGS
 
 __all__ = [
+    "LGHorizonAdBreak",
     "LGHorizonApi",
     "LGHorizonDevice",
     "LGHorizonAuth",

@@ -4,8 +4,10 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from typing import Any, Callable, Coroutine, Dict, Optional
 from .lghorizon_models import (
+    LGHorizonAdBreak,
     LGHorizonRunningState,
     LGHorizonStatusMessage,
     LGHorizonUIStatusMessage,
@@ -295,6 +297,38 @@ class LGHorizonDevice:
         await self._mqtt_client.publish_message(
             f"{self._auth.household_id}/{self.device_id}", payload_str
         )
+
+    def get_current_ad_break(self) -> Optional[LGHorizonAdBreak]:
+        """Return the ad break at the current estimated playback position, or None.
+
+        Calculates real-time position based on last known position and elapsed time.
+        """
+        ds = self._device_state
+        if not ds.ad_breaks or ds.position is None or ds.last_position_update is None:
+            return None
+
+        # Calculate real-time position in seconds
+        elapsed = time.time() - ds.last_position_update
+        speed = ds.speed if ds.speed is not None else 1
+        current_position_s = ds.position + (elapsed * speed)
+        current_position_ms = int(current_position_s * 1000)
+
+        for ab in ds.ad_breaks:
+            if ab.start_ms <= current_position_ms < ab.end_ms:
+                return ab
+        return None
+
+    async def skip_ad_break(self) -> bool:
+        """Skip to the end of the current ad break. Returns True if skipped.
+
+        Calculates the real-time playback position and, if currently within
+        an ad break, seeks to the end of that break.
+        """
+        ad_break = self.get_current_ad_break()
+        if ad_break is None:
+            return False
+        await self.set_player_position(ad_break.end_ms)
+        return True
 
     async def display_message(self, sourceType: str, message: str) -> None:
         """Display a message on the set-top box and repeat it for longer visibility.

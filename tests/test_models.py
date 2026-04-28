@@ -7,6 +7,7 @@ import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch, call
 
 from lghorizon.lghorizon_models import (
+    LGHorizonAdBreak,
     LGHorizonAppsState,
     LGHorizonChannel,
     LGHorizonCustomer,
@@ -1966,3 +1967,169 @@ class TestNdvrTimestampParsing:
     def test_invalid_string_returns_none(self):
         proc = self._make_processor()
         assert proc._parse_timestamp("not-a-date") is None
+
+
+# ---------------------------------------------------------------------------
+# TestAdBreaks
+# ---------------------------------------------------------------------------
+
+# Fixture ad manifest from captured MQTT data
+_AD_MANIFEST_RAW = [
+    {"dStart": 0, "dEnd": 15000, "adType": "IP_OTHER", "adCounter": True, "isSkippable": False},
+    {"dStart": 527760, "dEnd": 1012640, "adType": "IP_OTHER", "adCounter": True, "isSkippable": False},
+    {"dStart": 1815360, "dEnd": 1846360, "adType": "IP_OTHER", "adCounter": True, "isSkippable": False},
+]
+
+
+class TestAdBreaks:
+    # ------------------------------------------------------------------
+    # LGHorizonAdBreak dataclass properties
+    # ------------------------------------------------------------------
+
+    def test_duration_ms(self):
+        ab = LGHorizonAdBreak(start_ms=527760, end_ms=1012640, ad_type="IP_OTHER", is_skippable=False, has_counter=True)
+        assert ab.duration_ms == 1012640 - 527760
+
+    def test_start_s(self):
+        ab = LGHorizonAdBreak(start_ms=527760, end_ms=1012640, ad_type="IP_OTHER", is_skippable=False, has_counter=True)
+        assert ab.start_s == 527760 / 1000
+
+    def test_end_s(self):
+        ab = LGHorizonAdBreak(start_ms=527760, end_ms=1012640, ad_type="IP_OTHER", is_skippable=False, has_counter=True)
+        assert ab.end_s == 1012640 / 1000
+
+    def test_duration_ms_first_break(self):
+        ab = LGHorizonAdBreak(start_ms=0, end_ms=15000, ad_type="IP_OTHER", is_skippable=False, has_counter=True)
+        assert ab.duration_ms == 15000
+
+    def test_start_s_zero(self):
+        ab = LGHorizonAdBreak(start_ms=0, end_ms=15000, ad_type="IP_OTHER", is_skippable=False, has_counter=True)
+        assert ab.start_s == 0.0
+
+    def test_end_s_first_break(self):
+        ab = LGHorizonAdBreak(start_ms=0, end_ms=15000, ad_type="IP_OTHER", is_skippable=False, has_counter=True)
+        assert ab.end_s == 15.0
+
+    # ------------------------------------------------------------------
+    # LGHorizonNDVRSource.ad_manifest property
+    # ------------------------------------------------------------------
+
+    def test_ad_manifest_parses_breaks(self):
+        src = LGHorizonNDVRSource({"recordingId": "rec-1", "adManifest": _AD_MANIFEST_RAW})
+        breaks = src.ad_manifest
+        assert len(breaks) == 3
+        for ab in breaks:
+            assert isinstance(ab, LGHorizonAdBreak)
+
+    def test_ad_manifest_correct_values(self):
+        src = LGHorizonNDVRSource({"adManifest": _AD_MANIFEST_RAW})
+        breaks = src.ad_manifest
+        assert breaks[0].start_ms == 0
+        assert breaks[0].end_ms == 15000
+        assert breaks[0].ad_type == "IP_OTHER"
+        assert breaks[0].is_skippable is False
+        assert breaks[0].has_counter is True
+        assert breaks[1].start_ms == 527760
+        assert breaks[1].end_ms == 1012640
+        assert breaks[2].start_ms == 1815360
+        assert breaks[2].end_ms == 1846360
+
+    def test_ad_manifest_no_key_returns_empty_list(self):
+        src = LGHorizonNDVRSource({"recordingId": "rec-1"})
+        assert src.ad_manifest == []
+
+    def test_ad_manifest_empty_array_returns_empty_list(self):
+        src = LGHorizonNDVRSource({"recordingId": "rec-1", "adManifest": []})
+        assert src.ad_manifest == []
+
+    # ------------------------------------------------------------------
+    # LGHorizonDeviceState.is_in_ad_break
+    # ------------------------------------------------------------------
+
+    def _make_state_with_breaks(self) -> LGHorizonDeviceState:
+        ds = LGHorizonDeviceState()
+        ds.ad_breaks = [
+            LGHorizonAdBreak(start_ms=0, end_ms=15000, ad_type="IP_OTHER", is_skippable=False, has_counter=True),
+            LGHorizonAdBreak(start_ms=527760, end_ms=1012640, ad_type="IP_OTHER", is_skippable=False, has_counter=True),
+            LGHorizonAdBreak(start_ms=1815360, end_ms=1846360, ad_type="IP_OTHER", is_skippable=False, has_counter=True),
+        ]
+        return ds
+
+    def test_is_in_ad_break_no_breaks(self):
+        ds = LGHorizonDeviceState()
+        ds.position = 10.0
+        assert ds.is_in_ad_break is False
+
+    def test_is_in_ad_break_position_none(self):
+        ds = self._make_state_with_breaks()
+        ds.position = None
+        assert ds.is_in_ad_break is False
+
+    def test_is_in_ad_break_within_first_break(self):
+        ds = self._make_state_with_breaks()
+        ds.position = 7.5  # 7500 ms, within [0, 15000)
+        assert ds.is_in_ad_break is True
+
+    def test_is_in_ad_break_within_second_break(self):
+        ds = self._make_state_with_breaks()
+        ds.position = 600.0  # 600000 ms, within [527760, 1012640)
+        assert ds.is_in_ad_break is True
+
+    def test_is_in_ad_break_at_break_start(self):
+        ds = self._make_state_with_breaks()
+        ds.position = 527.760  # exactly 527760 ms
+        assert ds.is_in_ad_break is True
+
+    def test_is_in_ad_break_at_break_end_exclusive(self):
+        ds = self._make_state_with_breaks()
+        ds.position = 1012.640  # exactly 1012640 ms — end is exclusive
+        assert ds.is_in_ad_break is False
+
+    def test_is_in_ad_break_between_breaks(self):
+        ds = self._make_state_with_breaks()
+        ds.position = 1100.0  # 1100000 ms, between second [527760,1012640) and third [1815360,1846360)
+        assert ds.is_in_ad_break is False
+
+    def test_is_in_ad_break_after_all_breaks(self):
+        ds = self._make_state_with_breaks()
+        ds.position = 2000.0  # 2000000 ms, after all breaks
+        assert ds.is_in_ad_break is False
+
+    # ------------------------------------------------------------------
+    # LGHorizonDeviceState.current_ad_break_end
+    # ------------------------------------------------------------------
+
+    def test_current_ad_break_end_no_breaks(self):
+        ds = LGHorizonDeviceState()
+        ds.position = 10.0
+        assert ds.current_ad_break_end is None
+
+    def test_current_ad_break_end_position_none(self):
+        ds = self._make_state_with_breaks()
+        ds.position = None
+        assert ds.current_ad_break_end is None
+
+    def test_current_ad_break_end_in_first_break(self):
+        ds = self._make_state_with_breaks()
+        ds.position = 7.5  # within [0, 15000)
+        assert ds.current_ad_break_end == 15.0  # end_s = 15000 / 1000
+
+    def test_current_ad_break_end_in_second_break(self):
+        ds = self._make_state_with_breaks()
+        ds.position = 600.0  # within [527760, 1012640)
+        assert ds.current_ad_break_end == pytest.approx(1012.640)
+
+    def test_current_ad_break_end_not_in_break(self):
+        ds = self._make_state_with_breaks()
+        ds.position = 1100.0  # between breaks
+        assert ds.current_ad_break_end is None
+
+    # ------------------------------------------------------------------
+    # LGHorizonDeviceState.reset() clears ad_breaks
+    # ------------------------------------------------------------------
+
+    def test_reset_clears_ad_breaks(self):
+        ds = self._make_state_with_breaks()
+        assert len(ds.ad_breaks) == 3
+        ds.reset()
+        assert ds.ad_breaks == []
