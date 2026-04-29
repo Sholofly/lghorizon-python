@@ -109,7 +109,7 @@ class LGHorizonApi:
     async def get_profile_channels(
         self, profile_id: Optional[str] = None
     ) -> Dict[str, LGHorizonChannel]:
-        """Returns channels to display baed on profile."""
+        """Returns channels to display based on profile."""
         # Attempt to retrieve the profile by the given profile_id
         if not profile_id:
             profile_id = self._profile_id
@@ -129,16 +129,33 @@ class LGHorizonApi:
             _LOGGER.debug("Returning favorite channels for profile '%s'.", profile.name)
             # Use a set for faster lookup of favorite channel IDs
             profile_channel_ids = set(profile.favorite_channels)
-            return {
+            channels = {
                 channel.id: channel
                 for channel in self._channels.values()
                 if channel.id in profile_channel_ids
             }
+        else:
+            # If no profile is found (even after defaulting) or the profile has no favorite channels,
+            # return all available channels.
+            _LOGGER.debug("No specific profile channels found, returning all channels.")
+            channels = dict(self._channels)
 
-        # If no profile is found (even after defaulting) or the profile has no favorite channels,
-        # return all available channels.
-        _LOGGER.debug("No specific profile channels found, returning all channels.")
-        return self._channels
+        # Deduplicate by channel number for display purposes:
+        # keep the last entry per logicalChannelNumber (typically HD over SD)
+        seen_numbers: dict[str, str] = {}
+        for channel in channels.values():
+            ch_num = str(channel.channel_number)
+            if ch_num in seen_numbers:
+                _LOGGER.debug(
+                    "Duplicate channel number %s: preferring %s over %s",
+                    ch_num, channel.id, seen_numbers[ch_num],
+                )
+            seen_numbers[ch_num] = channel.id
+
+        return {
+            cid: channels[cid]
+            for cid in seen_numbers.values()
+        }
 
     async def _register_devices(self) -> None:
         """Register devices."""

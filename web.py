@@ -18,7 +18,7 @@ from aiohttp import web
 
 from lghorizon.lghorizon_api import LGHorizonApi
 from lghorizon.lghorizon_models import LGHorizonAuth
-from lghorizon.const import COUNTRY_SETTINGS
+from lghorizon.const import COUNTRY_SETTINGS, MEDIA_KEYS
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -143,6 +143,12 @@ async def get_countries(request: web.Request):
     return web.json_response({"countries": countries})
 
 
+@routes.get("/api/keys")
+async def get_keys(request: web.Request):
+    """Return all available media keys grouped by category."""
+    return web.json_response({"keys": MEDIA_KEYS})
+
+
 @routes.post("/api/login")
 async def login(request: web.Request):
     """Authenticate and initialize the API connection."""
@@ -205,6 +211,7 @@ async def login(request: web.Request):
             "success": True,
             "devices": device_list,
             "channels": channel_list,
+            "keys": MEDIA_KEYS,
         })
 
     except Exception as e:
@@ -330,6 +337,11 @@ async def handle_command(request: web.Request):
             if not channel_name:
                 return web.json_response({"error": "Missing 'channel_name' parameter."}, status=400)
             await device.set_channel(channel_name)
+        elif command == "set_channel_by_number":
+            channel_number = data.get("channel_number", "")
+            if not channel_number:
+                return web.json_response({"error": "Missing 'channel_number' parameter."}, status=400)
+            await device.set_channel_by_number(channel_number)
         else:
             return web.json_response({"error": f"Unknown command: {command}"}, status=400)
 
