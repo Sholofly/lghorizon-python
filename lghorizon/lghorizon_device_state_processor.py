@@ -337,6 +337,7 @@ class LGHorizonDeviceStateProcessor:
             player_state.last_speed_change_time
         )
         device_state.position = int(player_state.relative_position / 1000)
+        device_state.ad_breaks = source.ad_manifest
         parsed_start = self._parse_timestamp(recording.start_time)
         parsed_end = self._parse_timestamp(recording.end_time)
         if parsed_start is not None:

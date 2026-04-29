@@ -22,12 +22,9 @@ shutdown_event = asyncio.Event()
 LOCAL_TZ = ZoneInfo("Europe/Amsterdam")
 
 
-async def read_input_and_signal_shutdown():
-    """Reads a line from stdin and sets the shutdown event."""
-    print("Press Enter to gracefully shut down...")
-    await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
-    print("Enter pressed, shutting down...")
-    shutdown_event.set()
+async def read_input_async() -> str:
+    """Read a line from stdin asynchronously."""
+    return await asyncio.get_event_loop().run_in_executor(None, sys.stdin.readline)
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -107,9 +104,6 @@ async def main():
         )
         api = LGHorizonApi(auth, profile_id=None)
 
-        # Start the input reader task
-        input_task = asyncio.create_task(read_input_and_signal_shutdown())
-
         # EPG cache for now/next in state callbacks
         epg_cache = {"epg": None}
 
@@ -154,6 +148,17 @@ async def main():
                 filled = int(bar_len * pct)
                 bar = "█" * filled + "░" * (bar_len - filled)
                 print(f"  Progress:       [{bar}] {pct:.0%}")
+
+            # Ad break info
+            if s.ad_breaks:
+                print(f"  {SEPARATOR}")
+                print(f"  🚫 Ad Breaks:   {len(s.ad_breaks)} detected")
+                for i, ab in enumerate(s.ad_breaks, 1):
+                    marker = " ◀ NOW" if (s.position and ab.start_ms <= s.position * 1000 < ab.end_ms) else ""
+                    print(f"    {i}. {format_duration(ab.start_ms // 1000)} - {format_duration(ab.end_ms // 1000)} ({format_duration(ab.duration_ms // 1000)}){marker}")
+                ad_break = device.get_current_ad_break()
+                if ad_break:
+                    print(f"  >>> IN AD BREAK - ends at {format_duration(int(ad_break.end_s))}")
 
             # EPG now/next (simulates HA media_player extra_state_attributes)
             epg = epg_cache.get("epg")
@@ -299,25 +304,195 @@ async def main():
 
             # ── Live monitoring ──
             print_header("LIVE MONITORING")
-            print("  Listening for device state changes...")
-            print("  Press Enter to stop.\n")
+            print("  Listening for device state changes...\n")
 
             for device in devices.values():
                 await device.set_callback(device_callback)
 
-            # Wait until the shutdown event is set
-            await shutdown_event.wait()
+            # Build device list for interactive commands
+            device_list = list(devices.values())
 
+            def print_help():
+                print(f"\n{'─' * 60}")
+                print("  Available commands:")
+                print("  ─────────────────────────────────────────")
+                print("  boxes                       - List all boxes")
+                print("  msg <nr> <bericht>          - Send message to box")
+                print("  channel <nr> <kanaal>       - Switch channel on box")
+                print("  key <nr> <key>              - Send key press to box")
+                print("  on <nr>                     - Turn box on")
+                print("  off <nr>                    - Turn box off")
+                print("  pause <nr>                  - Pause playback")
+                print("  play <nr>                   - Resume playback")
+                print("  stop <nr>                   - Stop playback")
+                print("  skip <nr>                   - Skip ad break")
+                print("  help                        - Show this help")
+                print("  quit / exit                 - Shut down")
+                print(f"{'─' * 60}\n")
+
+            def print_boxes():
+                print()
+                for i, dev in enumerate(device_list):
+                    status = dev.device_state.state.value
+                    print(f"  [{i}] {dev.device_friendly_name} ({status})")
+                print()
+
+            print_help()
+
+            # Interactive command loop
+            while not shutdown_event.is_set():
+                try:
+                    line = await read_input_async()
+                    line = line.strip()
+                    if not line:
+                        continue
+
+                    parts = line.split(maxsplit=2)
+                    cmd = parts[0].lower()
+
+                    if cmd in ("quit", "exit", "q"):
+                        print("Shutting down...")
+                        shutdown_event.set()
+                        break
+
+                    elif cmd == "help":
+                        print_help()
+
+                    elif cmd == "boxes":
+                        print_boxes()
+
+                    elif cmd == "msg":
+                        if len(parts) < 3:
+                            print("  Usage: msg <box_nr> <bericht>")
+                            continue
+                        try:
+                            idx = int(parts[1])
+                            message = parts[2]
+                            dev = device_list[idx]
+                            print(f"  Sending message to {dev.device_friendly_name}: {message}")
+                            await dev.display_message("linear", message)
+                            print("  ✓ Message sent!")
+                        except (ValueError, IndexError):
+                            print(f"  Invalid box number. Use 'boxes' to see available boxes (0-{len(device_list)-1}).")
+
+                    elif cmd == "channel":
+                        if len(parts) < 3:
+                            print("  Usage: channel <box_nr> <channel_name>")
+                            continue
+                        try:
+                            idx = int(parts[1])
+                            channel_name = parts[2]
+                            dev = device_list[idx]
+                            print(f"  Switching {dev.device_friendly_name} to {channel_name}...")
+                            await dev.set_channel(channel_name)
+                            print("  ✓ Channel switched!")
+                        except (ValueError, IndexError):
+                            print(f"  Invalid box number. Use 'boxes' to see available boxes (0-{len(device_list)-1}).")
+                        except Exception as e:
+                            print(f"  Error: {e}")
+
+                    elif cmd == "key":
+                        if len(parts) < 3:
+                            print("  Usage: key <box_nr> <key_name>")
+                            continue
+                        try:
+                            idx = int(parts[1])
+                            key_name = parts[2]
+                            dev = device_list[idx]
+                            print(f"  Sending key '{key_name}' to {dev.device_friendly_name}...")
+                            await dev.send_key_to_box(key_name)
+                            print("  ✓ Key sent!")
+                        except (ValueError, IndexError):
+                            print(f"  Invalid box number. Use 'boxes' to see available boxes (0-{len(device_list)-1}).")
+
+                    elif cmd == "on":
+                        if len(parts) < 2:
+                            print("  Usage: on <box_nr>")
+                            continue
+                        try:
+                            idx = int(parts[1])
+                            dev = device_list[idx]
+                            await dev.turn_on()
+                            print(f"  ✓ {dev.device_friendly_name} turning on!")
+                        except (ValueError, IndexError):
+                            print(f"  Invalid box number.")
+
+                    elif cmd == "off":
+                        if len(parts) < 2:
+                            print("  Usage: off <box_nr>")
+                            continue
+                        try:
+                            idx = int(parts[1])
+                            dev = device_list[idx]
+                            await dev.turn_off()
+                            print(f"  ✓ {dev.device_friendly_name} turning off!")
+                        except (ValueError, IndexError):
+                            print(f"  Invalid box number.")
+
+                    elif cmd == "pause":
+                        if len(parts) < 2:
+                            print("  Usage: pause <box_nr>")
+                            continue
+                        try:
+                            idx = int(parts[1])
+                            dev = device_list[idx]
+                            await dev.pause()
+                            print(f"  ✓ Paused!")
+                        except (ValueError, IndexError):
+                            print(f"  Invalid box number.")
+
+                    elif cmd == "play":
+                        if len(parts) < 2:
+                            print("  Usage: play <box_nr>")
+                            continue
+                        try:
+                            idx = int(parts[1])
+                            dev = device_list[idx]
+                            await dev.play()
+                            print(f"  ✓ Playing!")
+                        except (ValueError, IndexError):
+                            print(f"  Invalid box number.")
+
+                    elif cmd == "stop":
+                        if len(parts) < 2:
+                            print("  Usage: stop <box_nr>")
+                            continue
+                        try:
+                            idx = int(parts[1])
+                            dev = device_list[idx]
+                            await dev.stop()
+                            print(f"  ✓ Stopped!")
+                        except (ValueError, IndexError):
+                            print(f"  Invalid box number.")
+
+                    elif cmd == "skip":
+                        if len(parts) < 2:
+                            print("  Usage: skip <box_nr>")
+                            continue
+                        try:
+                            idx = int(parts[1])
+                            dev = device_list[idx]
+                            skipped = await dev.skip_ad_break()
+                            if skipped:
+                                print(f"  ✓ Ad break skipped!")
+                            else:
+                                print(f"  No ad break to skip.")
+                        except (ValueError, IndexError):
+                            print(f"  Invalid box number.")
+
+                    else:
+                        print(f"  Unknown command: {cmd}. Type 'help' for available commands.")
+
+                except Exception as cmd_err:
+                    print(f"  Command error: {cmd_err}")
+
+        except KeyboardInterrupt:
+            print("\nInterrupted, shutting down...")
         except Exception as e:
             print(f"\nError: {e}")
             _LOGGER.error("An error occurred: %s", e, exc_info=True)
         finally:
-            _LOGGER.info("Shutting down API and cancelling input task.")
-            input_task.cancel()
-            try:
-                await input_task
-            except asyncio.CancelledError:
-                pass
+            _LOGGER.info("Shutting down API.")
             await api.disconnect()
             print("Shutdown complete.")
             _LOGGER.info("Shutdown complete.")

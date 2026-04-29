@@ -219,6 +219,32 @@ class LGHorizonReviewBufferSource(LGHorizonSource):
         return LGHorizonSourceType.REVIEWBUFFER
 
 
+@dataclass
+class LGHorizonAdBreak:
+    """Represent an ad break within an nDVR recording."""
+
+    start_ms: int
+    end_ms: int
+    ad_type: str
+    is_skippable: bool
+    has_counter: bool
+
+    @property
+    def duration_ms(self) -> int:
+        """Return the duration of this ad break in milliseconds."""
+        return self.end_ms - self.start_ms
+
+    @property
+    def start_s(self) -> float:
+        """Return the start position in seconds."""
+        return self.start_ms / 1000
+
+    @property
+    def end_s(self) -> float:
+        """Return the end position in seconds."""
+        return self.end_ms / 1000
+
+
 class LGHorizonNDVRSource(LGHorizonSource):
     """Represent the Network Digital Video Recorder (NDVR) Source of an LG Horizon device."""
 
@@ -231,6 +257,21 @@ class LGHorizonNDVRSource(LGHorizonSource):
     def channel_id(self) -> str:
         """Return the channel ID."""
         return self._raw_json.get("channelId", "")
+
+    @property
+    def ad_manifest(self) -> List[LGHorizonAdBreak]:
+        """Return the list of ad breaks from the ad manifest."""
+        raw_manifest = self._raw_json.get("adManifest", [])
+        breaks = []
+        for entry in raw_manifest:
+            breaks.append(LGHorizonAdBreak(
+                start_ms=entry.get("dStart", 0),
+                end_ms=entry.get("dEnd", 0),
+                ad_type=entry.get("adType", "UNKNOWN"),
+                is_skippable=entry.get("isSkippable", False),
+                has_counter=entry.get("adCounter", False),
+            ))
+        return breaks
 
     @property
     def source_type(self) -> LGHorizonSourceType:
@@ -932,6 +973,7 @@ class LGHorizonDeviceState:
     end_time: Optional[int] = None
     last_position_update: Optional[int] = None
     _last_good_linear_metadata: Dict[str, Any] = field(default_factory=dict)
+    ad_breaks: List[LGHorizonAdBreak] = field(default_factory=list)
 
     @property
     def paused(self) -> bool:
@@ -939,6 +981,25 @@ class LGHorizonDeviceState:
         if self.speed is None:
             return False
         return self.speed == 0
+
+    @property
+    def is_in_ad_break(self) -> bool:
+        """Return True if current position is within an ad break."""
+        if not self.ad_breaks or self.position is None:
+            return False
+        position_ms = int(self.position * 1000)
+        return any(ab.start_ms <= position_ms < ab.end_ms for ab in self.ad_breaks)
+
+    @property
+    def current_ad_break_end(self) -> Optional[float]:
+        """Return the end position (in seconds) of the current ad break, or None."""
+        if not self.ad_breaks or self.position is None:
+            return None
+        position_ms = int(self.position * 1000)
+        for ab in self.ad_breaks:
+            if ab.start_ms <= position_ms < ab.end_ms:
+                return ab.end_s
+        return None
 
     def reset_progress(self) -> None:
         """Reset the progress-related attributes."""
@@ -963,6 +1024,7 @@ class LGHorizonDeviceState:
         self.source_type = LGHorizonSourceType.UNKNOWN
         self.ui_state_type = LGHorizonUIStateType.UNKNOWN
         self.media_type = LGHorizonMediaType.UNKNOWN
+        self.ad_breaks = []
         self.reset_progress()
 
 
