@@ -259,6 +259,7 @@ class LGHorizonApi:
             service_url,
             f"/v2/channels?cityId={self._customer.city_id}&language={lang}&productClass=Orion-DASH",
         )
+        seen_numbers: dict[str, str] = {}  # channel_number -> channel_id
         for channel_json in channels_json:
             channel = LGHorizonChannel(channel_json)
             common_entitlements = list(
@@ -268,6 +269,17 @@ class LGHorizonApi:
             if len(common_entitlements) == 0:
                 continue
 
+            # Deduplicate by channel number: keep the last entry per number
+            # (API typically returns SD first, HD last)
+            ch_num = str(channel.channel_number)
+            if ch_num in seen_numbers:
+                old_id = seen_numbers[ch_num]
+                _LOGGER.debug(
+                    "Duplicate channel number %s: replacing %s with %s",
+                    ch_num, old_id, channel.id,
+                )
+                del self._channels[old_id]
+            seen_numbers[ch_num] = channel.id
             self._channels[channel.id] = channel
 
     async def get_all_recordings(self) -> LGHorizonRecordingList:

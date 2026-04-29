@@ -376,6 +376,20 @@ class LGHorizonDevice:
         )
         if channel is None:
             raise ValueError(f"Channel '{source}' not found")
+        await self._tune_to_channel(channel)
+
+    async def set_channel_by_number(self, channel_number: str | int) -> None:
+        """Change the channel by its number."""
+        number_str = str(channel_number)
+        channel = next(
+            (src for src in self._channels.values() if str(src.channel_number) == number_str), None
+        )
+        if channel is None:
+            raise ValueError(f"Channel number '{number_str}' not found")
+        await self._tune_to_channel(channel)
+
+    async def _tune_to_channel(self, channel) -> None:
+        """Tune to a specific channel object via CPE.pushToTV."""
         payload = {
             "id": make_id(8),
             "type": "CPE.pushToTV",

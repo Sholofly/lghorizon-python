@@ -337,6 +337,11 @@ async def handle_command(request: web.Request):
             if not channel_name:
                 return web.json_response({"error": "Missing 'channel_name' parameter."}, status=400)
             await device.set_channel(channel_name)
+        elif command == "set_channel_by_number":
+            channel_number = data.get("channel_number", "")
+            if not channel_number:
+                return web.json_response({"error": "Missing 'channel_number' parameter."}, status=400)
+            await device.set_channel_by_number(channel_number)
         else:
             return web.json_response({"error": f"Unknown command: {command}"}, status=400)
 
