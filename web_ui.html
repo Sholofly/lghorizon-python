@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LG Horizon Test UI</title>
-    <!-- Tailwind CSS for rapid styling -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -29,7 +28,6 @@
         }
     </script>
     <style>
-        /* Custom Styles & Animations */
         body {
             background-color: #13141c;
             color: #e2e8f0;
@@ -58,26 +56,51 @@
             box-shadow: 0 0 0 2px rgba(15, 125, 255, 0.2);
         }
 
-        .btn {
-            transition: all 0.2s ease;
-        }
-        .btn:active {
-            transform: scale(0.97);
-        }
+        .btn { transition: all 0.2s ease; }
+        .btn:active { transform: scale(0.97); }
         
         .btn-control {
             background: rgba(255,255,255,0.05);
             border: 1px solid rgba(255,255,255,0.1);
             border-radius: 0.375rem;
-            padding: 0.5rem;
             display: flex;
             align-items: center;
             justify-content: center;
+            cursor: pointer;
+            user-select: none;
         }
         .btn-control:hover {
             background: rgba(255,255,255,0.1);
             border-color: rgba(255,255,255,0.2);
         }
+        .btn-control:active { background: rgba(255,255,255,0.15); transform: scale(0.95); }
+
+        /* Remote specific */
+        .d-pad-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 0.5rem;
+            width: fit-content;
+            margin: 0 auto;
+        }
+        .numpad-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.5rem;
+            max-width: 200px;
+            margin: 0 auto;
+        }
+
+        /* Color Buttons */
+        .btn-color-red { background: #ef4444; border-color: #b91c1c; color: white; }
+        .btn-color-green { background: #22c55e; border-color: #15803d; color: white; }
+        .btn-color-yellow { background: #eab308; border-color: #a16207; color: white; }
+        .btn-color-blue { background: #3b82f6; border-color: #1d4ed8; color: white; }
+        .btn-color-red:hover { background: #dc2626; }
+        .btn-color-green:hover { background: #16a34a; }
+        .btn-color-yellow:hover { background: #ca8a04; }
+        .btn-color-blue:hover { background: #2563eb; }
 
         /* Progress Bar */
         .progress-container {
@@ -95,20 +118,10 @@
         }
 
         /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        ::-webkit-scrollbar-track {
-            background: #13141c; 
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #334155; 
-            border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #475569; 
-        }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #475569; }
 
         /* Status Indicator Pulse */
         @keyframes pulse-status {
@@ -116,86 +129,53 @@
             70% { box-shadow: 0 0 0 6px rgba(var(--status-color), 0); }
             100% { box-shadow: 0 0 0 0 rgba(var(--status-color), 0); }
         }
-        
-        .status-dot {
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
         .status-green { background-color: #22c55e; --status-color: 34, 197, 94; animation: pulse-status 2s infinite; }
         .status-orange { background-color: #f59e0b; --status-color: 245, 158, 11; }
         .status-red { background-color: #ef4444; }
         .status-gray { background-color: #6b7280; }
 
         /* Toast */
-        .toast-container {
-            position: fixed;
-            bottom: 1rem;
-            right: 1rem;
-            z-index: 50;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-        }
+        .toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 60; display: flex; flex-direction: column; gap: 0.5rem; }
         .toast {
-            padding: 0.75rem 1rem;
-            border-radius: 0.375rem;
-            background: #1e212f;
-            border-left: 4px solid #0f7dff;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-            animation: slideIn 0.3s forwards, fadeOut 0.3s 2.7s forwards;
-            min-width: 250px;
+            padding: 0.75rem 1rem; border-radius: 0.375rem; background: #1e212f; border-left: 4px solid #0f7dff;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); animation: slideIn 0.3s forwards, fadeOut 0.3s 2.7s forwards; min-width: 250px;
         }
         .toast.error { border-left-color: #ef4444; }
         .toast.success { border-left-color: #22c55e; }
-        
-        @keyframes slideIn {
-            from { transform: translateX(100%); opacity: 0; }
-            to { transform: translateX(0); opacity: 1; }
-        }
-        @keyframes fadeOut {
-            from { opacity: 1; }
-            to { opacity: 0; }
-        }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { from { opacity: 1; } to { opacity: 0; } }
 
-        /* Transitions */
-        .fade-enter { opacity: 0; transform: translateY(10px); }
-        .fade-enter-active { opacity: 1; transform: translateY(0); transition: opacity 300ms, transform 300ms; }
-        .fade-exit { opacity: 1; }
-        .fade-exit-active { opacity: 0; transition: opacity 300ms; }
-        
+        /* Tabs */
+        .tab-item {
+            padding: 0.75rem 1rem; cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s;
+            display: flex; align-items: center; gap: 0.5rem; color: #94a3b8; font-weight: 500; white-space: nowrap;
+        }
+        .tab-item:hover { color: #e2e8f0; background: rgba(255,255,255,0.02); }
+        .tab-item.active { color: #0f7dff; border-bottom-color: #0f7dff; background: rgba(15, 125, 255, 0.05); }
+
+        /* Log Panel */
+        .log-panel {
+            transition: height 0.3s ease;
+            height: 40px; /* Collapsed */
+        }
+        .log-panel.expanded { height: 250px; }
+
         /* Loading Spinner */
         .spinner {
-            border: 3px solid rgba(255,255,255,0.1);
-            border-radius: 50%;
-            border-top: 3px solid #0f7dff;
-            width: 24px;
-            height: 24px;
-            -webkit-animation: spin 1s linear infinite; /* Safari */
-            animation: spin 1s linear infinite;
+            border: 3px solid rgba(255,255,255,0.1); border-radius: 50%; border-top: 3px solid #0f7dff;
+            width: 24px; height: 24px; animation: spin 1s linear infinite;
         }
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        .thumbnail-img {
-            aspect-ratio: 16/9;
-            object-fit: cover;
-            background-color: rgba(0,0,0,0.5);
-            border-radius: 0.375rem;
-        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="min-h-screen flex flex-col">
+<body class="h-screen flex flex-col overflow-hidden">
 
     <!-- Toast Container -->
     <div id="toastContainer" class="toast-container"></div>
 
     <!-- Header -->
-    <header class="glass-panel sticky top-0 z-40 px-6 py-4 flex justify-between items-center hidden" id="appHeader">
+    <header class="glass-panel z-40 px-6 py-3 flex justify-between items-center hidden shrink-0" id="appHeader">
         <div class="flex items-center gap-3">
             <div class="text-accent text-2xl">📺</div>
             <h1 class="text-xl font-bold tracking-wide">LG Horizon <span class="font-light opacity-70">Test UI</span></h1>
@@ -204,21 +184,19 @@
             <div id="wsStatus" class="flex items-center gap-2 text-sm text-offline">
                 <span class="status-dot status-gray"></span> Disconnected
             </div>
-            <button onclick="app.logout()" class="btn px-4 py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-md text-sm font-medium border border-red-500/20">
+            <button onclick="app.logout()" class="btn px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-md text-sm font-medium border border-red-500/20">
                 Logout
             </button>
         </div>
     </header>
 
     <!-- Main Content -->
-    <main class="flex-grow flex flex-col relative w-full h-full max-w-7xl mx-auto p-4 sm:p-6" id="mainContainer">
+    <main class="flex-grow flex flex-col relative w-full h-full overflow-hidden" id="mainContainer">
         
         <!-- ================= LOGIN SCREEN ================= -->
-        <div id="loginScreen" class="flex-grow flex items-center justify-center fade-enter-active">
+        <div id="loginScreen" class="h-full flex items-center justify-center p-4">
             <div class="glass-panel w-full max-w-md p-8 rounded-xl relative overflow-hidden">
-                <!-- Decorative element -->
                 <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-accent to-purple-500"></div>
-                
                 <div class="text-center mb-8">
                     <div class="text-5xl mb-4">📺</div>
                     <h2 class="text-2xl font-bold mb-1">LG Horizon</h2>
@@ -227,15 +205,12 @@
 
                 <form id="loginForm" onsubmit="app.handleLogin(event)" class="space-y-5">
                     <div id="loginErrorMsg" class="hidden bg-red-500/10 border border-red-500/30 text-red-400 p-3 rounded-md text-sm mb-4"></div>
-                    
                     <div>
                         <label class="block text-sm font-medium text-slate-300 mb-1">Provider / Country</label>
                         <select id="countrySelect" onchange="app.updateLoginForm()" class="input-field w-full rounded-md p-2.5 text-sm" required>
                             <option value="">Loading countries...</option>
                         </select>
                     </div>
-
-                    <!-- User/Pass Fields -->
                     <div id="userPassFields" class="space-y-5 hidden">
                         <div>
                             <label class="block text-sm font-medium text-slate-300 mb-1">Username</label>
@@ -246,43 +221,214 @@
                             <input type="password" id="passwordInput" class="input-field w-full rounded-md p-2.5 text-sm" placeholder="••••••••">
                         </div>
                     </div>
-
-                    <!-- Token Field -->
                     <div id="tokenField" class="hidden">
                         <label class="block text-sm font-medium text-slate-300 mb-1">Refresh Token</label>
                         <textarea id="tokenInput" class="input-field w-full rounded-md p-2.5 text-sm h-32 font-mono text-xs" placeholder="Paste refresh token here..."></textarea>
                     </div>
-
                     <button type="submit" id="loginBtn" class="btn w-full bg-accent hover:bg-accentHover text-white font-medium py-2.5 rounded-md mt-6 flex justify-center items-center gap-2">
                         <span>Connect to API</span>
                         <div id="loginSpinner" class="spinner hidden" style="width: 18px; height: 18px; border-width: 2px;"></div>
                     </button>
-
-                    <label class="flex items-center gap-2 mt-3 cursor-pointer select-none">
-                        <input type="checkbox" id="rememberMe" onchange="if(!this.checked) app.clearSavedCredentials()" class="w-4 h-4 rounded border-slate-600 bg-slate-800 text-accent focus:ring-accent/50 accent-[#0f7dff]">
-                        <span class="text-sm text-slate-400">Remember credentials</span>
-                    </label>
                 </form>
             </div>
         </div>
 
         <!-- ================= DASHBOARD SCREEN ================= -->
-        <div id="dashboardScreen" class="hidden flex-col h-full flex-grow gap-6 pb-6">
+        <div id="dashboardScreen" class="hidden flex-col h-full overflow-hidden">
             
-            <!-- Devices Grid -->
-            <div id="devicesContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Device cards injected here -->
+            <!-- Tab Bar -->
+            <div class="bg-slate-900/80 border-b border-slate-700/50 overflow-x-auto shrink-0 flex items-end px-4" id="tabContainer">
+                <!-- Tabs injected here -->
             </div>
 
-            <!-- Event Log -->
-            <div class="glass-panel rounded-xl mt-auto border border-slate-700/50 overflow-hidden flex flex-col h-64 shadow-lg">
-                <div class="bg-slate-800/50 px-4 py-2 border-b border-slate-700/50 flex justify-between items-center">
-                    <h3 class="text-sm font-medium flex items-center gap-2">
-                        <span class="text-accent">⚡</span> Event Log
-                    </h3>
-                    <button onclick="app.clearLog()" class="text-xs text-slate-400 hover:text-white transition-colors">Clear</button>
+            <!-- Active Device View Container -->
+            <div class="flex-grow overflow-y-auto p-4 lg:p-6" id="deviceViewContainer">
+                <div id="noDeviceView" class="h-full flex items-center justify-center text-slate-500">
+                    Select a device to view controls.
                 </div>
-                <div id="eventLog" class="p-4 overflow-y-auto flex-grow font-mono text-xs space-y-1.5 text-slate-300">
+                
+                <div id="activeDeviceView" class="hidden max-w-5xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 pb-20">
+                    
+                    <!-- Left Column: Status & Now Playing -->
+                    <div class="lg:col-span-5 flex flex-col gap-6">
+                        
+                        <!-- Header Card -->
+                        <div class="glass-panel p-5 rounded-xl border border-slate-700/50 relative overflow-hidden">
+                            <div class="flex justify-between items-start z-10 relative">
+                                <div>
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span id="devStatusDot" class="status-dot"></span>
+                                        <h2 id="devName" class="text-2xl font-bold tracking-tight"></h2>
+                                    </div>
+                                    <div class="text-sm text-slate-400 font-mono flex items-center gap-2">
+                                        <span id="devModel"></span>
+                                        <span class="text-slate-600">|</span>
+                                        <span id="devStateBadge" class="text-xs px-2 py-0.5 rounded bg-slate-800 border border-slate-700"></span>
+                                    </div>
+                                </div>
+                                
+                                <button onclick="app.sendKey('Power')" id="powerBtn" class="btn btn-control w-12 h-12 rounded-full border-2 transition-colors flex shrink-0" title="Power Toggle">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Now Playing Card -->
+                        <div class="glass-panel p-4 rounded-xl border border-slate-700/50 flex flex-col">
+                            <h3 class="text-xs uppercase tracking-wider text-slate-500 font-bold mb-3">Now Playing</h3>
+                            
+                            <div id="nowPlayingContent" class="hidden flex-col gap-3">
+                                <div class="relative w-full aspect-video rounded-lg overflow-hidden bg-black/50 border border-slate-700">
+                                    <img id="npImage" src="" class="w-full h-full object-cover">
+                                    <div id="npAppBadge" class="hidden absolute top-2 right-2 bg-black/70 backdrop-blur text-[10px] px-2 py-0.5 rounded font-medium border border-white/10"></div>
+                                </div>
+                                
+                                <div>
+                                    <div id="npChannel" class="text-accent text-sm font-semibold uppercase tracking-wider truncate"></div>
+                                    <div id="npTitle" class="text-lg font-bold text-white leading-tight mt-1"></div>
+                                    <div id="npEpisode" class="text-sm text-slate-400 mt-1"></div>
+                                </div>
+                                
+                                <div id="npProgressWrap" class="mt-2">
+                                    <div class="flex justify-between text-xs text-slate-400 font-mono mb-1">
+                                        <span id="npTimeCurrent">0:00</span>
+                                        <span id="npSpeedBadge" class="hidden bg-accent/20 text-accent px-1 rounded text-[10px]">x1</span>
+                                        <span id="npTimeTotal">0:00</span>
+                                    </div>
+                                    <div class="progress-container">
+                                        <div id="npProgressBar" class="progress-bar rounded-r" style="width: 0%"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="noContentMsg" class="py-8 text-center text-slate-500 italic">
+                                No content playing
+                            </div>
+                        </div>
+
+                        <!-- Message & Channel -->
+                        <div class="glass-panel p-4 rounded-xl border border-slate-700/50 space-y-4">
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs text-slate-400 uppercase tracking-wider font-bold">Switch Channel</label>
+                                <div class="flex gap-2">
+                                    <select id="channelSelect" class="input-field flex-grow text-sm rounded-md p-2 h-10">
+                                        <!-- Populated dynamically -->
+                                    </select>
+                                    <button onclick="app.setChannel()" class="btn btn-control w-10 h-10 text-accent">▶</button>
+                                </div>
+                            </div>
+
+                            <div class="flex flex-col gap-1.5">
+                                <label class="text-xs text-slate-400 uppercase tracking-wider font-bold">Send Message</label>
+                                <div class="flex gap-2">
+                                    <input type="text" id="msgInput" class="input-field flex-grow text-sm rounded-md p-2 h-10" placeholder="Hello TV...">
+                                    <button onclick="app.sendMessage()" class="btn btn-control w-10 h-10 text-accent">✉</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Remote Control -->
+                    <div class="lg:col-span-7 flex justify-center">
+                        <div class="glass-panel p-6 rounded-[2rem] border border-slate-700/50 w-full max-w-sm flex flex-col gap-8 bg-slate-900 shadow-2xl">
+                            
+                            <!-- Remote: Top Extra -->
+                            <div class="flex justify-between px-2">
+                                <button class="btn btn-control w-10 h-8 rounded text-xs" onclick="app.sendKey('Standby')">STB</button>
+                                <button class="btn btn-control w-10 h-8 rounded text-xs" onclick="app.sendKey('WakeUp')">WAKE</button>
+                                <button class="btn btn-control w-10 h-8 rounded text-xs" onclick="app.sendKey('NextUserProfile')">USR</button>
+                            </div>
+
+                            <!-- Remote: Media Playback -->
+                            <div class="flex justify-center gap-2 bg-slate-800/50 p-3 rounded-full border border-slate-700/50">
+                                <button class="btn btn-control w-10 h-10 rounded-full" onclick="app.sendKey('MediaRewind')">⏪</button>
+                                <button class="btn btn-control w-10 h-10 rounded-full" onclick="app.sendKey('MediaPlay')">▶</button>
+                                <button class="btn btn-control w-10 h-10 rounded-full" onclick="app.sendKey('MediaPause')">⏸</button>
+                                <button class="btn btn-control w-10 h-10 rounded-full" onclick="app.sendKey('MediaStop')">⏹</button>
+                                <button class="btn btn-control w-10 h-10 rounded-full" onclick="app.sendKey('MediaFastForward')">⏩</button>
+                                <button class="btn btn-control w-10 h-10 rounded-full text-red-400" onclick="app.sendKey('MediaRecord')">⏺</button>
+                            </div>
+
+                            <!-- Remote: Navigation / Quick Actions -->
+                            <div class="grid grid-cols-3 gap-3 text-sm font-medium px-4">
+                                <button class="btn btn-control py-2 rounded-lg" onclick="app.sendKey('MediaTopMenu')">Home</button>
+                                <button class="btn btn-control py-2 rounded-lg" onclick="app.sendKey('Guide')">Guide</button>
+                                <button class="btn btn-control py-2 rounded-lg" onclick="app.sendKey('TV')">TV</button>
+                                <button class="btn btn-control py-2 rounded-lg" onclick="app.sendKey('Info')">Info</button>
+                                <button class="btn btn-control py-2 rounded-lg" onclick="app.sendKey('ContextMenu')">Menu</button>
+                                <button class="btn btn-control py-2 rounded-lg" onclick="app.sendKey('Escape')">Back</button>
+                            </div>
+
+                            <!-- Remote: D-Pad & Volume/Channel -->
+                            <div class="flex justify-between items-center px-2">
+                                <div class="flex flex-col gap-2 bg-slate-800/30 p-2 rounded-full border border-slate-700/30">
+                                    <button class="btn btn-control w-10 h-12 rounded-t-full font-bold" onclick="app.sendKey('ChannelUp')">CH+</button>
+                                    <div class="h-px bg-slate-700 w-full"></div>
+                                    <button class="btn btn-control w-10 h-12 rounded-b-full font-bold" onclick="app.sendKey('ChannelDown')">CH-</button>
+                                </div>
+
+                                <div class="d-pad-grid">
+                                    <div></div>
+                                    <button class="btn btn-control w-14 h-14 rounded-t-xl bg-slate-800" onclick="app.sendKey('ArrowUp')">▲</button>
+                                    <div></div>
+                                    
+                                    <button class="btn btn-control w-14 h-14 rounded-l-xl bg-slate-800" onclick="app.sendKey('ArrowLeft')">◀</button>
+                                    <button class="btn btn-control w-14 h-14 rounded-full bg-slate-700 text-white font-bold shadow-inner" onclick="app.sendKey('Enter')">OK</button>
+                                    <button class="btn btn-control w-14 h-14 rounded-r-xl bg-slate-800" onclick="app.sendKey('ArrowRight')">▶</button>
+                                    
+                                    <div></div>
+                                    <button class="btn btn-control w-14 h-14 rounded-b-xl bg-slate-800" onclick="app.sendKey('ArrowDown')">▼</button>
+                                    <div></div>
+                                </div>
+
+                                <div class="flex flex-col gap-2 bg-slate-800/30 p-2 rounded-full border border-slate-700/30 opacity-50 cursor-not-allowed" title="Volume usually controlled via TV, not box">
+                                    <button class="btn w-10 h-12 rounded-t-full font-bold">V+</button>
+                                    <div class="h-px bg-slate-700 w-full"></div>
+                                    <button class="btn w-10 h-12 rounded-b-full font-bold">V-</button>
+                                </div>
+                            </div>
+
+                            <!-- Remote: Colors -->
+                            <div class="flex justify-center gap-4 px-4">
+                                <button class="btn btn-control btn-color-red w-12 h-6 rounded-full" onclick="app.sendKey('Red')"></button>
+                                <button class="btn btn-control btn-color-green w-12 h-6 rounded-full" onclick="app.sendKey('Green')"></button>
+                                <button class="btn btn-control btn-color-yellow w-12 h-6 rounded-full" onclick="app.sendKey('Yellow')"></button>
+                                <button class="btn btn-control btn-color-blue w-12 h-6 rounded-full" onclick="app.sendKey('Blue')"></button>
+                            </div>
+
+                            <!-- Remote: Numpad -->
+                            <div class="numpad-grid mb-4">
+                                <button class="btn btn-control h-12 rounded-full text-lg font-mono" onclick="app.sendKey('1')">1</button>
+                                <button class="btn btn-control h-12 rounded-full text-lg font-mono" onclick="app.sendKey('2')">2</button>
+                                <button class="btn btn-control h-12 rounded-full text-lg font-mono" onclick="app.sendKey('3')">3</button>
+                                <button class="btn btn-control h-12 rounded-full text-lg font-mono" onclick="app.sendKey('4')">4</button>
+                                <button class="btn btn-control h-12 rounded-full text-lg font-mono" onclick="app.sendKey('5')">5</button>
+                                <button class="btn btn-control h-12 rounded-full text-lg font-mono" onclick="app.sendKey('6')">6</button>
+                                <button class="btn btn-control h-12 rounded-full text-lg font-mono" onclick="app.sendKey('7')">7</button>
+                                <button class="btn btn-control h-12 rounded-full text-lg font-mono" onclick="app.sendKey('8')">8</button>
+                                <button class="btn btn-control h-12 rounded-full text-lg font-mono" onclick="app.sendKey('9')">9</button>
+                                <button class="btn btn-control h-12 rounded-full text-xs" onclick="app.sendKey('Subtitle')">SUB</button>
+                                <button class="btn btn-control h-12 rounded-full text-lg font-mono" onclick="app.sendKey('0')">0</button>
+                                <button class="btn btn-control h-12 rounded-full text-xs" onclick="app.sendKey('AudioTrack')">AUD</button>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Event Log (Collapsible Bottom Panel) -->
+            <div id="logPanel" class="glass-panel log-panel shrink-0 border-t border-slate-700/50 flex flex-col absolute bottom-0 w-full z-50">
+                <div class="px-4 h-[40px] flex justify-between items-center cursor-pointer bg-slate-800/80 hover:bg-slate-700/80 transition-colors" onclick="app.toggleLog()">
+                    <h3 class="text-sm font-medium flex items-center gap-2">
+                        <span class="text-accent">⚡</span> Event Log <span id="logCounter" class="bg-accent text-white text-[10px] px-1.5 rounded-full hidden">0</span>
+                    </h3>
+                    <div class="flex gap-4 items-center">
+                        <button onclick="event.stopPropagation(); app.clearLog()" class="text-xs text-slate-400 hover:text-white transition-colors">Clear</button>
+                        <span id="logChevron" class="text-slate-400 transform transition-transform">▲</span>
+                    </div>
+                </div>
+                <div id="eventLog" class="p-4 overflow-y-auto flex-grow font-mono text-xs space-y-1.5 text-slate-300 bg-background/90 backdrop-blur">
                     <!-- Logs injected here -->
                 </div>
             </div>
@@ -290,207 +436,52 @@
         </div>
     </main>
 
-    <!-- Templates -->
-    <template id="deviceCardTemplate">
-        <div class="glass-panel rounded-xl p-5 border border-slate-700/50 flex flex-col gap-4 device-card transition-all duration-300" data-device-id="">
-            
-            <!-- Header: Status & Info -->
-            <div class="flex justify-between items-start">
-                <div>
-                    <div class="flex items-center gap-2 mb-1">
-                        <span class="status-indicator status-dot"></span>
-                        <h2 class="text-lg font-bold device-name tracking-tight"></h2>
-                    </div>
-                    <div class="text-xs text-slate-400 font-mono flex items-center gap-2">
-                        <span class="device-model"></span>
-                        <span class="text-slate-600">|</span>
-                        <span class="device-state text-[10px] px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700"></span>
-                    </div>
-                </div>
-                
-                <!-- Power Button -->
-                <button class="btn btn-control power-btn w-10 h-10 rounded-full bg-slate-800 border-slate-700 text-slate-400 hover:text-white hover:border-accent" title="Power Toggle">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
-                </button>
-            </div>
-
-            <!-- Content Area (Thumbnail + Metadata) -->
-            <div class="bg-slate-900/50 rounded-lg p-3 border border-slate-800 flex gap-4">
-                <div class="w-1/3 shrink-0 relative">
-                    <img src="data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=" class="thumbnail-img w-full h-auto object-cover rounded shadow-md border border-slate-800" alt="Thumbnail">
-                    <div class="app-badge hidden absolute top-2 right-2 bg-black/70 backdrop-blur text-[10px] px-2 py-0.5 rounded font-medium border border-white/10"></div>
-                </div>
-                
-                <div class="flex flex-col justify-center flex-grow min-w-0">
-                    <div class="channel-name text-accent text-xs font-semibold mb-1 uppercase tracking-wider truncate"></div>
-                    <div class="show-title text-base font-medium text-white truncate leading-tight mb-1"></div>
-                    <div class="episode-info text-xs text-slate-400 truncate mb-2"></div>
-                    
-                    <!-- Progress -->
-                    <div class="progress-wrapper hidden mt-auto">
-                        <div class="flex justify-between text-[10px] text-slate-500 font-mono mb-1">
-                            <span class="time-current">0:00</span>
-                            <span class="time-total">0:00</span>
-                        </div>
-                        <div class="progress-container h-1.5">
-                            <div class="progress-bar rounded-r" style="width: 0%"></div>
-                        </div>
-                    </div>
-                    
-                    <!-- Offline / No Content state -->
-                    <div class="no-content-msg hidden text-sm text-slate-500 italic mt-2">
-                        No content playing
-                    </div>
-                </div>
-            </div>
-
-            <!-- Controls -->
-            <div class="mt-2 space-y-3">
-                
-                <!-- Playback & Channel -->
-                <div class="flex justify-between items-center bg-slate-800/30 p-2 rounded-lg border border-slate-700/30">
-                    <div class="flex gap-1">
-                        <button class="btn btn-control w-9 h-9 cmd-btn" data-cmd="rewind" title="Rewind">⏪</button>
-                        <button class="btn btn-control w-9 h-9 cmd-btn" data-cmd="play" title="Play">▶</button>
-                        <button class="btn btn-control w-9 h-9 cmd-btn" data-cmd="pause" title="Pause">⏸</button>
-                        <button class="btn btn-control w-9 h-9 cmd-btn" data-cmd="stop" title="Stop">⏹</button>
-                        <button class="btn btn-control w-9 h-9 cmd-btn" data-cmd="fast_forward" title="Fast Forward">⏩</button>
-                    </div>
-                    
-                    <div class="h-6 w-px bg-slate-700 mx-2"></div>
-                    
-                    <div class="flex gap-1">
-                        <button class="btn btn-control w-9 h-9 cmd-btn text-xs font-bold" data-cmd="ChannelDown" title="Channel Down">CH-</button>
-                        <button class="btn btn-control w-9 h-9 cmd-btn text-xs font-bold" data-cmd="ChannelUp" title="Channel Up">CH+</button>
-                    </div>
-                </div>
-
-                <!-- Advanced Controls Row -->
-                <div class="flex gap-2">
-                    <button class="btn btn-control flex-1 py-1.5 text-xs text-red-400 hover:text-red-300 cmd-btn" data-cmd="record">⏺ Record</button>
-                    <button class="btn btn-control flex-1 py-1.5 text-xs cmd-btn" data-cmd="enter">Enter/OK</button>
-                    <button class="btn btn-control flex-1 py-1.5 text-xs cmd-btn" data-cmd="skip_ad">Skip Ad</button>
-                </div>
-
-                <!-- Complex Inputs -->
-                <div class="grid grid-cols-2 gap-3 mt-2">
-                    <!-- Switch Channel -->
-                    <div class="flex flex-col gap-1">
-                        <label class="text-[10px] text-slate-400 uppercase tracking-wider">Switch Channel</label>
-                        <div class="flex gap-1">
-                            <select class="channel-select input-field flex-grow text-xs rounded p-1.5 border-slate-700 h-8">
-                                <!-- Populated dynamically -->
-                            </select>
-                            <button class="btn btn-control w-8 h-8 set-channel-btn text-accent">▶</button>
-                        </div>
-                    </div>
-
-                    <!-- Send Message -->
-                    <div class="flex flex-col gap-1">
-                        <label class="text-[10px] text-slate-400 uppercase tracking-wider">Send Message</label>
-                        <div class="flex gap-1">
-                            <input type="text" class="msg-input input-field flex-grow text-xs rounded p-1.5 border-slate-700 h-8" placeholder="Msg text...">
-                            <button class="btn btn-control w-8 h-8 send-msg-btn text-accent">✉</button>
-                        </div>
-                    </div>
-                    
-                    <!-- Send Key -->
-                    <div class="flex flex-col gap-1 col-span-2">
-                        <label class="text-[10px] text-slate-400 uppercase tracking-wider">Send Raw Key</label>
-                        <div class="flex gap-1">
-                            <input type="text" class="key-input input-field flex-grow text-xs rounded p-1.5 border-slate-700 h-8 font-mono" placeholder="e.g. Power, ContextMenu...">
-                            <button class="btn btn-control w-8 h-8 send-key-btn text-accent">⌨</button>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-        </div>
-    </template>
-
     <script>
-        /**
-         * LG Horizon Test UI - Application Logic
-         */
         const app = {
             state: {
                 countries: [],
                 channels: [],
                 devices: {},
+                keys: {},
+                activeDeviceId: null,
                 ws: null,
-                isLoggedIn: false
+                isLoggedIn: false,
+                logExpanded: false,
+                unreadLogs: 0
             },
-
-            // --- Initialization ---
 
             init() {
-                this.mockApiIfLocal(); // For dev testing without backend
-                this.fetchCountries().then(() => this.loadSavedCredentials());
-                this.checkExistingSession();
-            },
-
-            // --- Credentials persistence ---
-
-            saveCredentials() {
-                if (!document.getElementById('rememberMe').checked) return;
-                const select = document.getElementById('countrySelect');
-                const selected = select.options[select.selectedIndex];
-                const useToken = selected?.dataset.useToken === 'true';
-
-                const creds = { country: select.value };
-                if (!useToken) {
-                    creds.username = document.getElementById('usernameInput').value;
-                }
-                // Password and refresh token are never stored
-                localStorage.setItem('lghorizon_credentials', JSON.stringify(creds));
-                localStorage.setItem('lghorizon_remember', 'true');
-            },
-
-            loadSavedCredentials() {
-                const remember = localStorage.getItem('lghorizon_remember') === 'true';
-                document.getElementById('rememberMe').checked = remember;
-                if (!remember) return;
-
-                try {
-                    const creds = JSON.parse(localStorage.getItem('lghorizon_credentials'));
-                    if (!creds?.country) return;
-
-                    const select = document.getElementById('countrySelect');
-                    select.value = creds.country;
-                    this.updateLoginForm();
-
-                    if (creds.username) {
-                        document.getElementById('usernameInput').value = creds.username;
-                    }
-                } catch(e) {
-                    console.warn('Failed to load saved credentials', e);
-                }
-            },
-
-            clearSavedCredentials() {
-                localStorage.removeItem('lghorizon_credentials');
-                localStorage.removeItem('lghorizon_remember');
+                this.mockApiIfLocal();
+                this.loadSavedCredentials();
+                this.fetchCountries();
+                this.checkSession();
             },
 
             // --- API & Auth ---
 
+            loadSavedCredentials() {
+                const savedUser = localStorage.getItem('lg_username');
+                const savedCountry = localStorage.getItem('lg_country');
+                if(savedUser) document.getElementById('usernameInput').value = savedUser;
+                // Country selected after fetch
+                this.state.savedCountry = savedCountry;
+            },
+
             async fetchCountries() {
                 try {
                     const res = await fetch('/api/countries');
-                    if (!res.ok) throw new Error('Failed to fetch countries');
+                    if (!res.ok) throw new Error('Fetch failed');
                     const data = await res.json();
                     this.state.countries = data.countries || [];
                     this.renderCountrySelect();
                 } catch (e) {
-                    console.error(e);
-                    this.showToast('Failed to load countries. Is backend running?', 'error');
+                    this.showToast('Failed to load providers.', 'error');
                 }
             },
 
             renderCountrySelect() {
                 const select = document.getElementById('countrySelect');
                 select.innerHTML = '<option value="" disabled selected>Select Provider...</option>';
-                
                 this.state.countries.forEach(c => {
                     const opt = document.createElement('option');
                     opt.value = c.code;
@@ -498,20 +489,29 @@
                     opt.textContent = `${c.name} (${c.code.toUpperCase()})`;
                     select.appendChild(opt);
                 });
+                
+                if (this.state.savedCountry) {
+                    select.value = this.state.savedCountry;
+                    this.updateLoginForm();
+                }
             },
 
             updateLoginForm() {
                 const select = document.getElementById('countrySelect');
-                const selected = select.options[select.selectedIndex];
-                const useToken = selected.dataset.useToken === 'true';
-
+                if(!select.value) return;
+                const useToken = select.options[select.selectedIndex].dataset.useToken === 'true';
                 document.getElementById('userPassFields').classList.toggle('hidden', useToken);
                 document.getElementById('tokenField').classList.toggle('hidden', !useToken);
-                
-                // Clear inputs
-                document.getElementById('usernameInput').value = '';
-                document.getElementById('passwordInput').value = '';
-                document.getElementById('tokenInput').value = '';
+            },
+
+            async checkSession() {
+                try {
+                    const res = await fetch('/api/status');
+                    const data = await res.json();
+                    if (data.connected) {
+                        this.handleLoginSuccess(data);
+                    }
+                } catch(e) {} // Not logged in
             },
 
             async handleLogin(e) {
@@ -525,18 +525,12 @@
                 const payload = { country };
                 if (useToken) {
                     payload.refresh_token = document.getElementById('tokenInput').value;
-                    if(!payload.refresh_token) {
-                        this.showLoginError("Refresh token required");
-                        return;
-                    }
                 } else {
                     payload.username = document.getElementById('usernameInput').value;
                     payload.password = document.getElementById('passwordInput').value;
-                    if(!payload.username || !payload.password) {
-                        this.showLoginError("Username and password required");
-                        return;
-                    }
+                    localStorage.setItem('lg_username', payload.username);
                 }
+                localStorage.setItem('lg_country', country);
 
                 this.setLoginLoading(true);
 
@@ -546,7 +540,6 @@
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(payload)
                     });
-                    
                     const data = await res.json();
                     
                     if (data.success) {
@@ -555,7 +548,7 @@
                         this.showLoginError(data.error || "Login failed");
                     }
                 } catch (err) {
-                    this.showLoginError("Connection error. Check backend.");
+                    this.showLoginError("Connection error.");
                 } finally {
                     this.setLoginLoading(false);
                 }
@@ -564,376 +557,171 @@
             handleLoginSuccess(data) {
                 this.state.isLoggedIn = true;
                 this.state.channels = data.channels || [];
-                this.saveCredentials();
+                if (data.keys) this.state.keys = data.keys;
                 
-                // Switch screens
+                if (data.devices) {
+                    data.devices.forEach(d => { this.state.devices[d.device_id] = d; });
+                }
+
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('appHeader').classList.remove('hidden');
                 document.getElementById('dashboardScreen').classList.remove('hidden');
                 document.getElementById('dashboardScreen').classList.add('flex');
                 
-                this.addLogEntry("System", "Logged in successfully", "success");
+                this.addLogEntry("System", "Connected to API", "success");
                 
-                // Render initial devices
-                if (data.devices) {
-                    document.getElementById('devicesContainer').innerHTML = ''; // clear
-                    data.devices.forEach(dev => this.updateDevice(dev));
+                this.populateChannelSelect();
+                this.renderTabs();
+                
+                // Select first device if none active
+                if (!this.state.activeDeviceId && data.devices && data.devices.length > 0) {
+                    this.setActiveDevice(data.devices[0].device_id);
                 }
 
                 this.connectWebSocket();
             },
 
             async logout() {
-                try {
-                    await fetch('/api/logout', { method: 'POST' });
-                } catch(e) {}
-                
-                if (this.state.ws) {
-                    this.state.ws.close();
-                }
+                try { await fetch('/api/logout', { method: 'POST' }); } catch(e) {}
+                if (this.state.ws) this.state.ws.close();
                 
                 this.state.isLoggedIn = false;
                 this.state.devices = {};
+                this.state.activeDeviceId = null;
                 
-                document.getElementById('devicesContainer').innerHTML = '';
                 document.getElementById('loginScreen').classList.remove('hidden');
                 document.getElementById('appHeader').classList.add('hidden');
                 document.getElementById('dashboardScreen').classList.add('hidden');
                 document.getElementById('dashboardScreen').classList.remove('flex');
                 
-                // Restore saved credentials so the user can edit and reconnect
-                this.loadSavedCredentials();
-            },
-
-            async checkExistingSession() {
-                try {
-                    const res = await fetch('/api/status');
-                    if (!res.ok) return;
-                    const data = await res.json();
-                    if (data.connected) {
-                        this.handleLoginSuccess({
-                            success: true,
-                            devices: data.devices,
-                            channels: data.channels,
-                        });
-                    }
-                } catch(e) {
-                    // Backend not reachable, stay on login
-                }
-            },
-
-            // --- WebSocket & Live Updates ---
-
-            connectWebSocket() {
-                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                const wsUrl = `${protocol}//${window.location.host}/ws`;
-                
-                this.updateWsStatus('connecting');
-                
-                try {
-                    this.state.ws = new WebSocket(wsUrl);
-                    
-                    this.state.ws.onopen = () => {
-                        this.updateWsStatus('connected');
-                        this.addLogEntry("System", "WebSocket connected");
-                    };
-                    
-                    this.state.ws.onmessage = (event) => {
-                        try {
-                            const msg = JSON.parse(event.data);
-                            if (msg.type === 'state_change' && msg.device) {
-                                this.updateDevice(msg.device);
-                                this.logDeviceStateChange(msg.device);
-                            } else if (msg.type === 'disconnected') {
-                                this.addLogEntry("System", "Backend reported disconnection", "error");
-                                this.showToast("Connection to provider lost", "error");
-                            }
-                        } catch (e) {
-                            console.error("WS parse error", e);
-                        }
-                    };
-                    
-                    this.state.ws.onclose = () => {
-                        this.updateWsStatus('disconnected');
-                        if (this.state.isLoggedIn) {
-                            this.addLogEntry("System", "WebSocket closed. Reconnecting in 5s...", "warning");
-                            setTimeout(() => this.connectWebSocket(), 5000);
-                        }
-                    };
-                    
-                    this.state.ws.onerror = () => {
-                        // Handled by onclose
-                    };
-                } catch(e) {
-                    console.error("WS Connect error", e);
-                }
-            },
-
-            updateWsStatus(status) {
-                const el = document.getElementById('wsStatus');
-                if (status === 'connected') {
-                    el.innerHTML = '<span class="status-dot status-green"></span> Live';
-                    el.className = 'flex items-center gap-2 text-sm text-success font-medium';
-                } else if (status === 'connecting') {
-                    el.innerHTML = '<span class="status-dot status-orange"></span> Connecting';
-                    el.className = 'flex items-center gap-2 text-sm text-warning';
-                } else {
-                    el.innerHTML = '<span class="status-dot status-gray"></span> Offline';
-                    el.className = 'flex items-center gap-2 text-sm text-offline';
-                }
+                this.addLogEntry("System", "Logged out");
             },
 
             // --- UI Rendering ---
 
-            updateDevice(dev) {
-                this.state.devices[dev.device_id] = dev;
+            renderTabs() {
+                const container = document.getElementById('tabContainer');
+                container.innerHTML = '';
                 
-                let card = document.querySelector(`.device-card[data-device-id="${dev.device_id}"]`);
-                if (!card) {
-                    card = this.createDeviceCard(dev.device_id);
-                }
-
-                // Header Info
-                card.querySelector('.device-name').textContent = dev.name || 'Unknown Device';
-                card.querySelector('.device-model').textContent = `${dev.manufacturer || ''} ${dev.model || ''}`.trim();
-                card.querySelector('.device-state').textContent = dev.state;
-
-                // Status Indicator
-                const indicator = card.querySelector('.status-indicator');
-                indicator.className = 'status-indicator status-dot ' + this.getStatusColorClass(dev.state);
-
-                // Thumbnail
-                const img = card.querySelector('.thumbnail-img');
-                if (dev.image) {
-                    img.src = dev.image;
-                    img.classList.remove('opacity-50', 'grayscale');
-                } else {
-                    img.src = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="%23334155" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect><polyline points="17 2 12 7 7 2"></polyline></svg>';
-                    img.classList.add('opacity-50', 'grayscale');
-                }
-
-                // App Badge
-                const badge = card.querySelector('.app-badge');
-                if (dev.media_type === 'app' && dev.app_name) {
-                    badge.textContent = dev.app_name;
-                    badge.classList.remove('hidden');
-                } else {
-                    badge.classList.add('hidden');
-                }
-
-                // Content Meta
-                const isOnline = dev.state === 'ONLINE_RUNNING';
-                const hasContent = isOnline && (dev.channel_name || dev.show_title);
-                
-                const metaContainer = card.querySelector('.flex-col.justify-center');
-                const noContent = card.querySelector('.no-content-msg');
-                const chName = card.querySelector('.channel-name');
-                const showTitle = card.querySelector('.show-title');
-                const epInfo = card.querySelector('.episode-info');
-                const progWrap = card.querySelector('.progress-wrapper');
-
-                if (hasContent) {
-                    noContent.classList.add('hidden');
-                    chName.classList.remove('hidden');
-                    showTitle.classList.remove('hidden');
+                Object.values(this.state.devices).forEach(dev => {
+                    const tab = document.createElement('div');
+                    tab.className = `tab-item ${this.state.activeDeviceId === dev.device_id ? 'active' : ''}`;
+                    tab.onclick = () => this.setActiveDevice(dev.device_id);
                     
-                    chName.textContent = dev.channel_name || (dev.media_type === 'app' ? 'App' : '');
-                    showTitle.textContent = dev.show_title || '';
+                    const color = this.getStatusColorClass(dev.state);
+                    tab.innerHTML = `<span class="status-dot ${color}"></span> ${dev.name || 'Device'}`;
+                    container.appendChild(tab);
+                });
+            },
+
+            setActiveDevice(deviceId) {
+                this.state.activeDeviceId = deviceId;
+                this.renderTabs();
+                this.updateActiveDeviceView();
+            },
+
+            updateActiveDeviceView() {
+                const dev = this.state.devices[this.state.activeDeviceId];
+                const noView = document.getElementById('noDeviceView');
+                const activeView = document.getElementById('activeDeviceView');
+
+                if (!dev) {
+                    noView.classList.remove('hidden');
+                    activeView.classList.add('hidden');
+                    return;
+                }
+
+                noView.classList.add('hidden');
+                activeView.classList.remove('hidden');
+                activeView.classList.add('grid');
+
+                // Header
+                document.getElementById('devName').textContent = dev.name;
+                document.getElementById('devModel').textContent = `${dev.manufacturer || ''} ${dev.model || ''}`;
+                document.getElementById('devStateBadge').textContent = dev.state;
+                
+                const dot = document.getElementById('devStatusDot');
+                dot.className = 'status-dot ' + this.getStatusColorClass(dev.state);
+
+                // Power Btn styling
+                const pwrBtn = document.getElementById('powerBtn');
+                if (dev.state === 'ONLINE_RUNNING') {
+                    pwrBtn.className = 'btn btn-control w-12 h-12 rounded-full border-2 text-success border-success bg-success/10';
+                } else {
+                    pwrBtn.className = 'btn btn-control w-12 h-12 rounded-full border-2 text-slate-400 border-slate-700 bg-slate-800 hover:text-white hover:border-accent';
+                }
+
+                // Now Playing
+                const isOnline = dev.state === 'ONLINE_RUNNING';
+                const hasContent = isOnline && (dev.channel_name || dev.show_title || dev.app_name);
+                
+                const npContent = document.getElementById('nowPlayingContent');
+                const noContentMsg = document.getElementById('noContentMsg');
+                
+                if (hasContent) {
+                    npContent.classList.remove('hidden');
+                    npContent.classList.add('flex');
+                    noContentMsg.classList.add('hidden');
+
+                    const img = document.getElementById('npImage');
+                    img.src = dev.image || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="100%" height="100%" viewBox="0 0 24 24" fill="none" stroke="%23334155" stroke-width="1"><rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect><polyline points="17 2 12 7 7 2"></polyline></svg>';
+                    
+                    document.getElementById('npChannel').textContent = dev.channel_name || '';
+                    document.getElementById('npTitle').textContent = dev.show_title || dev.app_name || '';
                     
                     let epStr = '';
                     if (dev.season_number) epStr += `S${dev.season_number.toString().padStart(2, '0')} `;
                     if (dev.episode_number) epStr += `E${dev.episode_number.toString().padStart(2, '0')} `;
                     if (dev.episode_title) epStr += `- ${dev.episode_title}`;
-                    epInfo.textContent = epStr;
-                    epInfo.classList.toggle('hidden', !epStr);
+                    document.getElementById('npEpisode').textContent = epStr;
+
+                    const badge = document.getElementById('npAppBadge');
+                    if (dev.media_type === 'app' && dev.app_name) {
+                        badge.textContent = dev.app_name;
+                        badge.classList.remove('hidden');
+                    } else {
+                        badge.classList.add('hidden');
+                    }
 
                     // Progress
+                    const progWrap = document.getElementById('npProgressWrap');
                     if (dev.duration > 0 && dev.position >= 0) {
                         progWrap.classList.remove('hidden');
-                        card.querySelector('.time-current').textContent = this.formatTime(dev.position);
-                        card.querySelector('.time-total').textContent = this.formatTime(dev.duration);
+                        document.getElementById('npTimeCurrent').textContent = this.formatTime(dev.position);
+                        document.getElementById('npTimeTotal').textContent = this.formatTime(dev.duration);
                         const pct = Math.min(100, Math.max(0, (dev.position / dev.duration) * 100));
-                        card.querySelector('.progress-bar').style.width = `${pct}%`;
+                        document.getElementById('npProgressBar').style.width = `${pct}%`;
                     } else {
                         progWrap.classList.add('hidden');
                     }
-                } else {
-                    noContent.classList.remove('hidden');
-                    chName.classList.add('hidden');
-                    showTitle.classList.add('hidden');
-                    epInfo.classList.add('hidden');
-                    progWrap.classList.add('hidden');
-                    if(dev.state === 'OFFLINE') {
-                        noContent.textContent = 'Device is offline';
-                    } else if (dev.state === 'ONLINE_STANDBY') {
-                        noContent.textContent = 'Device is in standby';
+
+                    // Speed
+                    const spd = document.getElementById('npSpeedBadge');
+                    if(dev.speed !== undefined && dev.speed !== 1) {
+                        spd.textContent = `x${dev.speed}`;
+                        spd.classList.remove('hidden');
                     } else {
-                        noContent.textContent = 'No content available';
+                        spd.classList.add('hidden');
                     }
-                }
-                
-                // Update Power Button style based on state
-                const pwrBtn = card.querySelector('.power-btn');
-                if (dev.state === 'ONLINE_RUNNING') {
-                    pwrBtn.classList.add('text-success', 'border-success', 'bg-success/10');
-                    pwrBtn.classList.remove('text-slate-400', 'border-slate-700', 'bg-slate-800');
                 } else {
-                    pwrBtn.classList.remove('text-success', 'border-success', 'bg-success/10');
-                    pwrBtn.classList.add('text-slate-400', 'border-slate-700', 'bg-slate-800');
+                    npContent.classList.add('hidden');
+                    npContent.classList.remove('flex');
+                    noContentMsg.classList.remove('hidden');
+                    if(dev.state === 'OFFLINE') noContentMsg.textContent = 'Device is offline';
+                    else if (dev.state === 'ONLINE_STANDBY') noContentMsg.textContent = 'Device is in standby';
+                    else noContentMsg.textContent = 'No content available';
                 }
             },
 
-            createDeviceCard(deviceId) {
-                const tpl = document.getElementById('deviceCardTemplate');
-                const clone = tpl.content.cloneNode(true);
-                const card = clone.querySelector('.device-card');
-                card.dataset.deviceId = deviceId;
-                
-                // Populate Channels
-                const select = card.querySelector('.channel-select');
+            populateChannelSelect() {
+                const select = document.getElementById('channelSelect');
                 select.innerHTML = '<option value="" disabled selected>Select channel...</option>';
                 this.state.channels.forEach(ch => {
                     const opt = document.createElement('option');
-                    opt.value = ch.title; // Backend set_channel looks up by title
+                    opt.value = ch.title || ch.id;
                     opt.textContent = `${ch.number ? ch.number+'. ' : ''}${ch.title}`;
                     select.appendChild(opt);
                 });
-
-                // Attach Event Listeners
-                
-                // Power
-                card.querySelector('.power-btn').addEventListener('click', () => {
-                    const dev = this.state.devices[deviceId];
-                    const cmd = dev.state === 'ONLINE_RUNNING' ? 'turn_off' : 'turn_on';
-                    this.sendCommand(deviceId, cmd);
-                });
-
-                // Simple commands
-                card.querySelectorAll('.cmd-btn').forEach(btn => {
-                    btn.addEventListener('click', (e) => {
-                        this.sendCommand(deviceId, e.currentTarget.dataset.cmd);
-                    });
-                });
-
-                // Set Channel
-                card.querySelector('.set-channel-btn').addEventListener('click', () => {
-                    const val = card.querySelector('.channel-select').value;
-                    if(val) this.sendCommand(deviceId, 'set_channel', { channel_name: val });
-                });
-
-                // Send Msg
-                card.querySelector('.send-msg-btn').addEventListener('click', () => {
-                    const input = card.querySelector('.msg-input');
-                    if(input.value) {
-                        this.sendCommand(deviceId, 'display_message', { message: input.value });
-                        input.value = '';
-                    }
-                });
-
-                // Send Key
-                card.querySelector('.send-key-btn').addEventListener('click', () => {
-                    const input = card.querySelector('.key-input');
-                    if(input.value) {
-                        this.sendCommand(deviceId, 'send_key', { key: input.value });
-                        input.value = '';
-                    }
-                });
-
-                document.getElementById('devicesContainer').appendChild(card);
-                return card;
-            },
-
-            // --- Commands ---
-
-            async sendCommand(deviceId, command, params = {}) {
-                const payload = { device_id: deviceId, command, ...params };
-                
-                // Visual feedback on the button
-                // Could add spinner here, keeping it simple for now
-                
-                try {
-                    const res = await fetch('/api/command', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-                    
-                    const data = await res.json();
-                    if (res.ok && data.success !== false) {
-                        this.showToast(`Command '${command}' sent`, 'success');
-                        this.addLogEntry("Command", `Sent '${command}' to ${this.state.devices[deviceId]?.name || deviceId}`);
-                    } else {
-                        throw new Error(data.error || 'Command failed');
-                    }
-                } catch(e) {
-                    this.showToast(`Error: ${e.message}`, 'error');
-                    this.addLogEntry("Error", `Command '${command}' failed: ${e.message}`, "error");
-                }
-            },
-
-            // --- Logging & Utilities ---
-
-            logDeviceStateChange(dev) {
-                let msg = `${dev.state}`;
-                if (dev.state === 'ONLINE_RUNNING') {
-                    if (dev.channel_name && dev.show_title) {
-                        msg += ` - ${dev.channel_name}: ${dev.show_title}`;
-                    } else if (dev.app_name) {
-                        msg += ` - App: ${dev.app_name}`;
-                    }
-                }
-                this.addLogEntry(dev.name, msg);
-            },
-
-            addLogEntry(source, message, type = "info") {
-                const log = document.getElementById('eventLog');
-                const time = new Date().toLocaleTimeString([], {hour12:false});
-                
-                const entry = document.createElement('div');
-                let colorCls = "text-slate-300";
-                if(type==="error") colorCls = "text-red-400";
-                if(type==="success") colorCls = "text-success";
-                if(type==="warning") colorCls = "text-warning";
-
-                entry.className = `flex gap-2 ${colorCls} hover:bg-slate-800/50 px-2 py-0.5 rounded -mx-2 transition-colors`;
-                entry.innerHTML = `
-                    <span class="text-slate-500 shrink-0">[${time}]</span>
-                    <span class="font-bold shrink-0">${source}:</span>
-                    <span class="break-words">${message}</span>
-                `;
-                
-                log.appendChild(entry);
-                
-                // Keep max 100 entries
-                while(log.children.length > 100) {
-                    log.removeChild(log.firstChild);
-                }
-                
-                // Auto scroll
-                log.scrollTop = log.scrollHeight;
-            },
-
-            clearLog() {
-                document.getElementById('eventLog').innerHTML = '';
-            },
-
-            showToast(msg, type = 'info') {
-                const container = document.getElementById('toastContainer');
-                const toast = document.createElement('div');
-                toast.className = `toast ${type}`;
-                
-                let icon = 'ℹ️';
-                if(type==='error') icon = '❌';
-                if(type==='success') icon = '✅';
-
-                toast.innerHTML = `<div class="flex items-center gap-2"><span class="text-sm">${icon}</span><span class="text-sm font-medium text-white">${msg}</span></div>`;
-                
-                container.appendChild(toast);
-                
-                // Clean up DOM after animation
-                setTimeout(() => {
-                    if(toast.parentNode) toast.parentNode.removeChild(toast);
-                }, 3000);
             },
 
             getStatusColorClass(state) {
@@ -954,23 +742,186 @@
                 return `${m}:${s.toString().padStart(2, '0')}`;
             },
 
+            // --- WebSockets ---
+
+            connectWebSocket() {
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const wsUrl = `${protocol}//${window.location.host}/ws`;
+                
+                this.updateWsStatus('connecting');
+                
+                try {
+                    this.state.ws = new WebSocket(wsUrl);
+                    this.state.ws.onopen = () => {
+                        this.updateWsStatus('connected');
+                        this.addLogEntry("System", "WebSocket connected");
+                    };
+                    this.state.ws.onmessage = (event) => {
+                        try {
+                            const msg = JSON.parse(event.data);
+                            if (msg.type === 'state_change' && msg.device) {
+                                this.state.devices[msg.device.device_id] = msg.device;
+                                this.logDeviceStateChange(msg.device);
+                                if (this.state.activeDeviceId === msg.device.device_id) {
+                                    this.updateActiveDeviceView();
+                                }
+                                this.renderTabs(); // update dots
+                            } else if (msg.type === 'disconnected') {
+                                this.addLogEntry("System", "Disconnected by backend", "error");
+                                this.showToast("Connection to provider lost", "error");
+                            }
+                        } catch (e) {}
+                    };
+                    this.state.ws.onclose = () => {
+                        this.updateWsStatus('disconnected');
+                        if (this.state.isLoggedIn) setTimeout(() => this.connectWebSocket(), 5000);
+                    };
+                } catch(e) {}
+            },
+
+            updateWsStatus(status) {
+                const el = document.getElementById('wsStatus');
+                if (status === 'connected') {
+                    el.innerHTML = '<span class="status-dot status-green"></span> Live';
+                    el.className = 'flex items-center gap-2 text-sm text-success font-medium';
+                } else if (status === 'connecting') {
+                    el.innerHTML = '<span class="status-dot status-orange"></span> Connecting';
+                    el.className = 'flex items-center gap-2 text-sm text-warning';
+                } else {
+                    el.innerHTML = '<span class="status-dot status-gray"></span> Offline';
+                    el.className = 'flex items-center gap-2 text-sm text-offline';
+                }
+            },
+
+            // --- Commands ---
+
+            async sendCommand(command, params = {}) {
+                if(!this.state.activeDeviceId) return;
+                const dev = this.state.devices[this.state.activeDeviceId];
+                
+                // Override power button if needed based on state
+                if (command === 'send_key' && params.key === 'Power') {
+                    if (dev.state === 'ONLINE_RUNNING') command = 'turn_off';
+                    else command = 'turn_on';
+                    delete params.key;
+                }
+
+                const payload = { device_id: this.state.activeDeviceId, command, ...params };
+                
+                try {
+                    const res = await fetch('/api/command', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success !== false) {
+                        const cmdDesc = command === 'send_key' ? params.key : command;
+                        this.addLogEntry("Command", `Sent '${cmdDesc}' to ${dev.name}`);
+                    } else {
+                        throw new Error(data.error || 'Command failed');
+                    }
+                } catch(e) {
+                    this.showToast(`Error: ${e.message}`, 'error');
+                    this.addLogEntry("Error", `Command failed: ${e.message}`, "error");
+                }
+            },
+
+            sendKey(keyName) {
+                this.sendCommand('send_key', { key: keyName });
+            },
+
+            setChannel() {
+                const val = document.getElementById('channelSelect').value;
+                if(val) this.sendCommand('set_channel', { channel_name: val });
+            },
+
+            sendMessage() {
+                const input = document.getElementById('msgInput');
+                if(input.value) {
+                    this.sendCommand('display_message', { message: input.value });
+                    input.value = '';
+                }
+            },
+
+            // --- Logging ---
+
+            toggleLog() {
+                this.state.logExpanded = !this.state.logExpanded;
+                const panel = document.getElementById('logPanel');
+                const chev = document.getElementById('logChevron');
+                const counter = document.getElementById('logCounter');
+                
+                if(this.state.logExpanded) {
+                    panel.classList.add('expanded');
+                    chev.textContent = '▼';
+                    this.state.unreadLogs = 0;
+                    counter.classList.add('hidden');
+                } else {
+                    panel.classList.remove('expanded');
+                    chev.textContent = '▲';
+                }
+            },
+
+            logDeviceStateChange(dev) {
+                let msg = `${dev.state}`;
+                if (dev.state === 'ONLINE_RUNNING') {
+                    if (dev.channel_name && dev.show_title) msg += ` - ${dev.channel_name}: ${dev.show_title}`;
+                    else if (dev.app_name) msg += ` - App: ${dev.app_name}`;
+                }
+                this.addLogEntry(dev.name, msg);
+            },
+
+            addLogEntry(source, message, type = "info") {
+                const log = document.getElementById('eventLog');
+                const time = new Date().toLocaleTimeString([], {hour12:false});
+                
+                const entry = document.createElement('div');
+                let colorCls = "text-slate-300";
+                if(type==="error") colorCls = "text-red-400";
+                if(type==="success") colorCls = "text-success";
+                if(type==="warning") colorCls = "text-warning";
+
+                entry.className = `flex gap-2 ${colorCls} hover:bg-slate-700/50 px-2 py-0.5 rounded -mx-2 transition-colors`;
+                entry.innerHTML = `
+                    <span class="text-slate-500 shrink-0">[${time}]</span>
+                    <span class="font-bold shrink-0">${source}:</span>
+                    <span class="break-words">${message}</span>
+                `;
+                
+                log.appendChild(entry);
+                while(log.children.length > 100) log.removeChild(log.firstChild);
+                log.scrollTop = log.scrollHeight;
+
+                if (!this.state.logExpanded) {
+                    this.state.unreadLogs++;
+                    const counter = document.getElementById('logCounter');
+                    counter.textContent = this.state.unreadLogs;
+                    counter.classList.remove('hidden');
+                }
+            },
+
+            clearLog() {
+                document.getElementById('eventLog').innerHTML = '';
+            },
+
+            showToast(msg, type = 'info') {
+                const container = document.getElementById('toastContainer');
+                const toast = document.createElement('div');
+                toast.className = `toast ${type}`;
+                let icon = type==='error' ? '❌' : (type==='success' ? '✅' : 'ℹ️');
+                toast.innerHTML = `<div class="flex items-center gap-2"><span class="text-sm">${icon}</span><span class="text-sm font-medium text-white">${msg}</span></div>`;
+                container.appendChild(toast);
+                setTimeout(() => { if(toast.parentNode) toast.parentNode.removeChild(toast); }, 3000);
+            },
+
             setLoginLoading(isLoading) {
                 const btn = document.getElementById('loginBtn');
-                const spinner = document.getElementById('loginSpinner');
-                const span = btn.querySelector('span');
-                const err = document.getElementById('loginErrorMsg');
-                
                 btn.disabled = isLoading;
-                if(isLoading) {
-                    err.classList.add('hidden');
-                    btn.classList.add('opacity-80', 'cursor-not-allowed');
-                    span.textContent = 'Connecting...';
-                    spinner.classList.remove('hidden');
-                } else {
-                    btn.classList.remove('opacity-80', 'cursor-not-allowed');
-                    span.textContent = 'Connect to API';
-                    spinner.classList.add('hidden');
-                }
+                btn.classList.toggle('opacity-80', isLoading);
+                btn.classList.toggle('cursor-not-allowed', isLoading);
+                document.getElementById('loginSpinner').classList.toggle('hidden', !isLoading);
+                document.getElementById('loginErrorMsg').classList.add('hidden');
             },
 
             showLoginError(msg) {
@@ -979,68 +930,56 @@
                 err.classList.remove('hidden');
             },
 
-            // --- Mock API for Development ---
+            // --- Mock API ---
             mockApiIfLocal() {
-                // If running locally as a file, mock fetch for testing the UI
                 if (window.location.protocol === 'file:') {
-                    console.log("Running from file, injecting mock API...");
-                    const originalFetch = window.fetch;
                     window.fetch = async function(url, options) {
-                        console.log("MOCK FETCH:", url, options);
-                        
                         if (url.includes('/api/countries')) {
                             return { ok: true, json: async () => ({ countries: [
                                 { code: 'nl', name: 'Ziggo', use_refreshtoken: false },
                                 { code: 'ch', name: 'Sunrise', use_refreshtoken: true }
                             ] }) };
                         }
-                        
+                        if (url.includes('/api/status')) return { ok: true, json: async () => ({ connected: false }) };
                         if (url.includes('/api/login')) {
                             return new Promise(resolve => setTimeout(() => {
                                 resolve({ ok: true, json: async () => ({
                                     success: true,
-                                    channels: [
-                                        { id: '1', title: 'NPO 1', number: '1' },
-                                        { id: '2', title: 'RTL 4', number: '4' }
-                                    ],
+                                    channels: [{ id: '1', title: 'NPO 1', number: '1' }, { id: '2', title: 'RTL 4', number: '4' }],
+                                    keys: {
+                                        "Power": ["Power", "Standby", "WakeUp"],
+                                        "Navigation": ["ChannelUp", "ChannelDown", "MediaTopMenu", "Guide", "Help", "Info", "ContextMenu", "NextUserProfile", "TV", "Teletext", "Subtitle", "AudioTrack"],
+                                        "D-Pad": ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Enter", "Escape", "Backspace"],
+                                    },
                                     devices: [{
-                                        device_id: "mock123", name: "Woonkamer", manufacturer: "Arris", model: "DCX960",
-                                        state: "ONLINE_RUNNING", channel_name: "NPO 1", show_title: "NOS Journaal",
+                                        device_id: "mock123", name: "Living Room", manufacturer: "Arris", model: "DCX960",
+                                        state: "ONLINE_RUNNING", channel_name: "NPO 1", show_title: "News Broadcast",
                                         duration: 3600, position: 1800, image: "https://via.placeholder.com/320x180/1a1a2e/0f7dff?text=NPO+1"
                                     }, {
-                                        device_id: "mock456", name: "Slaapkamer", manufacturer: "Arris", model: "DCX960",
-                                        state: "ONLINE_STANDBY", channel_name: "", show_title: ""
+                                        device_id: "mock456", name: "Bedroom", manufacturer: "Arris", model: "DCX960",
+                                        state: "ONLINE_STANDBY"
                                     }]
                                 }) });
-                            }, 800));
+                            }, 500));
                         }
-
-                        if (url.includes('/api/command')) {
-                            return { ok: true, json: async () => ({ success: true }) };
-                        }
-
-                        return originalFetch(url, options);
+                        if (url.includes('/api/command')) return { ok: true, json: async () => ({ success: true }) };
+                        return fetch(url, options);
                     };
 
-                    // Mock WebSocket
-                    const originalWS = window.WebSocket;
                     window.WebSocket = function() {
                         setTimeout(() => {
                             if(this.onopen) this.onopen();
-                            
-                            // Simulate state changes
                             setInterval(() => {
                                 if(!this.onmessage) return;
-                                const isAdv = Math.random() > 0.5;
                                 this.onmessage({ data: JSON.stringify({
                                     type: "state_change",
                                     device: {
-                                        device_id: "mock123", name: "Woonkamer", manufacturer: "Arris", model: "DCX960",
-                                        state: "ONLINE_RUNNING", channel_name: isAdv ? "RTL 4" : "NPO 1", show_title: isAdv ? "Movie" : "News",
+                                        device_id: "mock123", name: "Living Room", manufacturer: "Arris", model: "DCX960",
+                                        state: "ONLINE_RUNNING", channel_name: "RTL 4", show_title: "Movie " + Math.floor(Math.random()*10),
                                         duration: 3600, position: Math.random() * 3600
                                     }
                                 }) });
-                            }, 5000);
+                            }, 10000);
                         }, 500);
                         this.close = function() { if(this.onclose) this.onclose(); };
                     };
@@ -1048,7 +987,6 @@
             }
         };
 
-        // Boot
         document.addEventListener('DOMContentLoaded', () => app.init());
     </script>
 </body>
