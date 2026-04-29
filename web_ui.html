@@ -718,7 +718,7 @@
                 select.innerHTML = '<option value="" disabled selected>Select channel...</option>';
                 this.state.channels.forEach(ch => {
                     const opt = document.createElement('option');
-                    opt.value = ch.title || ch.id;
+                    opt.value = ch.number || ch.title;
                     opt.textContent = `${ch.number ? ch.number+'. ' : ''}${ch.title}`;
                     select.appendChild(opt);
                 });
@@ -833,7 +833,7 @@
 
             setChannel() {
                 const val = document.getElementById('channelSelect').value;
-                if(val) this.sendCommand('set_channel', { channel_name: val });
+                if(val) this.sendCommand('set_channel_by_number', { channel_number: val });
             },
 
             sendMessage() {

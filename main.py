@@ -377,14 +377,18 @@ async def main():
 
                     elif cmd == "channel":
                         if len(parts) < 3:
-                            print("  Usage: channel <box_nr> <channel_name>")
+                            print("  Usage: channel <box_nr> <number_or_name>")
                             continue
                         try:
                             idx = int(parts[1])
-                            channel_name = parts[2]
+                            channel_input = parts[2]
                             dev = device_list[idx]
-                            print(f"  Switching {dev.device_friendly_name} to {channel_name}...")
-                            await dev.set_channel(channel_name)
+                            print(f"  Switching {dev.device_friendly_name} to {channel_input}...")
+                            # Try by number first, fall back to name
+                            try:
+                                await dev.set_channel_by_number(channel_input)
+                            except ValueError:
+                                await dev.set_channel(channel_input)
                             print("  ✓ Channel switched!")
                         except (ValueError, IndexError):
                             print(f"  Invalid box number. Use 'boxes' to see available boxes (0-{len(device_list)-1}).")
