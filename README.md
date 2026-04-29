@@ -258,7 +258,26 @@ python -m pytest tests/ -v
 1. Create a `secrets.json` (see Quick Start)
 2. Run `python main.py`
 
-The demo script prints all profiles, devices, channels, recordings, and then monitors live state changes with a visual progress bar.
+The demo script prints all profiles, devices, channels, recordings, and then monitors live state changes with a visual progress bar. It also provides an interactive command prompt to control your set-top boxes (send messages, switch channels, etc.). Type `help` for a list of available commands.
+
+### Web-based Test UI
+
+A browser-based interface for testing all library features interactively:
+
+```bash
+python web.py
+```
+
+Then open [http://localhost:8080](http://localhost:8080) in your browser.
+
+**Features:**
+- Login with your provider credentials (username/password or refresh token, depending on provider)
+- Live dashboard showing all set-top boxes with real-time state updates via WebSocket
+- Full device control: power, playback, channel switching, message display, raw key input
+- Event log with timestamped state changes
+- Optional "Remember credentials" to save your provider and username between sessions (passwords are never stored)
+
+> **Note:** No additional dependencies are required — `web.py` uses the same `aiohttp` that the library already depends on.
 
 ## License
 
