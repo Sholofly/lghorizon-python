@@ -972,6 +972,7 @@ class LGHorizonDeviceState:
     start_time: Optional[int] = None
     end_time: Optional[int] = None
     last_position_update: Optional[int] = None
+    _last_good_linear_metadata: Dict[str, Any] = field(default_factory=dict)
     ad_breaks: List[LGHorizonAdBreak] = field(default_factory=list)
 
     @property
@@ -1026,6 +1027,64 @@ class LGHorizonDeviceState:
         self.ad_breaks = []
         self.reset_progress()
 
+
+    def cache_linear_metadata(self) -> None:
+        """Cache current linear metadata for fallback when app overlays appear."""
+        if not self.channel_name or not self.show_title:
+            return
+        self._last_good_linear_metadata = {
+            "channel_id": self.channel_id,
+            "channel_name": self.channel_name,
+            "show_title": self.show_title,
+            "episode_title": self.episode_title,
+            "season_number": self.season_number,
+            "episode_number": self.episode_number,
+            "image": self.image,
+            "start_time": self.start_time,
+            "end_time": self.end_time,
+            "duration": self.duration,
+            "position": self.position,
+            "last_position_update": self.last_position_update,
+            "source_type": self.source_type,
+            "media_type": self.media_type,
+        }
+
+    def restore_linear_metadata(self) -> bool:
+        """Restore cached linear metadata. Returns True if restored."""
+        if not self._last_good_linear_metadata:
+            return False
+        self.channel_id = self._last_good_linear_metadata.get("channel_id")
+        self.channel_name = self._last_good_linear_metadata.get("channel_name")
+        self.show_title = self._last_good_linear_metadata.get("show_title")
+        self.episode_title = self._last_good_linear_metadata.get("episode_title")
+        self.season_number = self._last_good_linear_metadata.get("season_number")
+        self.episode_number = self._last_good_linear_metadata.get("episode_number")
+        self.image = self._last_good_linear_metadata.get("image")
+        self.start_time = self._last_good_linear_metadata.get("start_time")
+        self.end_time = self._last_good_linear_metadata.get("end_time")
+        self.duration = self._last_good_linear_metadata.get("duration")
+        self.position = self._last_good_linear_metadata.get("position")
+        self.last_position_update = self._last_good_linear_metadata.get("last_position_update")
+        self.source_type = self._last_good_linear_metadata.get("source_type", LGHorizonSourceType.LINEAR)
+        self.media_type = self._last_good_linear_metadata.get("media_type", LGHorizonMediaType.CHANNEL)
+        return True
+
+    def clear_linear_metadata_cache(self) -> None:
+        """Clear the cached linear metadata."""
+        self._last_good_linear_metadata = {}
+
+    @staticmethod
+    def is_launcher_app(app_name: str, logo_path: str) -> bool:
+        """Check if app state looks like a launcher overlay (e.g., BBC Launcher)."""
+        if not app_name:
+            return False
+        name_lower = app_name.lower()
+        logo_lower = (logo_path or "").lower()
+        if "launcher" in name_lower:
+            return True
+        if "appstore" in logo_lower:
+            return True
+        return False
 
 
 class LGHorizonEntitlements:

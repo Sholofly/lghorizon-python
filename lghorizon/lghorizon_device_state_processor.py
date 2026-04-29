@@ -55,6 +55,11 @@ class LGHorizonDeviceStateProcessor:
         """Process the device state based on the status message."""
         device_state.reset()
         device_state.state = status_message.running_state
+        if status_message.running_state in (
+            LGHorizonRunningState.ONLINE_STANDBY,
+            LGHorizonRunningState.OFFLINE,
+        ):
+            device_state.clear_linear_metadata_cache()
 
     async def process_ui_state(
         self,
@@ -121,6 +126,11 @@ class LGHorizonDeviceStateProcessor:
         device_state: LGHorizonDeviceState,
         apps_state: LGHorizonAppsState,
     ) -> None:
+        if device_state.is_launcher_app(apps_state.app_name, apps_state.logo_path):
+            if device_state.restore_linear_metadata():
+                device_state.ui_state_type = LGHorizonUIStateType.MAINUI
+                return
+
         device_state.id = apps_state.id
         device_state.show_title = apps_state.app_name
         device_state.image = apps_state.logo_path
@@ -171,6 +181,7 @@ class LGHorizonDeviceStateProcessor:
             f"{channel.stream_image}{join_param}{str(random.randrange(1000000))}"
         )
         device_state.image = image_url
+        device_state.cache_linear_metadata()
 
     async def _process_reviewbuffer_state(
         self,
@@ -218,6 +229,7 @@ class LGHorizonDeviceStateProcessor:
             f"{channel.stream_image}{join_param}{str(random.randrange(1000000))}"
         )
         device_state.image = image_url
+        device_state.cache_linear_metadata()
 
     async def _process_replay_state(
         self,
@@ -258,6 +270,7 @@ class LGHorizonDeviceStateProcessor:
         device_state.position = int(player_state.relative_position / 1000)
         # Add random number to url to force refresh
         device_state.image = await self._get_intent_image_url(replay_event.event_id)
+        device_state.cache_linear_metadata()
 
     async def _process_vod_state(
         self,
