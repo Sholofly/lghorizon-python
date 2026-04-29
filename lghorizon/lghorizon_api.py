@@ -109,7 +109,7 @@ class LGHorizonApi:
     async def get_profile_channels(
         self, profile_id: Optional[str] = None
     ) -> Dict[str, LGHorizonChannel]:
-        """Returns channels to display baed on profile."""
+        """Returns channels to display based on profile."""
         # Attempt to retrieve the profile by the given profile_id
         if not profile_id:
             profile_id = self._profile_id
@@ -129,16 +129,33 @@ class LGHorizonApi:
             _LOGGER.debug("Returning favorite channels for profile '%s'.", profile.name)
             # Use a set for faster lookup of favorite channel IDs
             profile_channel_ids = set(profile.favorite_channels)
-            return {
+            channels = {
                 channel.id: channel
                 for channel in self._channels.values()
                 if channel.id in profile_channel_ids
             }
+        else:
+            # If no profile is found (even after defaulting) or the profile has no favorite channels,
+            # return all available channels.
+            _LOGGER.debug("No specific profile channels found, returning all channels.")
+            channels = dict(self._channels)
 
-        # If no profile is found (even after defaulting) or the profile has no favorite channels,
-        # return all available channels.
-        _LOGGER.debug("No specific profile channels found, returning all channels.")
-        return self._channels
+        # Deduplicate by channel number for display purposes:
+        # keep the last entry per logicalChannelNumber (typically HD over SD)
+        seen_numbers: dict[str, str] = {}
+        for channel in channels.values():
+            ch_num = str(channel.channel_number)
+            if ch_num in seen_numbers:
+                _LOGGER.debug(
+                    "Duplicate channel number %s: preferring %s over %s",
+                    ch_num, channel.id, seen_numbers[ch_num],
+                )
+            seen_numbers[ch_num] = channel.id
+
+        return {
+            cid: channels[cid]
+            for cid in seen_numbers.values()
+        }
 
     async def _register_devices(self) -> None:
         """Register devices."""
@@ -259,7 +276,6 @@ class LGHorizonApi:
             service_url,
             f"/v2/channels?cityId={self._customer.city_id}&language={lang}&productClass=Orion-DASH",
         )
-        seen_numbers: dict[str, str] = {}  # channel_number -> channel_id
         for channel_json in channels_json:
             channel = LGHorizonChannel(channel_json)
             common_entitlements = list(
@@ -269,17 +285,6 @@ class LGHorizonApi:
             if len(common_entitlements) == 0:
                 continue
 
-            # Deduplicate by channel number: keep the last entry per number
-            # (API typically returns SD first, HD last)
-            ch_num = str(channel.channel_number)
-            if ch_num in seen_numbers:
-                old_id = seen_numbers[ch_num]
-                _LOGGER.debug(
-                    "Duplicate channel number %s: replacing %s with %s",
-                    ch_num, old_id, channel.id,
-                )
-                del self._channels[old_id]
-            seen_numbers[ch_num] = channel.id
             self._channels[channel.id] = channel
 
     async def get_all_recordings(self) -> LGHorizonRecordingList:
