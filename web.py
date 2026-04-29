@@ -281,6 +281,57 @@ async def get_channels(request: web.Request):
     return web.json_response({"channels": channel_list})
 
 
+@routes.get("/api/services")
+async def get_services(request: web.Request):
+    """Return all available service names and their URLs."""
+    if not app_state["connected"]:
+        return web.json_response({"error": "Not connected."}, status=401)
+
+    api = app_state["api"]
+    services = api._service_config.get_all_services()
+    return web.json_response({"services": services})
+
+
+@routes.post("/api/explore")
+async def explore_service(request: web.Request):
+    """Probe any service endpoint and return raw JSON response.
+
+    Body: {"service": "discoveryService", "path": "/v1/...", "params": {}}
+    Or:   {"url": "https://full-url/...", "params": {}}
+    """
+    if not app_state["connected"]:
+        return web.json_response({"error": "Not connected."}, status=401)
+
+    data = await request.json()
+    api = app_state["api"]
+    auth = app_state["auth"]
+
+    # Build the full URL
+    if "url" in data:
+        full_url = data["url"]
+    else:
+        service_name = data.get("service", "")
+        path = data.get("path", "")
+        try:
+            base_url = api._service_config.get_service_url(service_name)
+        except ValueError as e:
+            return web.json_response({"error": str(e)}, status=400)
+        full_url = base_url + path
+
+    # Replace common placeholders
+    household_id = auth.household_id
+    full_url = full_url.replace("{household_id}", household_id)
+
+    _LOGGER.info("Exploring: %s", full_url)
+
+    try:
+        result = await auth.request(full_url, "")
+        return web.json_response({"url": full_url, "response": result})
+    except Exception as e:
+        _LOGGER.error("Explore failed for %s: %s", full_url, e, exc_info=True)
+        return web.json_response({"url": full_url, "error": str(e)}, status=502)
+
+
 @routes.post("/api/command")
 async def handle_command(request: web.Request):
     """Execute a command on a device."""
