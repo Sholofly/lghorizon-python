@@ -45,7 +45,7 @@ class LGHorizonDevice:
     _device_state: LGHorizonDeviceState
     _manufacturer: Optional[str]
     _model: Optional[str]
-    _recording_capacity: Optional[int]
+    _local_recording_capacity: Optional[int]
     _device_state_processor: LGHorizonDeviceStateProcessor
     _mqtt_client: LGHorizonMqttClient
     _change_callback: Callable[[str], Coroutine[Any, Any, Any]]
@@ -72,7 +72,7 @@ class LGHorizonDevice:
         self._device_state = LGHorizonDeviceState()  # Initialize state
         self._manufacturer = None
         self._model = None
-        self._recording_capacity = None
+        self._local_recording_capacity = None
         self._device_state_processor = device_state_processor
         self._change_callback = None
 
@@ -122,14 +122,14 @@ class LGHorizonDevice:
         return self._device_state
 
     @property
-    def recording_capacity(self) -> Optional[int]:
-        """Return the recording capacity used."""
-        return self._recording_capacity
+    def local_recording_capacity(self) -> Optional[int]:
+        """Return the local HDD recording capacity used."""
+        return self._local_recording_capacity
 
-    @recording_capacity.setter
-    def recording_capacity(self, value: int) -> None:
-        """Set the recording capacity used."""
-        self._recording_capacity = value
+    @local_recording_capacity.setter
+    def local_recording_capacity(self, value: int) -> None:
+        """Set the local HDD recording capacity used."""
+        self._local_recording_capacity = value
 
     @property
     def last_ui_message_timestamp(self) -> int:
@@ -169,7 +169,7 @@ class LGHorizonDevice:
         # Always request current state from the box so we get an initial
         # UI status even when the box is already ONLINE_RUNNING at startup.
         await self._request_settop_box_state()
-        await self._request_settop_box_recording_capacity()
+        await self._request_settop_box_local_recording_capacity()
 
     async def handle_status_message(
         self, status_message: LGHorizonStatusMessage
@@ -192,7 +192,7 @@ class LGHorizonDevice:
             await self._request_settop_box_state()
 
         await self._trigger_callback()
-        await self._request_settop_box_recording_capacity()
+        await self._request_settop_box_local_recording_capacity()
 
     async def handle_ui_status_message(
         self, status_message: LGHorizonUIStatusMessage
@@ -205,11 +205,11 @@ class LGHorizonDevice:
         self.last_ui_message_timestamp = status_message.message_timestamp
         await self._trigger_callback()
 
-    async def update_recording_capacity(self, payload) -> None:
-        """Updates the recording capacity."""
+    async def update_local_recording_capacity(self, payload) -> None:
+        """Updates the local recording capacity from a CPE.capacity response."""
         if "CPE.capacity" not in payload or "used" not in payload:
             return
-        self.recording_capacity = payload["used"]  # Use the setter
+        self.local_recording_capacity = payload["used"]
 
     async def _trigger_callback(self):
         """Trigger the registered callback function.
@@ -453,7 +453,7 @@ class LGHorizonDevice:
         }
         await self._mqtt_client.publish_message(topic, json.dumps(payload))
 
-    async def _request_settop_box_recording_capacity(self) -> None:
+    async def _request_settop_box_local_recording_capacity(self) -> None:
         """Send mqtt message to receive state from settop box."""
         topic = f"{self._auth.household_id}/{self.device_id}"
         payload = {

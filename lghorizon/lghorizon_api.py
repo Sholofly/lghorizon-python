@@ -100,11 +100,35 @@ class LGHorizonApi:
 
     @property
     def has_cloud_recording(self) -> bool:
-        """Get profile IDs."""
+        """Return whether the account supports cloud recording."""
         if not self._initialized:
             raise RuntimeError("LGHorizonApi not initialized")
 
         return self._customer.has_cloud_recording
+
+    @property
+    def has_pvr(self) -> bool:
+        """Return whether the account has PVR (cloud recording) entitlement."""
+        if not self._initialized:
+            raise RuntimeError("LGHorizonApi not initialized")
+
+        return self._entitlements.has_pvr
+
+    @property
+    def has_local_dvr(self) -> bool:
+        """Return whether the account has local DVR entitlement."""
+        if not self._initialized:
+            raise RuntimeError("LGHorizonApi not initialized")
+
+        return self._entitlements.has_local_dvr
+
+    @property
+    def has_recording(self) -> bool:
+        """Return whether the account supports any recording (cloud or local)."""
+        if not self._initialized:
+            raise RuntimeError("LGHorizonApi not initialized")
+
+        return self._entitlements.has_recording
 
     async def get_profile_channels(
         self, profile_id: Optional[str] = None
@@ -227,6 +251,15 @@ class LGHorizonApi:
 
     async def _on_mqtt_message(self, mqtt_message: dict, mqtt_topic: str):
         """MQTT message callback."""
+        # Route capacity responses directly to the device
+        if mqtt_message.get("type") == "CPE.capacity":
+            source = mqtt_message.get("source")
+            if source:
+                device = self._devices.get(source, None)
+                if device:
+                    await device.update_local_recording_capacity(mqtt_message)
+            return
+
         message = await self._message_factory.create_message(mqtt_topic, mqtt_message)
         match message.message_type:
             case LGHorizonMessageType.STATUS:
@@ -289,7 +322,7 @@ class LGHorizonApi:
 
     async def get_all_recordings(self) -> LGHorizonRecordingList:
         """Retrieve all recordings."""
-        if not self._customer.has_cloud_recording:
+        if not self._entitlements.has_recording:
             return LGHorizonRecordingList([])
         _LOGGER.debug("Retrieving recordings...")
         service_url = self._service_config.get_service_url("recordingService")
@@ -305,7 +338,7 @@ class LGHorizonApi:
         self, show_id: str, channel_id: str
     ) -> LGHorizonShowRecordingList:  # type: ignore[valid-type]
         """Retrieve all recordings."""
-        if not self._customer.has_cloud_recording:
+        if not self._entitlements.has_recording:
             return LGHorizonShowRecordingList(None, None, [])
         _LOGGER.debug("Retrieving recordings fro show...")
         service_url = self._service_config.get_service_url("recordingService")
@@ -320,7 +353,7 @@ class LGHorizonApi:
     async def get_recording_quota(self) -> LGHorizonRecordingQuota:
         """Refresh recording quota."""
         _LOGGER.debug("Refreshing recording quota...")
-        if not self._customer.has_cloud_recording:
+        if not self._entitlements.has_recording:
             return LGHorizonRecordingQuota({})
         service_url = self._service_config.get_service_url("recordingService")
         quota_json = await self.auth.request(

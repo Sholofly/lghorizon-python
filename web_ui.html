@@ -236,6 +236,49 @@
         <!-- ================= DASHBOARD SCREEN ================= -->
         <div id="dashboardScreen" class="hidden flex-col h-full overflow-hidden">
             
+            <!-- Account-level Recording Bar -->
+            <div id="recordingBar" class="bg-slate-900 border-b border-slate-700/50 px-4 py-2.5 shrink-0 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 relative z-10 shadow-sm">
+                <div class="flex items-center gap-3 w-full md:w-auto shrink-0">
+                    <h3 class="text-xs uppercase tracking-wider text-slate-400 font-bold whitespace-nowrap">Recording Capacity</h3>
+                    <div id="recordingLoader" class="animate-spin h-3.5 w-3.5 border-2 border-accent border-t-transparent rounded-full hidden"></div>
+                    <button onclick="app.fetchRecordingCapacity()" class="text-slate-500 hover:text-white transition-colors ml-auto md:ml-0" title="Refresh">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>
+                    </button>
+                </div>
+
+                <div id="noRecordingMsg" class="hidden text-xs text-slate-500 italic w-full md:w-auto text-center md:text-left">
+                    No recording features available
+                </div>
+
+                <div id="recordingContent" class="hidden w-full md:flex-1 flex flex-col md:flex-row items-start md:items-center gap-4 md:gap-6 justify-end">
+                    <div class="flex flex-wrap gap-1.5 shrink-0" id="recordingFeatures">
+                        <!-- Badges injected here -->
+                    </div>
+                    
+                    <!-- Cloud -->
+                    <div id="cloudQuotaSection" class="hidden items-center gap-3 w-full md:w-64 shrink-0">
+                        <span class="text-xs text-slate-400 font-medium whitespace-nowrap">Cloud</span>
+                        <div class="flex-grow">
+                            <div class="flex justify-between items-end text-[10px] mb-0.5">
+                                <span id="cloudMb" class="text-slate-400">0 MB / 0 MB</span>
+                                <span id="cloudPct" class="font-bold text-white">0%</span>
+                            </div>
+                            <div class="progress-container h-1.5">
+                                <div id="cloudProgressBar" class="progress-bar rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Local -->
+                    <div id="localQuotaSection" class="hidden items-center gap-3 w-full md:w-auto shrink-0 border-t md:border-t-0 md:border-l border-slate-700/50 pt-2 md:pt-0 md:pl-4">
+                        <span class="text-xs text-slate-400 font-medium whitespace-nowrap">Local</span>
+                        <div id="localDevicesList" class="flex flex-wrap gap-3">
+                            <!-- Local devices injected here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Tab Bar -->
             <div class="bg-slate-900/80 border-b border-slate-700/50 overflow-x-auto shrink-0 flex items-end px-4" id="tabContainer">
                 <!-- Tabs injected here -->
@@ -579,6 +622,152 @@
                 }
 
                 this.connectWebSocket();
+                this.fetchRecordingCapacity();
+            },
+
+            async fetchRecordingCapacity() {
+                const loader = document.getElementById('recordingLoader');
+                const content = document.getElementById('recordingContent');
+                const noMsg = document.getElementById('noRecordingMsg');
+                
+                if (loader) {
+                    loader.classList.remove('hidden');
+                    content.classList.add('hidden');
+                    content.classList.remove('flex');
+                    noMsg.classList.add('hidden');
+                }
+
+                try {
+                    const res = await fetch('/api/recording-capacity');
+                    if (res.ok) {
+                        const data = await res.json();
+                        this.renderRecordingCapacity(data);
+                    } else {
+                        throw new Error('Failed to fetch');
+                    }
+                } catch (e) {
+                    if (loader) loader.classList.add('hidden');
+                    if (noMsg) {
+                        noMsg.textContent = 'Failed to load recording info';
+                        noMsg.classList.remove('hidden');
+                    }
+                }
+            },
+
+            renderRecordingCapacity(data) {
+                const loader = document.getElementById('recordingLoader');
+                const content = document.getElementById('recordingContent');
+                const noMsg = document.getElementById('noRecordingMsg');
+                
+                if (loader) loader.classList.add('hidden');
+
+                if (!data.entitlements || !data.entitlements.has_recording) {
+                    if (noMsg) {
+                        noMsg.textContent = 'No recording features available';
+                        noMsg.classList.remove('hidden');
+                    }
+                    if (content) {
+                        content.classList.add('hidden');
+                        content.classList.remove('flex');
+                    }
+                    return;
+                }
+
+                if (noMsg) noMsg.classList.add('hidden');
+                if (content) {
+                    content.classList.remove('hidden');
+                    content.classList.add('flex');
+                }
+
+                // Features badges
+                const featuresContainer = document.getElementById('recordingFeatures');
+                if (featuresContainer) {
+                    featuresContainer.innerHTML = '';
+                    if (data.entitlements.features) {
+                        data.entitlements.features
+                            .filter(f => ['PVR', 'LOCALDVR'].includes(f.toUpperCase()))
+                            .forEach(f => {
+                                const badge = document.createElement('span');
+                                badge.className = 'text-[10px] px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 font-medium';
+                                badge.textContent = f;
+                                featuresContainer.appendChild(badge);
+                            });
+                    }
+                }
+
+                // Cloud Quota
+                const cloudSection = document.getElementById('cloudQuotaSection');
+                if (cloudSection) {
+                    if (data.entitlements.has_pvr && data.cloud_quota) {
+                        cloudSection.classList.remove('hidden');
+                        cloudSection.classList.add('flex');
+                        
+                        const pct = data.cloud_quota.percentage_used || 0;
+                        document.getElementById('cloudPct').textContent = `${pct.toFixed(1)}%`;
+                        
+                        // Show in GB if large enough, else MB
+                        let occ = data.cloud_quota.occupied_mb;
+                        let total = data.cloud_quota.quota_mb;
+                        let unit = 'MB';
+                        if (total > 1024) {
+                            occ = (occ / 1024).toFixed(1);
+                            total = (total / 1024).toFixed(1);
+                            unit = 'GB';
+                        }
+                        document.getElementById('cloudMb').textContent = `${occ} ${unit} / ${total} ${unit}`;
+                        
+                        const bar = document.getElementById('cloudProgressBar');
+                        if (bar) {
+                            bar.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+                            
+                            // Colors
+                            bar.className = 'progress-bar rounded-full transition-all duration-500';
+                            if (pct > 90) bar.style.backgroundColor = 'var(--danger, #ef4444)';
+                            else if (pct > 75) bar.style.backgroundColor = 'var(--warning, #f59e0b)';
+                            else bar.style.backgroundColor = 'var(--accent, #0f7dff)';
+                        }
+                    } else {
+                        cloudSection.classList.add('hidden');
+                        cloudSection.classList.remove('flex');
+                    }
+                }
+
+                // Local Devices
+                const localSection = document.getElementById('localQuotaSection');
+                const localList = document.getElementById('localDevicesList');
+                if (localSection && localList) {
+                    localList.innerHTML = '';
+                    
+                    if (data.entitlements.has_local_dvr && data.local_devices && Object.keys(data.local_devices).length > 0) {
+                        localSection.classList.remove('hidden');
+                        localSection.classList.add('flex');
+                        
+                        Object.values(data.local_devices).forEach(dev => {
+                            const row = document.createElement('div');
+                            row.className = 'flex items-center gap-1.5 text-xs bg-slate-800/50 border border-slate-700/50 px-2 py-1 rounded';
+                            
+                            const nameSpan = document.createElement('span');
+                            nameSpan.className = 'text-slate-400';
+                            nameSpan.textContent = dev.name || 'Device';
+                            
+                            const valSpan = document.createElement('span');
+                            if (dev.local_recording_capacity_used !== null && dev.local_recording_capacity_used !== undefined) {
+                                valSpan.className = 'font-mono text-white font-medium';
+                                valSpan.textContent = `${dev.local_recording_capacity_used}%`;
+                            } else {
+                                valSpan.className = 'text-slate-500 italic text-[10px]';
+                                valSpan.textContent = 'waiting...';
+                            }
+                            
+                            row.appendChild(nameSpan);
+                            row.appendChild(valSpan);
+                            localList.appendChild(row);
+                        });
+                    } else {
+                        localSection.classList.add('hidden');
+                        localSection.classList.remove('flex');
+                    }
+                }
             },
 
             async logout() {
@@ -963,6 +1152,33 @@
                             }, 500));
                         }
                         if (url.includes('/api/command')) return { ok: true, json: async () => ({ success: true }) };
+                        if (url.includes('/api/recording-capacity')) {
+                            return new Promise(resolve => setTimeout(() => {
+                                resolve({ ok: true, json: async () => ({
+                                    entitlements: {
+                                        features: ["PVR", "LOCALDVR", "REPLAY", "VOD", "CVP_bootToHomeWithPiG"],
+                                        has_pvr: true,
+                                        has_local_dvr: true,
+                                        has_recording: true
+                                    },
+                                    cloud_quota: {
+                                        quota_mb: 500000,
+                                        occupied_mb: 123456,
+                                        percentage_used: 24.7
+                                    },
+                                    local_devices: {
+                                        "mock123": {
+                                            name: "Living Room",
+                                            local_recording_capacity_used: 50
+                                        },
+                                        "mock456": {
+                                            name: "Bedroom",
+                                            local_recording_capacity_used: null
+                                        }
+                                    }
+                                }) });
+                            }, 500));
+                        }
                         return fetch(url, options);
                     };
 

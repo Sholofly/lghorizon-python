@@ -1104,6 +1104,26 @@ class LGHorizonEntitlements:
         """Returns a list of entitlement IDs."""
         return [e["id"] for e in self.entitlements if "id" in e]
 
+    @property
+    def features(self) -> list[str]:
+        """Returns the list of feature flags (e.g. 'PVR', 'LOCALDVR')."""
+        return self.entitlements_json.get("features", [])
+
+    @property
+    def has_pvr(self) -> bool:
+        """Return whether the account supports cloud recording (PVR/NDVR)."""
+        return "PVR" in self.features
+
+    @property
+    def has_local_dvr(self) -> bool:
+        """Return whether the account supports local recording (LOCALDVR)."""
+        return "LOCALDVR" in self.features
+
+    @property
+    def has_recording(self) -> bool:
+        """Return whether the account supports any recording (cloud or local)."""
+        return self.has_pvr or self.has_local_dvr
+
 
 class LGHorizonReplayEvent:
     """LGhorizon replay event."""
@@ -1299,6 +1319,21 @@ class LGHorizonRecording(ABC):
     def channel_id(self) -> str:
         """Return the channel ID of the recording."""
         return self._recording_payload["channelId"]
+
+    @property
+    def recording_type(self) -> str:
+        """Return the recording type (e.g. 'nDVR', 'localDVR', 'LDVR')."""
+        return self._recording_payload.get("recordingType", "")
+
+    @property
+    def cpe_id(self) -> Optional[str]:
+        """Return the CPE device ID. Only present for local DVR recordings."""
+        return self._recording_payload.get("cpeId", None)
+
+    @property
+    def is_local_recording(self) -> bool:
+        """Return whether this is a local DVR recording."""
+        return self.cpe_id is not None
 
     @property
     def poster_url(self) -> Optional[str]:
