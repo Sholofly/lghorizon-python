@@ -24,3 +24,6 @@ test/nl.py
 secrets.json
 logfile.log
 lghorizon.log
+lghorizon_web.log
+check_adbreaks.py
+mqtt_capture.json

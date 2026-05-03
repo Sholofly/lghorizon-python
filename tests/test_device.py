@@ -157,7 +157,7 @@ async def test_set_callback_stores_callback(device):
 async def test_set_callback_calls_register_mqtt(device, mqtt_client, mock_auth):
     callback = AsyncMock()
     await device.set_callback(callback)
-    # register_mqtt + _request_settop_box_state + _request_settop_box_recording_capacity
+    # register_mqtt + _request_settop_box_state + _request_settop_box_local_recording_capacity
     assert mqtt_client.publish_message.call_count == 3
     # First call: register our own HGO status
     topic, payload_str = mqtt_client.publish_message.call_args_list[0][0]

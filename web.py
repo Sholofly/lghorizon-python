@@ -292,6 +292,53 @@ async def get_services(request: web.Request):
     return web.json_response({"services": services})
 
 
+@routes.get("/api/recording-capacity")
+async def get_recording_capacity(request: web.Request):
+    """Return cloud recording quota and per-device local recording capacity."""
+    if not app_state["connected"]:
+        return web.json_response({"error": "Not connected."}, status=401)
+
+    api = app_state["api"]
+
+    # Entitlement flags + full feature list
+    entitlements = {
+        "features": api._entitlements.features,
+        "has_pvr": api.has_pvr,
+        "has_local_dvr": api.has_local_dvr,
+        "has_recording": api.has_recording,
+    }
+
+    # Cloud quota (account-level)
+    cloud_quota = None
+    if api.has_pvr:
+        try:
+            quota = await api.get_recording_quota()
+            cloud_quota = {
+                "quota_mb": quota.quota,
+                "occupied_mb": quota.occupied,
+                "percentage_used": round(quota.percentage_used, 1),
+            }
+        except Exception as e:
+            _LOGGER.error("Failed to fetch cloud quota: %s", e)
+            cloud_quota = {"error": str(e)}
+
+    # Per-device local recording capacity
+    local_devices = {}
+    if api.has_local_dvr:
+        for dev_id, device in app_state["devices"].items():
+            capacity = device.local_recording_capacity
+            local_devices[dev_id] = {
+                "name": device.device_friendly_name,
+                "local_recording_capacity_used": capacity,
+            }
+
+    return web.json_response({
+        "entitlements": entitlements,
+        "cloud_quota": cloud_quota,
+        "local_devices": local_devices,
+    })
+
+
 @routes.post("/api/explore")
 async def explore_service(request: web.Request):
     """Probe any service endpoint and return raw JSON response.
@@ -463,8 +510,8 @@ def create_app() -> web.Application:
 
 
 if __name__ == "__main__":
-    print("┌────────────────────────────────────────┐")
-    print("│  LG Horizon Test UI                    │")
-    print("│  Open: http://localhost:8080            │")
-    print("└────────────────────────────────────────┘")
+    print("+----------------------------------------+")
+    print("|  LG Horizon Test UI                    |")
+    print("|  Open: http://localhost:8080            |")
+    print("+----------------------------------------+")
     web.run_app(create_app(), host="0.0.0.0", port=8080)

@@ -8,6 +8,7 @@ from lghorizon.lghorizon_device import LGHorizonDevice
 from lghorizon.lghorizon_models import (
     LGHorizonAuth,
     LGHorizonChannel,
+    LGHorizonEntitlements,
     LGHorizonCustomer,
     LGHorizonEpg,
     LGHorizonEventDetail,
@@ -148,6 +149,86 @@ class TestHasCloudRecording:
 
 
 # ---------------------------------------------------------------------------
+# has_pvr / has_local_dvr properties
+# ---------------------------------------------------------------------------
+
+
+class TestHasPvr:
+    def test_raises_if_not_initialized(self, mock_auth):
+        api = make_api(mock_auth)
+        with pytest.raises(RuntimeError, match="not initialized"):
+            _ = api.has_pvr
+
+    def test_returns_true_when_pvr_feature_present(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._entitlements = LGHorizonEntitlements({"features": ["PVR", "LOCALDVR"]})
+        assert api.has_pvr is True
+
+    def test_returns_false_when_pvr_feature_absent(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._entitlements = LGHorizonEntitlements({"features": ["LOCALDVR"]})
+        assert api.has_pvr is False
+
+
+class TestHasLocalDvr:
+    def test_raises_if_not_initialized(self, mock_auth):
+        api = make_api(mock_auth)
+        with pytest.raises(RuntimeError, match="not initialized"):
+            _ = api.has_local_dvr
+
+    def test_returns_true_when_localdvr_feature_present(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._entitlements = LGHorizonEntitlements({"features": ["LOCALDVR"]})
+        assert api.has_local_dvr is True
+
+    def test_returns_false_when_localdvr_feature_absent(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._entitlements = LGHorizonEntitlements({"features": ["PVR"]})
+        assert api.has_local_dvr is False
+
+
+# ---------------------------------------------------------------------------
+# has_recording property
+# ---------------------------------------------------------------------------
+
+
+class TestHasRecording:
+    def test_raises_if_not_initialized(self, mock_auth):
+        api = make_api(mock_auth)
+        with pytest.raises(RuntimeError, match="not initialized"):
+            _ = api.has_recording
+
+    def test_returns_true_when_pvr_feature_present(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._entitlements = LGHorizonEntitlements({"features": ["PVR"]})
+        assert api.has_recording is True
+
+    def test_returns_true_when_localdvr_feature_present(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._entitlements = LGHorizonEntitlements({"features": ["LOCALDVR"]})
+        assert api.has_recording is True
+
+    def test_returns_false_when_no_recording_features(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._entitlements = LGHorizonEntitlements({"features": []})
+        assert api.has_recording is False
+
+
+# ---------------------------------------------------------------------------
 # get_profile_channels()
 # ---------------------------------------------------------------------------
 
@@ -220,7 +301,7 @@ class TestGetProfileChannels:
 
 
 class TestGetAllRecordings:
-    async def test_returns_empty_list_if_no_cloud_recording(
+    async def test_returns_empty_list_if_no_recording_entitlement(
         self, mock_auth, sample_channel_json
     ):
         no_recording_json = {
@@ -235,15 +316,17 @@ class TestGetAllRecordings:
         api = make_api(mock_auth)
         api._initialized = True
         api._customer = LGHorizonCustomer(no_recording_json)
+        api._entitlements = LGHorizonEntitlements({"features": []})
         result = await api.get_all_recordings()
         assert isinstance(result, LGHorizonRecordingList)
-        # No cloud recording → recording service should NOT have been called
+        # No recording entitlement → recording service should NOT have been called
         mock_auth.request.assert_not_called()
 
     async def test_calls_recording_service_when_cloud_recording_available(
         self, mock_auth, sample_customer_json, sample_channel_json
     ):
         api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._entitlements = LGHorizonEntitlements({"features": ["PVR"]})
         # Provide a service config mock so get_service_url works
         service_config = MagicMock()
         service_config.get_service_url = MagicMock(return_value="https://recording.example.com")
@@ -267,7 +350,7 @@ class TestGetAllRecordings:
 
 
 class TestGetRecordingQuota:
-    async def test_returns_empty_quota_if_no_cloud_recording(self, mock_auth):
+    async def test_returns_empty_quota_if_no_recording_entitlement(self, mock_auth):
         no_recording_json = {
             "customerId": "cust-x",
             "hashedCustomerId": "hashed-x",
@@ -280,6 +363,7 @@ class TestGetRecordingQuota:
         api = make_api(mock_auth)
         api._initialized = True
         api._customer = LGHorizonCustomer(no_recording_json)
+        api._entitlements = LGHorizonEntitlements({"features": []})
         result = await api.get_recording_quota()
         assert isinstance(result, LGHorizonRecordingQuota)
         mock_auth.request.assert_not_called()
@@ -288,6 +372,7 @@ class TestGetRecordingQuota:
         self, mock_auth, sample_customer_json, sample_channel_json
     ):
         api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._entitlements = LGHorizonEntitlements({"features": ["PVR"]})
         service_config = MagicMock()
         service_config.get_service_url = MagicMock(return_value="https://recording.example.com")
         api._service_config = service_config
@@ -338,8 +423,9 @@ class TestOnMqttMessage:
         self, mock_auth, sample_customer_json, sample_channel_json, sample_ui_status_payload
     ):
         api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
-        mock_device = _make_mock_device(state=LGHorizonRunningState.ONLINE_RUNNING)
+        mock_device = _make_mock_device()
         api._devices = {"device-1": mock_device}
+        mock_device.device_state.state = LGHorizonRunningState.ONLINE_RUNNING
 
         ui_msg = MagicMock(spec=LGHorizonUIStatusMessage)
         ui_msg.message_type = LGHorizonMessageType.UI_STATUS
@@ -352,6 +438,26 @@ class TestOnMqttMessage:
 
         mock_device.handle_ui_status_message.assert_awaited_once_with(ui_msg)
         mock_device.handle_status_message.assert_not_awaited()
+
+    async def test_routes_capacity_message_to_correct_device(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        mock_device = MagicMock(spec=LGHorizonDevice)
+        mock_device.update_local_recording_capacity = AsyncMock()
+        api._devices = {"device-1": mock_device}
+        payload = {"type": "CPE.capacity", "source": "device-1", "used": 50}
+        await api._on_mqtt_message(payload, "household-123/device-1")
+        mock_device.update_local_recording_capacity.assert_awaited_once_with(payload)
+
+    async def test_ignores_capacity_message_for_unknown_device(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._devices = {}
+        payload = {"type": "CPE.capacity", "source": "unknown-device", "used": 50}
+        # Should not raise
+        await api._on_mqtt_message(payload, "household-123/unknown-device")
 
     async def test_ignores_status_message_for_unknown_device(
         self, mock_auth, sample_customer_json, sample_channel_json, sample_status_payload

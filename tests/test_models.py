@@ -874,6 +874,42 @@ class TestLGHorizonRecordingSingle:
         assert r.poster_url is None
 
 
+class TestLGHorizonRecordingBaseProperties:
+    """Tests for properties added to the LGHorizonRecording base class."""
+
+    def test_recording_type_ndvr(self, sample_recording_single_json):
+        sample_recording_single_json["recordingType"] = "nDVR"
+        r = LGHorizonRecordingSingle(sample_recording_single_json)
+        assert r.recording_type == "nDVR"
+
+    def test_recording_type_local_dvr(self, sample_recording_single_json):
+        sample_recording_single_json["recordingType"] = "localDVR"
+        r = LGHorizonRecordingSingle(sample_recording_single_json)
+        assert r.recording_type == "localDVR"
+
+    def test_recording_type_default_empty(self, sample_recording_single_json):
+        r = LGHorizonRecordingSingle(sample_recording_single_json)
+        assert r.recording_type == ""
+
+    def test_cpe_id_present(self, sample_recording_single_json):
+        sample_recording_single_json["cpeId"] = "3C36E4-EOSSTB-003597101009"
+        r = LGHorizonRecordingSingle(sample_recording_single_json)
+        assert r.cpe_id == "3C36E4-EOSSTB-003597101009"
+
+    def test_cpe_id_none_when_missing(self, sample_recording_single_json):
+        r = LGHorizonRecordingSingle(sample_recording_single_json)
+        assert r.cpe_id is None
+
+    def test_is_local_recording_true(self, sample_recording_single_json):
+        sample_recording_single_json["cpeId"] = "some-device-id"
+        r = LGHorizonRecordingSingle(sample_recording_single_json)
+        assert r.is_local_recording is True
+
+    def test_is_local_recording_false(self, sample_recording_single_json):
+        r = LGHorizonRecordingSingle(sample_recording_single_json)
+        assert r.is_local_recording is False
+
+
 class TestLGHorizonRecordingSeason:
     def test_id(self, sample_recording_season_json):
         r = LGHorizonRecordingSeason(sample_recording_season_json)
@@ -1218,6 +1254,59 @@ class TestLGHorizonEntitlements:
         }
         e = LGHorizonEntitlements(data)
         assert e.entitlement_ids == ["ent-1"]
+
+    def test_features(self):
+        data = {"features": ["PVR", "LOCALDVR", "VOD"]}
+        e = LGHorizonEntitlements(data)
+        assert e.features == ["PVR", "LOCALDVR", "VOD"]
+
+    def test_features_empty(self):
+        e = LGHorizonEntitlements({})
+        assert e.features == []
+
+    def test_has_pvr_true(self):
+        e = LGHorizonEntitlements({"features": ["PVR", "LOCALDVR"]})
+        assert e.has_pvr is True
+
+    def test_has_pvr_false(self):
+        e = LGHorizonEntitlements({"features": ["LOCALDVR"]})
+        assert e.has_pvr is False
+
+    def test_has_pvr_false_when_empty(self):
+        e = LGHorizonEntitlements({})
+        assert e.has_pvr is False
+
+    def test_has_local_dvr_true(self):
+        e = LGHorizonEntitlements({"features": ["PVR", "LOCALDVR"]})
+        assert e.has_local_dvr is True
+
+    def test_has_local_dvr_false(self):
+        e = LGHorizonEntitlements({"features": ["PVR"]})
+        assert e.has_local_dvr is False
+
+    def test_has_local_dvr_false_when_empty(self):
+        e = LGHorizonEntitlements({})
+        assert e.has_local_dvr is False
+
+    def test_has_recording_true_when_pvr(self):
+        e = LGHorizonEntitlements({"features": ["PVR"]})
+        assert e.has_recording is True
+
+    def test_has_recording_true_when_local_dvr(self):
+        e = LGHorizonEntitlements({"features": ["LOCALDVR"]})
+        assert e.has_recording is True
+
+    def test_has_recording_true_when_both(self):
+        e = LGHorizonEntitlements({"features": ["PVR", "LOCALDVR"]})
+        assert e.has_recording is True
+
+    def test_has_recording_false_when_empty(self):
+        e = LGHorizonEntitlements({})
+        assert e.has_recording is False
+
+    def test_has_recording_false_when_no_pvr_or_localdvr(self):
+        e = LGHorizonEntitlements({"features": ["VOD"]})
+        assert e.has_recording is False
 
 
 # ---------------------------------------------------------------------------
