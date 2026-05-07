@@ -1,5 +1,6 @@
 """LG Horizon API client."""
 
+import asyncio
 import logging
 from typing import Any, Dict, cast, Callable, Optional
 from datetime import date as date_type
@@ -44,6 +45,7 @@ class LGHorizonApi:
     _entitlements: LGHorizonEntitlements
     _profile_id: Optional[str]
     _device_state_processor: LGHorizonDeviceStateProcessor | None
+    _token_refresh_task: asyncio.Task | None
 
     def __init__(self, auth: LGHorizonAuth, profile_id: Optional[str]) -> None:
         """Initialize LG Horizon API client.
@@ -60,6 +62,7 @@ class LGHorizonApi:
         self._recording_factory = LGHorizonRecordingFactory()
         self._device_state_processor = None
         self._mqtt_client = None
+        self._token_refresh_task = None
         self._initialized = False
 
     async def initialize(self) -> None:
@@ -77,6 +80,7 @@ class LGHorizonApi:
             self.auth, self._channels, self._customer, self._profile_id
         )
         self._initialized = True
+        self._token_refresh_task = asyncio.create_task(self._token_refresh_loop())
 
     async def set_token_refresh_callback(
         self, token_refresh_callback: Callable[[str], None]
@@ -203,9 +207,54 @@ class LGHorizonApi:
 
     async def disconnect(self) -> None:
         """Disconnect the client."""
+        if self._token_refresh_task:
+            self._token_refresh_task.cancel()
+            self._token_refresh_task = None
         if self._mqtt_client:
             await self._mqtt_client.disconnect()
         self._initialized = False
+
+    async def _token_refresh_loop(self) -> None:
+        """Background task to periodically refresh the access token.
+
+        Runs every hour and proactively refreshes the token when it is
+        approaching expiry.  This keeps the session alive even when no
+        explicit API calls are being made (e.g. idle Home Assistant).
+        """
+        _LOGGER.debug("Token auto-refresh loop started")
+        try:
+            while True:
+                _LOGGER.debug(
+                    "Token auto-refresh: sleeping 1 hour before next check"
+                )
+                await asyncio.sleep(3600)  # check every hour
+                _LOGGER.debug(
+                    "Token auto-refresh: woke up, checking token expiry "
+                    "(expiry=%s, expiring=%s)",
+                    self.auth.token_expiry,
+                    self.auth.is_token_expiring(),
+                )
+                if self.auth.is_token_expiring():
+                    _LOGGER.debug(
+                        "Token auto-refresh: token expiring soon, refreshing proactively"
+                    )
+                    try:
+                        await self.auth.fetch_access_token()
+                        _LOGGER.debug(
+                            "Token auto-refresh: token refreshed successfully "
+                            "(new expiry=%s)",
+                            self.auth.token_expiry,
+                        )
+                    except Exception as ex:
+                        _LOGGER.error(
+                            "Token auto-refresh: background refresh failed: %s", ex
+                        )
+                else:
+                    _LOGGER.debug(
+                        "Token auto-refresh: token still valid, no refresh needed"
+                    )
+        except asyncio.CancelledError:
+            _LOGGER.debug("Token auto-refresh loop stopped")
 
     async def _create_mqtt_client(self) -> LGHorizonMqttClient:
         """Create and configure the MQTT client.
