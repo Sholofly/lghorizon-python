@@ -28,7 +28,14 @@ def _redact_sensitive(data):
     if not isinstance(data, dict):
         return data
     redacted = dict(data)
-    for key in ("accessToken", "access_token", "refreshToken", "refresh_token", "token", "password"):
+    for key in (
+        "accessToken",
+        "access_token",
+        "refreshToken",
+        "refresh_token",
+        "token",
+        "password",
+    ):
         if key in redacted:
             redacted[key] = "***REDACTED***"
     return redacted
@@ -264,13 +271,15 @@ class LGHorizonNDVRSource(LGHorizonSource):
         raw_manifest = self._raw_json.get("adManifest", [])
         breaks = []
         for entry in raw_manifest:
-            breaks.append(LGHorizonAdBreak(
-                start_ms=entry.get("dStart", 0),
-                end_ms=entry.get("dEnd", 0),
-                ad_type=entry.get("adType", "UNKNOWN"),
-                is_skippable=entry.get("isSkippable", False),
-                has_counter=entry.get("adCounter", False),
-            ))
+            breaks.append(
+                LGHorizonAdBreak(
+                    start_ms=entry.get("dStart", 0),
+                    end_ms=entry.get("dEnd", 0),
+                    ad_type=entry.get("adType", "UNKNOWN"),
+                    is_skippable=entry.get("isSkippable", False),
+                    has_counter=entry.get("adCounter", False),
+                )
+            )
         return breaks
 
     @property
@@ -574,7 +583,9 @@ class LGHorizonAuth:
         self._token_expiry = None
         self._country_code = country_code
         self._host = COUNTRY_SETTINGS[country_code]["api_url"]
-        self._use_refresh_token = COUNTRY_SETTINGS[country_code]["use_refreshtoken"] or bool(refresh_token)
+        self._use_refresh_token = COUNTRY_SETTINGS[country_code][
+            "use_refreshtoken"
+        ] or bool(refresh_token)
         self._service_config = None
         self._token_refresh_callback = token_refresh_callback
 
@@ -726,7 +737,9 @@ class LGHorizonAuth:
             return json_response
         except ClientResponseError as cre:
             if cre.status == 401:
-                _LOGGER.debug("Got 401 from %s, refreshing token and retrying", request_url)
+                _LOGGER.debug(
+                    "Got 401 from %s, refreshing token and retrying", request_url
+                )
                 await self.fetch_access_token()
                 try:
                     web_response = await self.websession.request(
@@ -741,7 +754,9 @@ class LGHorizonAuth:
                     )
                     return json_response
                 except ClientResponseError as retry_cre:
-                    _LOGGER.error("Retry failed for %s: %s", request_url, str(retry_cre))
+                    _LOGGER.error(
+                        "Retry failed for %s: %s", request_url, str(retry_cre)
+                    )
                     raise LGHorizonApiConnectionError(
                         f"Unable to call {request_url}. Error:{str(retry_cre)}"
                     ) from retry_cre
@@ -867,7 +882,16 @@ class LGHorizonServicesConfig:
             ValueError: If the service or its URL is not found
         """
         if service_name in self._config and "URL" in self._config[service_name]:
-            return self._config[service_name]["URL"]
+            url = self._config[service_name]["URL"]
+
+            # Temporary override for broken Ziggo NL EPG server
+            if "static.spark.ziggogo.tv" in url:
+                url = url.replace(
+                    "static.spark.ziggogo.tv", "staticqbr-prod-nl.gnp.cloud.ziggogo.tv"
+                )
+
+            return url
+
         raise ValueError(f"Service URL for '{service_name}' not found in configuration")
 
     def get_all_services(self) -> dict[str, str]:
@@ -924,7 +948,9 @@ class LGHorizonCustomer:
     @property
     def has_cloud_recording(self) -> bool:
         """Return whether the customer has cloud recording."""
-        return bool(self.recording_retention_period and self.recording_retention_period > 0)
+        return bool(
+            self.recording_retention_period and self.recording_retention_period > 0
+        )
 
     @property
     def assigned_devices(self) -> list[str]:
@@ -948,15 +974,22 @@ class LGHorizonCustomer:
         return self.profiles[profile_id].options.lang
 
 
-
 @dataclass
 class LGHorizonDeviceState:
     """Represent current state of a box."""
 
-    state: LGHorizonRunningState = field(default_factory=lambda: LGHorizonRunningState.UNKNOWN)
-    source_type: LGHorizonSourceType = field(default_factory=lambda: LGHorizonSourceType.UNKNOWN)
-    ui_state_type: LGHorizonUIStateType = field(default_factory=lambda: LGHorizonUIStateType.UNKNOWN)
-    media_type: LGHorizonMediaType = field(default_factory=lambda: LGHorizonMediaType.UNKNOWN)
+    state: LGHorizonRunningState = field(
+        default_factory=lambda: LGHorizonRunningState.UNKNOWN
+    )
+    source_type: LGHorizonSourceType = field(
+        default_factory=lambda: LGHorizonSourceType.UNKNOWN
+    )
+    ui_state_type: LGHorizonUIStateType = field(
+        default_factory=lambda: LGHorizonUIStateType.UNKNOWN
+    )
+    media_type: LGHorizonMediaType = field(
+        default_factory=lambda: LGHorizonMediaType.UNKNOWN
+    )
     id: Optional[str] = None
     channel_id: Optional[str] = None
     channel_name: Optional[str] = None
@@ -1027,7 +1060,6 @@ class LGHorizonDeviceState:
         self.ad_breaks = []
         self.reset_progress()
 
-
     def cache_linear_metadata(self) -> None:
         """Cache current linear metadata for fallback when app overlays appear."""
         if not self.channel_name or not self.show_title:
@@ -1064,9 +1096,15 @@ class LGHorizonDeviceState:
         self.end_time = self._last_good_linear_metadata.get("end_time")
         self.duration = self._last_good_linear_metadata.get("duration")
         self.position = self._last_good_linear_metadata.get("position")
-        self.last_position_update = self._last_good_linear_metadata.get("last_position_update")
-        self.source_type = self._last_good_linear_metadata.get("source_type", LGHorizonSourceType.LINEAR)
-        self.media_type = self._last_good_linear_metadata.get("media_type", LGHorizonMediaType.CHANNEL)
+        self.last_position_update = self._last_good_linear_metadata.get(
+            "last_position_update"
+        )
+        self.source_type = self._last_good_linear_metadata.get(
+            "source_type", LGHorizonSourceType.LINEAR
+        )
+        self.media_type = self._last_good_linear_metadata.get(
+            "media_type", LGHorizonMediaType.CHANNEL
+        )
         return True
 
     def clear_linear_metadata_cache(self) -> None:
@@ -1620,8 +1658,7 @@ class LGHorizonEpgEntry:
         self._entry_json = entry_json
         channel_id = entry_json.get("channelId", "")
         self._events = [
-            LGHorizonEpgEvent(ev, channel_id)
-            for ev in entry_json.get("events", [])
+            LGHorizonEpgEvent(ev, channel_id) for ev in entry_json.get("events", [])
         ]
 
     @property
@@ -1911,12 +1948,16 @@ class LGHorizonManagedRecording:
     @property
     def start_time(self) -> Optional[str]:
         """Return the display start time (ISO 8601)."""
-        return self._recording_json.get("displayStartTime") or self._recording_json.get("startTime")
+        return self._recording_json.get("displayStartTime") or self._recording_json.get(
+            "startTime"
+        )
 
     @property
     def end_time(self) -> Optional[str]:
         """Return the display end time (ISO 8601)."""
-        return self._recording_json.get("displayEndTime") or self._recording_json.get("endTime")
+        return self._recording_json.get("displayEndTime") or self._recording_json.get(
+            "endTime"
+        )
 
     @property
     def rec_start_time(self) -> Optional[str]:
@@ -1987,8 +2028,7 @@ class LGHorizonManagedRecordingList:
         self._limit = response_json.get("limit", 0)
         self._offset = response_json.get("offset", 0)
         self._recordings = [
-            LGHorizonManagedRecording(item)
-            for item in response_json.get("data", [])
+            LGHorizonManagedRecording(item) for item in response_json.get("data", [])
         ]
 
     @property
