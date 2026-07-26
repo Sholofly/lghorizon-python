@@ -57,9 +57,14 @@ async def _create_client(paho_instance=None):
     if paho_instance is None:
         paho_instance = _make_paho_mock()
 
-    with patch("lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_instance):
+    with patch(
+        "lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_instance
+    ):
         # tls_set is called via run_in_executor; patch executor to call it synchronously
-        with patch("asyncio.AbstractEventLoop.run_in_executor", new=AsyncMock(return_value=None)):
+        with patch(
+            "asyncio.AbstractEventLoop.run_in_executor",
+            new=AsyncMock(return_value=None),
+        ):
             client = await LGHorizonMqttClient.create(auth, on_connected, on_message)
 
     return client, auth, on_connected, on_message, paho_instance
@@ -68,11 +73,21 @@ async def _create_client(paho_instance=None):
 def _make_direct_client(loop=None):
     """Directly instantiate LGHorizonMqttClient (bypasses create())."""
     if loop is None:
-        loop = asyncio.get_event_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            # Als er geen loop draait (zoals in jouw synchrone test), maak er een aan
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
     auth = _make_mock_auth()
     on_connected = AsyncMock()
     on_message = AsyncMock()
-    return LGHorizonMqttClient(auth, on_connected, on_message, loop), auth, on_connected, on_message
+    return (
+        LGHorizonMqttClient(auth, on_connected, on_message, loop),
+        auth,
+        on_connected,
+        on_message,
+    )
 
 
 # ===========================================================================
@@ -83,36 +98,62 @@ def _make_direct_client(loop=None):
 class TestCreate:
     async def test_returns_instance(self):
         paho_mock = _make_paho_mock()
-        with patch("lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_mock):
-            with patch("asyncio.AbstractEventLoop.run_in_executor", new=AsyncMock(return_value=None)):
+        with patch(
+            "lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_mock
+        ):
+            with patch(
+                "asyncio.AbstractEventLoop.run_in_executor",
+                new=AsyncMock(return_value=None),
+            ):
                 auth = _make_mock_auth()
-                client = await LGHorizonMqttClient.create(auth, AsyncMock(), AsyncMock())
+                client = await LGHorizonMqttClient.create(
+                    auth, AsyncMock(), AsyncMock()
+                )
 
         assert isinstance(client, LGHorizonMqttClient)
 
     async def test_client_id_is_non_empty_string(self):
         paho_mock = _make_paho_mock()
-        with patch("lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_mock):
-            with patch("asyncio.AbstractEventLoop.run_in_executor", new=AsyncMock(return_value=None)):
+        with patch(
+            "lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_mock
+        ):
+            with patch(
+                "asyncio.AbstractEventLoop.run_in_executor",
+                new=AsyncMock(return_value=None),
+            ):
                 auth = _make_mock_auth()
-                client = await LGHorizonMqttClient.create(auth, AsyncMock(), AsyncMock())
+                client = await LGHorizonMqttClient.create(
+                    auth, AsyncMock(), AsyncMock()
+                )
 
         assert isinstance(client.client_id, str)
         assert len(client.client_id) > 0
 
     async def test_broker_url_strips_wss_and_port(self):
         paho_mock = _make_paho_mock()
-        with patch("lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_mock):
-            with patch("asyncio.AbstractEventLoop.run_in_executor", new=AsyncMock(return_value=None)):
+        with patch(
+            "lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_mock
+        ):
+            with patch(
+                "asyncio.AbstractEventLoop.run_in_executor",
+                new=AsyncMock(return_value=None),
+            ):
                 auth = _make_mock_auth()
-                client = await LGHorizonMqttClient.create(auth, AsyncMock(), AsyncMock())
+                client = await LGHorizonMqttClient.create(
+                    auth, AsyncMock(), AsyncMock()
+                )
 
         assert client._mqtt_broker_url == BROKER_URL_STRIPPED
 
     async def test_username_password_set_from_auth(self):
         paho_mock = _make_paho_mock()
-        with patch("lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_mock):
-            with patch("asyncio.AbstractEventLoop.run_in_executor", new=AsyncMock(return_value=None)):
+        with patch(
+            "lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_mock
+        ):
+            with patch(
+                "asyncio.AbstractEventLoop.run_in_executor",
+                new=AsyncMock(return_value=None),
+            ):
                 auth = _make_mock_auth()
                 await LGHorizonMqttClient.create(auth, AsyncMock(), AsyncMock())
 
@@ -120,10 +161,17 @@ class TestCreate:
 
     async def test_paho_client_constructed_with_client_id(self):
         paho_mock = _make_paho_mock()
-        with patch("lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_mock) as mock_cls:
-            with patch("asyncio.AbstractEventLoop.run_in_executor", new=AsyncMock(return_value=None)):
+        with patch(
+            "lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_mock
+        ) as mock_cls:
+            with patch(
+                "asyncio.AbstractEventLoop.run_in_executor",
+                new=AsyncMock(return_value=None),
+            ):
                 auth = _make_mock_auth()
-                client = await LGHorizonMqttClient.create(auth, AsyncMock(), AsyncMock())
+                client = await LGHorizonMqttClient.create(
+                    auth, AsyncMock(), AsyncMock()
+                )
 
         call_kwargs = mock_cls.call_args
         # client_id should be set and match the instance's client_id
@@ -151,7 +199,9 @@ class TestConnect:
         client._mqtt_client = paho_mock
         client._mqtt_broker_url = BROKER_URL_STRIPPED
 
-        with patch.object(loop, "run_in_executor", new=AsyncMock(return_value=None)) as mock_exec:
+        with patch.object(
+            loop, "run_in_executor", new=AsyncMock(return_value=None)
+        ) as mock_exec:
             await client.connect()
 
         # run_in_executor should have been called with connect, broker url, port 443
@@ -199,11 +249,17 @@ class TestConnect:
         client._mqtt_client = paho_mock
         client._mqtt_broker_url = BROKER_URL_STRIPPED
 
-        with patch.object(loop, "run_in_executor", new=AsyncMock(return_value=None)) as mock_exec:
+        with patch.object(
+            loop, "run_in_executor", new=AsyncMock(return_value=None)
+        ) as mock_exec:
             await client.connect()
 
         # connect should NOT have been called via executor
-        connect_calls = [c for c in mock_exec.call_args_list if len(c.args) > 1 and c.args[1] == paho_mock.connect]
+        connect_calls = [
+            c
+            for c in mock_exec.call_args_list
+            if len(c.args) > 1 and c.args[1] == paho_mock.connect
+        ]
         assert len(connect_calls) == 0
 
 
