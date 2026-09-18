@@ -6,7 +6,7 @@ on:
 jobs:
   build-n-publish:
     name: Publish Python 🐍 distribution 📦 to Pypi
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       id-token: write
     steps:
