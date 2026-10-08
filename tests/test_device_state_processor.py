@@ -419,3 +419,84 @@ class TestProcessVodState:
         assert device_state.duration == 2700.0
         # relativePosition 120000 ms → 120 s
         assert device_state.position == 120
+
+    async def test_missing_relative_position_leaves_position_none(
+        self, processor, mock_auth, sample_vod_json, mock_service_config
+    ):
+        mock_auth.get_service_config = AsyncMock(return_value=mock_service_config)
+        mock_auth.request = AsyncMock(
+            side_effect=[sample_vod_json, self._intents_response()]
+        )
+        msg = self._vod_ui_msg()
+        del msg.ui_state.player_state._raw_json["relativePosition"]
+
+        device_state = LGHorizonDeviceState()
+        device_state.state = LGHorizonRunningState.ONLINE_RUNNING
+
+        await processor.process_ui_state(device_state, msg)
+
+        assert device_state.position is None
+
+
+# ---------------------------------------------------------------------------
+# _process_ndvr_state (via process_ui_state with mocked API)
+# ---------------------------------------------------------------------------
+
+# Pre-roll ad break at position 0, as seen in captured MQTT data
+_AD_MANIFEST_WITH_PREROLL = [
+    {"dStart": 0, "dEnd": 15000, "adType": "IP_OTHER", "adCounter": True, "isSkippable": False},
+    {"dStart": 527760, "dEnd": 1012640, "adType": "IP_OTHER", "adCounter": True, "isSkippable": False},
+]
+
+
+class TestProcessNdvrState:
+    def _ndvr_ui_msg(self, relative_position=None):
+        player_state = {
+            "sourceType": "nDVR",
+            "speed": 1,
+            "lastSpeedChangeTime": 1700000000000,
+            "source": {
+                "recordingId": "rec-1",
+                "channelId": "channel-1",
+                "adManifest": _AD_MANIFEST_WITH_PREROLL,
+            },
+        }
+        if relative_position is not None:
+            player_state["relativePosition"] = relative_position
+        payload = {
+            "source": "device-1",
+            "messageTimeStamp": 1700000000,
+            "status": {"uiStatus": "mainUI", "playerState": player_state},
+        }
+        return LGHorizonUIStatusMessage(payload, TOPIC)
+
+    async def _process(self, processor, mock_auth, recording_json, msg):
+        mock_auth.request = AsyncMock(
+            side_effect=[recording_json, [{"intents": [{"url": "https://x/img.png"}]}]]
+        )
+        device_state = LGHorizonDeviceState()
+        device_state.state = LGHorizonRunningState.ONLINE_RUNNING
+        await processor.process_ui_state(device_state, msg)
+        return device_state
+
+    async def test_position_set_from_relative_position(
+        self, processor, mock_auth, sample_recording_single_json
+    ):
+        device_state = await self._process(
+            processor, mock_auth, sample_recording_single_json, self._ndvr_ui_msg(300000)
+        )
+
+        assert device_state.position == 300
+        assert len(device_state.ad_breaks) == 2
+        assert device_state.is_in_ad_break is False
+
+    async def test_missing_relative_position_is_not_treated_as_zero(
+        self, processor, mock_auth, sample_recording_single_json
+    ):
+        device_state = await self._process(
+            processor, mock_auth, sample_recording_single_json, self._ndvr_ui_msg()
+        )
+
+        assert device_state.position is None
+        assert len(device_state.ad_breaks) == 2
+        assert device_state.is_in_ad_break is False

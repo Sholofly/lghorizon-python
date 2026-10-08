@@ -506,6 +506,10 @@ class TestLGHorizonPlayerState:
         ps = LGHorizonPlayerState({"relativePosition": 60000})
         assert ps.relative_position == 60000
 
+    def test_relative_position_missing_is_none(self):
+        ps = LGHorizonPlayerState({})
+        assert ps.relative_position is None
+
     def test_source_linear(self):
         raw = {
             "sourceType": "linear",
