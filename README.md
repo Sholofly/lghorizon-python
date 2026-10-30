@@ -65,7 +65,7 @@ A Python library to interact with and control LG Horizon set-top boxes (Ziggo, T
 pip install lghorizon
 ```
 
-**Requirements**: Python 3.14+, aiohttp, paho-mqtt (2.1 or newer, below 3), backoff
+**Requirements**: Python 3.13+, aiohttp, paho-mqtt (2.1 or newer, below 3), backoff
 
 ## Quick Start
 
