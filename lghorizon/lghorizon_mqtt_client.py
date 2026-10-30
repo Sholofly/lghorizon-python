@@ -258,12 +258,13 @@ class LGHorizonMqttClient:
             reason_code: The disconnection result.
             properties: MQTT 5 properties (unused).
         """
-        _logger.warning("MQTT disconnected with result code: %s", reason_code)
-        if not self._disconnect_requested:
-            _logger.debug("Unexpected MQTT disconnection. Initiating reconnect loop.")
-            self._schedule_reconnect()
-        else:
+        if self._disconnect_requested:
             _logger.debug("MQTT disconnected as requested.")
+            return
+        _logger.warning(
+            "MQTT disconnected unexpectedly with result code: %s", reason_code
+        )
+        self._schedule_reconnect()
 
     def _schedule_reconnect(self):
         """Start the reconnect loop from any thread unless one is active."""
