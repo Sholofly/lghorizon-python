@@ -462,6 +462,30 @@ class TestOnDisconnect:
 
         mock_cst.assert_not_called()
 
+    async def test_requested_disconnect_does_not_log_a_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ):
+        loop = asyncio.get_running_loop()
+        client, *_ = _make_direct_client(loop)
+        client._disconnect_requested = True
+
+        client._on_disconnect(MagicMock(), None, MagicMock(), 0, None)
+
+        assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+    async def test_unexpected_disconnect_logs_a_warning(
+        self, caplog: pytest.LogCaptureFixture
+    ):
+        loop = asyncio.get_running_loop()
+        client, *_ = _make_direct_client(loop)
+        client._disconnect_requested = False
+
+        with patch.object(loop, "call_soon_threadsafe"):
+            client._on_disconnect(MagicMock(), None, MagicMock(), 7, None)
+
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert warnings == ["MQTT disconnected unexpectedly with result code: 7"]
+
     async def test_does_not_start_reconnect_if_task_already_running(self):
         loop = asyncio.get_running_loop()
         client, *_ = _make_direct_client(loop)
