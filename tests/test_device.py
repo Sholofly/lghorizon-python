@@ -533,3 +533,28 @@ async def test_play_recording_publishes_ndvr_payload(device, mqtt_client, mock_a
     assert payload["type"] == "CPE.pushToTV"
     assert payload["status"]["sourceType"] == "nDVR"
     assert payload["status"]["source"]["recordingId"] == "rec-42"
+
+
+class TestTolerantDeviceParsing:
+    def _make(self, device_json: dict) -> LGHorizonDevice:
+        return LGHorizonDevice(device_json, MagicMock(), MagicMock(), MagicMock(), {})
+
+    def test_missing_settings_falls_back_to_device_id(self):
+        device = self._make({"deviceId": "d1", "hashedCPEId": "h1", "platformType": "EOS"})
+        assert device.device_friendly_name == "d1"
+
+    def test_empty_friendly_name_falls_back_to_device_id(self):
+        device = self._make(
+            {"deviceId": "d1", "hashedCPEId": "h1", "settings": {"deviceFriendlyName": ""}}
+        )
+        assert device.device_friendly_name == "d1"
+
+    def test_unknown_platform_type_is_logged(self, caplog: pytest.LogCaptureFixture):
+        from lghorizon.lghorizon_models import _WARNED_UNKNOWN
+
+        _WARNED_UNKNOWN.clear()
+        device = self._make({"deviceId": "d1", "hashedCPEId": "h1", "platformType": "NEWBOX"})
+
+        assert device.manufacturer == "unknown"
+        assert "platform type 'NEWBOX'" in caplog.text
+        _WARNED_UNKNOWN.clear()
