@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import time
@@ -12,7 +13,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional, Callable
 
 import backoff
-from aiohttp import ClientResponseError, ClientSession
+from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
 
 from .const import (
     COUNTRY_SETTINGS,
@@ -21,6 +22,18 @@ from .exceptions import LGHorizonApiConnectionError, LGHorizonApiUnauthorizedErr
 
 
 _LOGGER = logging.getLogger(__name__)
+
+REQUEST_TIMEOUT = ClientTimeout(total=30)
+MAX_RETRY_AFTER = 30
+
+
+def _retry_after_seconds(error: ClientResponseError) -> float:
+    """Return the Retry-After delay of a 429 response, capped."""
+    try:
+        delay = float((error.headers or {}).get("Retry-After", 1))
+    except ValueError:
+        delay = 1
+    return max(0, min(delay, MAX_RETRY_AFTER))
 
 
 def _redact_sensitive(data):
@@ -588,6 +601,8 @@ class LGHorizonAuth:
         ] or bool(refresh_token)
         self._service_config = None
         self._token_refresh_callback = token_refresh_callback
+        self._refresh_lock = asyncio.Lock()
+        self._token_generation = 0
 
     @property
     def websession(self) -> ClientSession:
@@ -667,7 +682,22 @@ class LGHorizonAuth:
         return current_unix_time >= (self.token_expiry - 86400)
 
     async def fetch_access_token(self) -> None:
-        """Fetch the access token."""
+        """Fetch the access token.
+
+        Concurrent callers are serialized; a caller that waited for another
+        refresh to finish reuses its result instead of refreshing again, since
+        the server may invalidate the refresh token that was just replaced.
+        """
+        generation = self._token_generation
+        async with self._refresh_lock:
+            if generation != self._token_generation:
+                _LOGGER.debug("Token was refreshed by another caller, skipping")
+                return
+            await self._fetch_access_token()
+            self._token_generation += 1
+
+    async def _fetch_access_token(self) -> None:
+        """Request new tokens from the auth service."""
         _LOGGER.debug("Fetching access token")
         headers = dict()
         headers["content-type"] = "application/json"
@@ -680,39 +710,79 @@ class LGHorizonAuth:
         else:
             payload = {"refreshToken": self.refresh_token}
             auth_url_path = "/auth-service/v1/authorization/refresh"
-        try:  # Use properties and backing fields
+        try:
             auth_response = await self.websession.post(
                 f"{self._host}{auth_url_path}",
                 json=payload,
                 headers=headers,
+                timeout=REQUEST_TIMEOUT,
             )
         except Exception as ex:
             raise LGHorizonApiConnectionError from ex
-        auth_json = await auth_response.json()
-        if not auth_response.ok:
-            error = None
-            if "error" in auth_json:
-                error = auth_json["error"]
-            if error and error["statusCode"] == 97401:
-                raise LGHorizonApiUnauthorizedError("Invalid credentials")
-            elif error and error["statusCode"] == 97402:
-                raise LGHorizonApiUnauthorizedError("Invalid token")
-            elif error:
-                raise LGHorizonApiConnectionError(error["message"])
-            else:
-                raise LGHorizonApiConnectionError("Unknown connection error")
 
-        self.household_id = auth_json["householdId"]
-        self.access_token = auth_json["accessToken"]
-        self.refresh_token = auth_json["refreshToken"]
+        try:
+            auth_json = await auth_response.json()
+        except (ClientError, ValueError) as ex:
+            if auth_response.ok:
+                raise LGHorizonApiConnectionError(
+                    "Invalid authorization response"
+                ) from ex
+            auth_json = {}
+
+        if not auth_response.ok:
+            error = auth_json.get("error") if isinstance(auth_json, dict) else None
+            if not isinstance(error, dict):
+                raise LGHorizonApiConnectionError(
+                    f"Unknown connection error (HTTP {auth_response.status})"
+                )
+            status_code = error.get("statusCode")
+            if status_code == 97401:
+                raise LGHorizonApiUnauthorizedError("Invalid credentials")
+            if status_code == 97402:
+                raise LGHorizonApiUnauthorizedError("Invalid token")
+            raise LGHorizonApiConnectionError(
+                error.get("message") or "Unknown connection error"
+            )
+
+        try:
+            household_id = auth_json["householdId"]
+            access_token = auth_json["accessToken"]
+            refresh_token = auth_json["refreshToken"]
+            username = auth_json["username"]
+            token_expiry = auth_json["refreshTokenExpiry"]
+        except (KeyError, TypeError) as ex:
+            raise LGHorizonApiConnectionError(
+                "Unexpected authorization response"
+            ) from ex
+
+        self.household_id = household_id
+        self.access_token = access_token
+        self.refresh_token = refresh_token
         if self._token_refresh_callback:
             self._token_refresh_callback(self.refresh_token)
-        self.username = auth_json["username"]
-        self.token_expiry = auth_json["refreshTokenExpiry"]
+        self.username = username
+        self.token_expiry = token_expiry
         _LOGGER.debug(
             "Access token and refresh token fetched. refresh token expires: %s",
             datetime.fromtimestamp(int(self.token_expiry)).ctime(),
         )
+
+    async def _get_json(
+        self, request_url: str, headers: dict, params: Any, **kwargs: Any
+    ) -> Any:
+        """Perform a single GET request and return the decoded JSON."""
+        kwargs.setdefault("timeout", REQUEST_TIMEOUT)
+        web_response = await self.websession.request(
+            "GET", request_url, **kwargs, headers=headers, params=params
+        )
+        web_response.raise_for_status()
+        json_response = await web_response.json()
+        _LOGGER.debug(
+            "Response from %s:\n %s",
+            request_url,
+            json.dumps(_redact_sensitive(json_response), indent=2),
+        )
+        return json_response
 
     @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3)
     async def request(self, host: str, path: str, params=None, **kwargs) -> Any:
@@ -720,39 +790,23 @@ class LGHorizonAuth:
         if headers := kwargs.pop("headers", {}):
             headers = dict(headers)
         request_url = f"{host}{path}"
-        if self.is_token_expiring():  # Use property
+        if self.is_token_expiring():
             _LOGGER.debug("Access token is expiring, fetching a new one")
             await self.fetch_access_token()
+        token_generation = self._token_generation
         try:
-            web_response = await self.websession.request(
-                "GET", request_url, **kwargs, headers=headers, params=params
-            )
-            web_response.raise_for_status()
-            json_response = await web_response.json()
-            _LOGGER.debug(
-                "Response from %s:\n %s",
-                request_url,
-                json.dumps(_redact_sensitive(json_response), indent=2),
-            )
-            return json_response
+            return await self._get_json(request_url, headers, params, **kwargs)
         except ClientResponseError as cre:
             if cre.status == 401:
                 _LOGGER.debug(
                     "Got 401 from %s, refreshing token and retrying", request_url
                 )
-                await self.fetch_access_token()
+                if token_generation == self._token_generation:
+                    await self.fetch_access_token()
                 try:
-                    web_response = await self.websession.request(
-                        "GET", request_url, **kwargs, headers=headers, params=params
+                    return await self._get_json(
+                        request_url, headers, params, **kwargs
                     )
-                    web_response.raise_for_status()
-                    json_response = await web_response.json()
-                    _LOGGER.debug(
-                        "Response from %s:\n %s",
-                        request_url,
-                        json.dumps(_redact_sensitive(json_response), indent=2),
-                    )
-                    return json_response
                 except ClientResponseError as retry_cre:
                     _LOGGER.error(
                         "Retry failed for %s: %s", request_url, str(retry_cre)
@@ -760,6 +814,8 @@ class LGHorizonAuth:
                     raise LGHorizonApiConnectionError(
                         f"Unable to call {request_url}. Error:{str(retry_cre)}"
                     ) from retry_cre
+            if cre.status == 429:
+                await asyncio.sleep(_retry_after_seconds(cre))
             _LOGGER.error("Error response from %s: %s", request_url, str(cre))
             raise LGHorizonApiConnectionError(
                 f"Unable to call {request_url}. Error:{str(cre)}"
