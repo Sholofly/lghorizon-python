@@ -6,7 +6,7 @@ import logging
 import sys
 import aiohttp
 
-from datetime import datetime, timezone
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from lghorizon.lghorizon_api import LGHorizonApi
@@ -230,7 +230,6 @@ async def main():
 
             # ── EPG (Today) ──
             import time as _time
-            from datetime import date as date_type
             print_header("EPG (Today)")
             epg = await api.get_epg()
             epg_cache["epg"] = epg  # Store for state change callbacks
@@ -419,7 +418,7 @@ async def main():
                             await dev.turn_on()
                             print(f"  ✓ {dev.device_friendly_name} turning on!")
                         except (ValueError, IndexError):
-                            print(f"  Invalid box number.")
+                            print("  Invalid box number.")
 
                     elif cmd == "off":
                         if len(parts) < 2:
@@ -431,7 +430,7 @@ async def main():
                             await dev.turn_off()
                             print(f"  ✓ {dev.device_friendly_name} turning off!")
                         except (ValueError, IndexError):
-                            print(f"  Invalid box number.")
+                            print("  Invalid box number.")
 
                     elif cmd == "pause":
                         if len(parts) < 2:
@@ -441,9 +440,9 @@ async def main():
                             idx = int(parts[1])
                             dev = device_list[idx]
                             await dev.pause()
-                            print(f"  ✓ Paused!")
+                            print("  ✓ Paused!")
                         except (ValueError, IndexError):
-                            print(f"  Invalid box number.")
+                            print("  Invalid box number.")
 
                     elif cmd == "play":
                         if len(parts) < 2:
@@ -453,9 +452,9 @@ async def main():
                             idx = int(parts[1])
                             dev = device_list[idx]
                             await dev.play()
-                            print(f"  ✓ Playing!")
+                            print("  ✓ Playing!")
                         except (ValueError, IndexError):
-                            print(f"  Invalid box number.")
+                            print("  Invalid box number.")
 
                     elif cmd == "stop":
                         if len(parts) < 2:
@@ -465,9 +464,9 @@ async def main():
                             idx = int(parts[1])
                             dev = device_list[idx]
                             await dev.stop()
-                            print(f"  ✓ Stopped!")
+                            print("  ✓ Stopped!")
                         except (ValueError, IndexError):
-                            print(f"  Invalid box number.")
+                            print("  Invalid box number.")
 
                     elif cmd == "skip":
                         if len(parts) < 2:
@@ -478,11 +477,11 @@ async def main():
                             dev = device_list[idx]
                             skipped = await dev.skip_ad_break()
                             if skipped:
-                                print(f"  ✓ Ad break skipped!")
+                                print("  ✓ Ad break skipped!")
                             else:
-                                print(f"  No ad break to skip.")
+                                print("  No ad break to skip.")
                         except (ValueError, IndexError):
-                            print(f"  Invalid box number.")
+                            print("  Invalid box number.")
 
                     else:
                         print(f"  Unknown command: {cmd}. Type 'help' for available commands.")

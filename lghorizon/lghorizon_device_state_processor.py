@@ -4,7 +4,7 @@ import logging
 import random
 import json
 import urllib.parse
-from datetime import datetime as dt, timezone
+from datetime import datetime as dt
 
 import time
 
@@ -284,7 +284,7 @@ class LGHorizonDeviceStateProcessor:
         )
         replay_event = LGHorizonReplayEvent(event_json)
         # Iets met buffer doen
-        channel = self._get_channel(replay_event.channel_id)
+        channel = self._get_channel(replay_event.channel_id)  # noqa: F841
 
         device_state.media_type = LGHorizonMediaType.CHANNEL
         device_state.id = replay_event.event_id

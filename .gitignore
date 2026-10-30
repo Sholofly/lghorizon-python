@@ -28,3 +28,7 @@ lghorizon_web.log
 check_adbreaks.py
 mqtt_capture.json
 ssdp_scan.py
+
+.coverage
+/lib64
+/pyvenv.cfg

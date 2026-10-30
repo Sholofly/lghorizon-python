@@ -3,7 +3,7 @@
 import asyncio
 import paho.mqtt.client as mqtt
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 from lghorizon.lghorizon_mqtt_client import LGHorizonMqttClient
 
