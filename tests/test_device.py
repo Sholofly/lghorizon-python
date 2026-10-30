@@ -495,6 +495,19 @@ async def test_send_key_to_box_payload(device, mqtt_client, mock_auth):
     assert payload["source"] == device.device_id.lower()
 
 
+@pytest.mark.asyncio
+async def test_send_key_to_box_uses_unique_ids(device, mqtt_client):
+    await device.send_key_to_box("A")
+    await device.send_key_to_box("B")
+
+    ids = [
+        json.loads(c.args[1])["id"] for c in mqtt_client.publish_message.call_args_list
+    ]
+    assert len(ids) == 2
+    assert ids[0] != ids[1]
+    assert all(len(i) == 8 and i.isalnum() for i in ids)
+
+
 # ---------------------------------------------------------------------------
 # set_channel
 # ---------------------------------------------------------------------------
