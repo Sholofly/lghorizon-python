@@ -1,7 +1,14 @@
 """Unit tests for LGHorizonApi."""
 
 import pytest
+from aiohttp import ClientResponseError, RequestInfo
 from unittest.mock import AsyncMock, MagicMock, patch
+from yarl import URL
+
+from lghorizon.exceptions import (
+    LGHorizonApiConnectionError,
+    LGHorizonApiUnauthorizedError,
+)
 
 from lghorizon.lghorizon_api import LGHorizonApi
 from lghorizon.lghorizon_device import LGHorizonDevice
@@ -560,17 +567,104 @@ class TestGetEpg:
         # 4 segments × 1 event = 4 events merged
         assert len(events) == 4
 
-    async def test_returns_empty_epg_when_all_segments_fail(
-        self, mock_auth, sample_customer_json, sample_channel_json
+    @staticmethod
+    def _connection_error(status: int) -> LGHorizonApiConnectionError:
+        request_info = RequestInfo(
+            url=URL("http://test"),
+            method="GET",
+            headers={},  # type: ignore[arg-type]
+            real_url=URL("http://test"),
+        )
+        cause = ClientResponseError(request_info, (), status=status, message="error")
+        error = LGHorizonApiConnectionError(f"Unable to call: {status}")
+        error.__cause__ = cause
+        return error
+
+    async def test_missing_segments_are_skipped_quietly(
+        self,
+        mock_auth,
+        sample_customer_json,
+        sample_channel_json,
+        caplog: pytest.LogCaptureFixture,
     ):
         api = self._make_api(mock_auth, sample_customer_json, sample_channel_json)
-        mock_auth.request = AsyncMock(side_effect=Exception("network error"))
+        segment = {"entries": [{"channelId": "NL_001", "events": [{"id": "e1"}]}]}
+        mock_auth.request = AsyncMock(
+            side_effect=[segment, segment, self._connection_error(404), self._connection_error(404)]
+        )
 
         from datetime import date
         result = await api.get_epg(epg_date=date(2026, 4, 24))
 
-        assert isinstance(result, LGHorizonEpg)
+        assert len(result.get_channel_events("NL_001")) == 2
+        assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+    async def test_all_segments_missing_returns_empty_epg(
+        self,
+        mock_auth,
+        sample_customer_json,
+        sample_channel_json,
+        caplog: pytest.LogCaptureFixture,
+    ):
+        api = self._make_api(mock_auth, sample_customer_json, sample_channel_json)
+        mock_auth.request = AsyncMock(side_effect=self._connection_error(404))
+
+        from datetime import date
+        result = await api.get_epg(epg_date=date(2026, 4, 24))
+
         assert result.entries == []
+        assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+    @pytest.mark.parametrize("status", [500, 502, 403])
+    async def test_failed_segments_are_logged_as_warnings(
+        self,
+        mock_auth,
+        sample_customer_json,
+        sample_channel_json,
+        caplog: pytest.LogCaptureFixture,
+        status: int,
+    ):
+        api = self._make_api(mock_auth, sample_customer_json, sample_channel_json)
+        segment = {"entries": [{"channelId": "NL_001", "events": [{"id": "e1"}]}]}
+        mock_auth.request = AsyncMock(
+            side_effect=[segment, self._connection_error(status), segment, segment]
+        )
+
+        from datetime import date
+        result = await api.get_epg(epg_date=date(2026, 4, 24))
+
+        assert len(result.get_channel_events("NL_001")) == 3
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1
+        assert "20260424060000" in warnings[0]
+
+    async def test_connection_error_without_http_cause_is_a_warning(
+        self,
+        mock_auth,
+        sample_customer_json,
+        sample_channel_json,
+        caplog: pytest.LogCaptureFixture,
+    ):
+        api = self._make_api(mock_auth, sample_customer_json, sample_channel_json)
+        mock_auth.request = AsyncMock(side_effect=LGHorizonApiConnectionError("down"))
+
+        from datetime import date
+        result = await api.get_epg(epg_date=date(2026, 4, 24))
+
+        assert result.entries == []
+        assert len([r for r in caplog.records if r.levelname == "WARNING"]) == 4
+
+    async def test_unauthorized_error_is_not_swallowed(
+        self, mock_auth, sample_customer_json, sample_channel_json
+    ):
+        api = self._make_api(mock_auth, sample_customer_json, sample_channel_json)
+        mock_auth.request = AsyncMock(
+            side_effect=LGHorizonApiUnauthorizedError("Invalid token")
+        )
+
+        from datetime import date
+        with pytest.raises(LGHorizonApiUnauthorizedError):
+            await api.get_epg(epg_date=date(2026, 4, 24))
 
     async def test_defaults_to_today_when_no_date_given(
         self, mock_auth, sample_customer_json, sample_channel_json
