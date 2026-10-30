@@ -618,6 +618,7 @@ class LGHorizonAuth:
     _host: str
     _use_refresh_token: bool
     _token_refresh_callback: Callable[[str], None] | None
+    _auth_failure_callback: Callable[[], None] | None
 
     def __init__(
         self,
@@ -627,8 +628,17 @@ class LGHorizonAuth:
         username: str = "",
         password: str = "",
         token_refresh_callback: Callable[[str], None] | None = None,
+        auth_failure_callback: Callable[[], None] | None = None,
     ) -> None:
-        """Initialize the auth with refresh token."""
+        """Initialize the auth with refresh token.
+
+        Args:
+            token_refresh_callback: Called with the new refresh token after
+                every successful token request.
+            auth_failure_callback: Called when the provider rejects the
+                credentials or refresh token. Called once per failure streak,
+                until a token request succeeds again.
+        """
         self._websession = websession
         self._refresh_token = refresh_token
         self._access_token = None
@@ -643,6 +653,8 @@ class LGHorizonAuth:
         ] or bool(refresh_token)
         self._service_config = None
         self._token_refresh_callback = token_refresh_callback
+        self._auth_failure_callback = auth_failure_callback
+        self._auth_failure_reported = False
         self._refresh_lock = asyncio.Lock()
         self._token_generation = 0
 
@@ -660,6 +672,26 @@ class LGHorizonAuth:
     def refresh_token(self, value: str) -> None:
         """Set the refresh token."""
         self._refresh_token = value
+
+    @property
+    def token_refresh_callback(self) -> Callable[[str], None] | None:
+        """Return the callback for a new refresh token."""
+        return self._token_refresh_callback
+
+    @token_refresh_callback.setter
+    def token_refresh_callback(self, value: Callable[[str], None] | None) -> None:
+        """Set the callback for a new refresh token."""
+        self._token_refresh_callback = value
+
+    @property
+    def auth_failure_callback(self) -> Callable[[], None] | None:
+        """Return the callback for rejected credentials."""
+        return self._auth_failure_callback
+
+    @auth_failure_callback.setter
+    def auth_failure_callback(self, value: Callable[[], None] | None) -> None:
+        """Set the callback for rejected credentials."""
+        self._auth_failure_callback = value
 
     @property
     def access_token(self) -> Optional[str]:
@@ -735,8 +767,23 @@ class LGHorizonAuth:
             if generation != self._token_generation:
                 _LOGGER.debug("Token was refreshed by another caller, skipping")
                 return
-            await self._fetch_access_token()
+            try:
+                await self._fetch_access_token()
+            except LGHorizonApiUnauthorizedError:
+                self._report_auth_failure()
+                raise
+            self._auth_failure_reported = False
             self._token_generation += 1
+
+    def _report_auth_failure(self) -> None:
+        """Tell the owner once that the credentials are no longer accepted."""
+        if self._auth_failure_reported or self._auth_failure_callback is None:
+            return
+        self._auth_failure_reported = True
+        try:
+            self._auth_failure_callback()
+        except Exception:
+            _LOGGER.exception("Error in the authentication failure callback")
 
     async def _fetch_access_token(self) -> None:
         """Request new tokens from the auth service."""

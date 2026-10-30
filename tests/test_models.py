@@ -2680,3 +2680,143 @@ class TestUnknownValueWarnings:
         assert (
             LGHorizonPlayerState({}).source_type.name == "UNKNOWN"
         )
+
+
+@pytest.mark.asyncio
+class TestAuthFailureCallback:
+    def _unauthorized_response(self):
+        return make_auth_response(
+            False, {"error": {"statusCode": AUTH_ERROR_INVALID_TOKEN, "message": "x"}}, 400
+        )
+
+    async def test_called_when_credentials_are_rejected(self):
+        auth = make_real_auth()
+        callback = MagicMock()
+        auth.auth_failure_callback = callback
+        auth.websession.post.return_value = self._unauthorized_response()
+
+        with pytest.raises(LGHorizonApiUnauthorizedError):
+            await auth.fetch_access_token()
+
+        callback.assert_called_once_with()
+
+    async def test_called_once_for_repeated_failures(self):
+        auth = make_real_auth()
+        callback = MagicMock()
+        auth.auth_failure_callback = callback
+        auth.websession.post.return_value = self._unauthorized_response()
+
+        for _ in range(3):
+            with pytest.raises(LGHorizonApiUnauthorizedError):
+                await auth.fetch_access_token()
+
+        callback.assert_called_once_with()
+
+    async def test_called_again_after_a_successful_token_request(self):
+        auth = make_real_auth()
+        callback = MagicMock()
+        auth.auth_failure_callback = callback
+        auth.websession.post.side_effect = [
+            self._unauthorized_response(),
+            make_auth_response(True, TOKEN_PAYLOAD),
+            self._unauthorized_response(),
+        ]
+
+        with pytest.raises(LGHorizonApiUnauthorizedError):
+            await auth.fetch_access_token()
+        await auth.fetch_access_token()
+        with pytest.raises(LGHorizonApiUnauthorizedError):
+            await auth.fetch_access_token()
+
+        assert callback.call_count == 2
+
+    @pytest.mark.parametrize(
+        "response",
+        [
+            pytest.param(make_auth_response(False, {}, 500), id="server-error"),
+            pytest.param(make_auth_response(False, {}, 403), id="forbidden"),
+            pytest.param(
+                make_auth_response(True, {"householdId": "hh"}), id="bad-success-body"
+            ),
+        ],
+    )
+    async def test_not_called_for_other_failures(self, response):
+        auth = make_real_auth()
+        callback = MagicMock()
+        auth.auth_failure_callback = callback
+        auth.websession.post.return_value = response
+
+        with pytest.raises(LGHorizonApiConnectionError):
+            await auth.fetch_access_token()
+
+        callback.assert_not_called()
+
+    async def test_not_called_when_the_request_cannot_be_sent(self):
+        auth = make_real_auth()
+        callback = MagicMock()
+        auth.auth_failure_callback = callback
+        auth.websession.post.side_effect = OSError("down")
+
+        with pytest.raises(LGHorizonApiConnectionError):
+            await auth.fetch_access_token()
+
+        callback.assert_not_called()
+
+    async def test_callback_set_later_is_still_called(self):
+        auth = make_real_auth()
+        auth.websession.post.return_value = self._unauthorized_response()
+        with pytest.raises(LGHorizonApiUnauthorizedError):
+            await auth.fetch_access_token()
+
+        callback = MagicMock()
+        auth.auth_failure_callback = callback
+        with pytest.raises(LGHorizonApiUnauthorizedError):
+            await auth.fetch_access_token()
+
+        callback.assert_called_once_with()
+
+    async def test_failing_callback_does_not_hide_the_error(self):
+        auth = make_real_auth()
+        auth.auth_failure_callback = MagicMock(side_effect=RuntimeError("boom"))
+        auth.websession.post.return_value = self._unauthorized_response()
+
+        with pytest.raises(LGHorizonApiUnauthorizedError):
+            await auth.fetch_access_token()
+
+    async def test_set_via_constructor(self):
+        callback = MagicMock()
+        auth = LGHorizonAuth(
+            MagicMock(), "nl", username="u", password="p", auth_failure_callback=callback
+        )
+
+        assert auth.auth_failure_callback is callback
+
+    async def test_unauthorized_response_to_a_request_reports_the_failure(self):
+        """A 401 on a data request refreshes the token; a rejected refresh reports."""
+        auth = make_real_auth()
+        callback = MagicMock()
+        auth.auth_failure_callback = callback
+        auth.is_token_expiring = MagicMock(return_value=False)
+        auth.websession.request = AsyncMock(return_value=make_error_response(401))
+        auth.websession.post.return_value = self._unauthorized_response()
+
+        with pytest.raises(LGHorizonApiUnauthorizedError):
+            await auth.request("http://host", "/path")
+
+        callback.assert_called_once_with()
+
+
+@pytest.mark.asyncio
+class TestTokenRefreshCallback:
+    async def test_set_through_the_api_is_called_with_the_new_token(self):
+        from lghorizon.lghorizon_api import LGHorizonApi
+
+        auth = make_real_auth()
+        api = LGHorizonApi(auth, profile_id=None)
+        callback = MagicMock()
+        await api.set_token_refresh_callback(callback)
+        auth.websession.post.return_value = make_auth_response(True, TOKEN_PAYLOAD)
+
+        await auth.fetch_access_token()
+
+        callback.assert_called_once_with("new-refresh")
