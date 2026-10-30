@@ -1201,6 +1201,31 @@ class TestLGHorizonServicesConfig:
         url = sample_service_config.get_service_url("linearService")
         assert url == "https://linear.example.com"
 
+    @pytest.mark.parametrize(
+        ("configured", "expected"),
+        [
+            pytest.param(
+                "https://static.spark.ziggogo.tv/eng/web/epg-service-lite/nl",
+                "https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/eng/web/epg-service-lite/nl",
+                id="epg",
+            ),
+            pytest.param(
+                "https://staticqbr-nl-prod.prod.cdn.dmdsdp.com/image-service",
+                "https://staticqbr-prod-nl.gnp.cloud.ziggogo.tv/image-service",
+                id="image-service",
+            ),
+            pytest.param(
+                "https://linear.example.com",
+                "https://linear.example.com",
+                id="unaffected",
+            ),
+        ],
+    )
+    def test_get_service_url_replaces_dead_hosts(self, configured: str, expected: str):
+        config = LGHorizonServicesConfig({"someService": {"URL": configured}})
+
+        assert config.get_service_url("someService") == expected
+
     async def test_get_service_url_raises_for_unknown(self, sample_service_config):
         with pytest.raises(ValueError):
             sample_service_config.get_service_url("nonExistentService")
