@@ -35,6 +35,16 @@ _HOST_OVERRIDES = {
 }
 
 
+def _is_permanent_client_error(error: LGHorizonApiConnectionError) -> bool:
+    """Return whether the error is an HTTP 4xx that a retry cannot fix."""
+    cause = error.__cause__
+    return (
+        isinstance(cause, ClientResponseError)
+        and 400 <= cause.status < 500
+        and cause.status not in (408, 429)
+    )
+
+
 def _retry_after_seconds(error: ClientResponseError) -> float:
     """Return the Retry-After delay of a 429 response, capped."""
     try:
@@ -814,7 +824,12 @@ class LGHorizonAuth:
         )
         return json_response
 
-    @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3)
+    @backoff.on_exception(
+        backoff.expo,
+        LGHorizonApiConnectionError,
+        max_tries=3,
+        giveup=_is_permanent_client_error,
+    )
     async def request(self, host: str, path: str, params=None, **kwargs) -> Any:
         """Make a request."""
         if headers := kwargs.pop("headers", {}):

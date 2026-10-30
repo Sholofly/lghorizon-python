@@ -2489,6 +2489,57 @@ class TestRequestHardening:
 
         assert sleep.await_args_list[0].args == (expected,)
 
+    @pytest.mark.parametrize(
+        ("status", "expected_attempts"),
+        [
+            pytest.param(400, 1, id="400"),
+            pytest.param(403, 1, id="403"),
+            pytest.param(404, 1, id="404"),
+            pytest.param(408, 3, id="408"),
+            pytest.param(429, 3, id="429"),
+            pytest.param(500, 3, id="500"),
+            pytest.param(502, 3, id="502"),
+        ],
+    )
+    async def test_only_retryable_errors_are_retried(
+        self, status: int, expected_attempts: int
+    ):
+        auth = make_auth()
+        auth.websession.request = AsyncMock(return_value=make_error_response(status))
+
+        with (
+            patch("lghorizon.lghorizon_models.asyncio.sleep", new=AsyncMock()),
+            pytest.raises(LGHorizonApiConnectionError),
+        ):
+            await auth.request("http://host", "/path")
+
+        assert auth.websession.request.call_count == expected_attempts
+
+    async def test_401_after_token_refresh_is_not_retried_again(self):
+        auth = make_auth()
+        auth.websession.request = AsyncMock(return_value=make_error_response(401))
+
+        with (
+            patch("lghorizon.lghorizon_models.asyncio.sleep", new=AsyncMock()),
+            pytest.raises(LGHorizonApiConnectionError),
+        ):
+            await auth.request("http://host", "/path")
+
+        auth.fetch_access_token.assert_called_once()
+        assert auth.websession.request.call_count == 2
+
+    async def test_network_errors_are_retried(self):
+        auth = make_auth()
+        auth.websession.request = AsyncMock(side_effect=OSError("down"))
+
+        with (
+            patch("lghorizon.lghorizon_models.asyncio.sleep", new=AsyncMock()),
+            pytest.raises(LGHorizonApiConnectionError),
+        ):
+            await auth.request("http://host", "/path")
+
+        assert auth.websession.request.call_count == 3
+
     async def test_non_429_error_does_not_sleep(self):
         auth = make_auth()
         auth.websession.request = AsyncMock(return_value=make_error_response(500))
