@@ -16,6 +16,8 @@ import backoff
 from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
 
 from .const import (
+    AUTH_ERROR_INVALID_CREDENTIALS,
+    AUTH_ERROR_INVALID_TOKEN,
     COUNTRY_SETTINGS,
 )
 from .exceptions import LGHorizonApiConnectionError, LGHorizonApiUnauthorizedError
@@ -765,9 +767,9 @@ class LGHorizonAuth:
                 error = {}
             status_code = error.get("statusCode")
             message = error.get("message")
-            if status_code == 97401:
+            if status_code == AUTH_ERROR_INVALID_CREDENTIALS:
                 raise LGHorizonApiUnauthorizedError("Invalid credentials")
-            if status_code == 97402:
+            if status_code == AUTH_ERROR_INVALID_TOKEN:
                 raise LGHorizonApiUnauthorizedError("Invalid token")
             if auth_response.status == 401:
                 raise LGHorizonApiUnauthorizedError(message or "Unauthorized")

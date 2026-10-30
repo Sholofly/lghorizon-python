@@ -6,6 +6,8 @@ import pytest
 import asyncio
 from unittest.mock import AsyncMock, MagicMock, patch, call
 
+from lghorizon.const import AUTH_ERROR_INVALID_CREDENTIALS, AUTH_ERROR_INVALID_TOKEN
+
 from lghorizon.lghorizon_models import (
     LGHorizonAdBreak,
     LGHorizonAppsState,
@@ -2361,8 +2363,8 @@ class TestFetchAccessToken:
     @pytest.mark.parametrize(
         ("status_code", "expected"),
         [
-            pytest.param(97401, "Invalid credentials", id="invalid-credentials"),
-            pytest.param(97402, "Invalid token", id="invalid-token"),
+            pytest.param(AUTH_ERROR_INVALID_CREDENTIALS, "Invalid credentials", id="invalid-credentials"),
+            pytest.param(AUTH_ERROR_INVALID_TOKEN, "Invalid token", id="invalid-token"),
         ],
     )
     async def test_known_error_codes_raise_unauthorized(
@@ -2414,7 +2416,7 @@ class TestFetchAccessToken:
     async def test_known_code_wins_over_http_status(self):
         auth = make_real_auth()
         auth.websession.post.return_value = make_auth_response(
-            False, {"error": {"statusCode": 97402, "message": "x"}}, 401
+            False, {"error": {"statusCode": AUTH_ERROR_INVALID_TOKEN, "message": "x"}}, 401
         )
 
         with pytest.raises(LGHorizonApiUnauthorizedError, match="Invalid token"):
