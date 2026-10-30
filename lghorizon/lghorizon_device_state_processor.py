@@ -283,8 +283,7 @@ class LGHorizonDeviceStateProcessor:
             service_path,
         )
         replay_event = LGHorizonReplayEvent(event_json)
-        # Iets met buffer doen
-        channel = self._get_channel(replay_event.channel_id)  # noqa: F841
+        channel = self._get_channel(replay_event.channel_id)
 
         device_state.media_type = LGHorizonMediaType.CHANNEL
         device_state.id = replay_event.event_id
@@ -299,7 +298,8 @@ class LGHorizonDeviceStateProcessor:
         device_state.end_time = replay_event.end_time
         device_state.duration = replay_event.end_time - replay_event.start_time
         device_state.position = self._position_seconds(player_state)
-        # Add random number to url to force refresh
+        if channel is not None:
+            device_state.channel_name = channel.title
         device_state.image = await self._get_intent_image_url(replay_event.event_id)
         device_state.cache_linear_metadata()
 

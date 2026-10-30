@@ -16,6 +16,8 @@ import backoff
 from aiohttp import ClientError, ClientResponseError, ClientSession, ClientTimeout
 
 from .const import (
+    AUTH_ERROR_INVALID_CREDENTIALS,
+    AUTH_ERROR_INVALID_TOKEN,
     COUNTRY_SETTINGS,
 )
 from .exceptions import LGHorizonApiConnectionError, LGHorizonApiUnauthorizedError
@@ -33,6 +35,16 @@ _HOST_OVERRIDES = {
     "static.spark.ziggogo.tv": "staticqbr-prod-nl.gnp.cloud.ziggogo.tv",
     "staticqbr-nl-prod.prod.cdn.dmdsdp.com": "staticqbr-prod-nl.gnp.cloud.ziggogo.tv",
 }
+
+
+def _is_permanent_client_error(error: LGHorizonApiConnectionError) -> bool:
+    """Return whether the error is an HTTP 4xx that a retry cannot fix."""
+    cause = error.__cause__
+    return (
+        isinstance(cause, ClientResponseError)
+        and 400 <= cause.status < 500
+        and cause.status not in (408, 429)
+    )
 
 
 def _retry_after_seconds(error: ClientResponseError) -> float:
@@ -762,16 +774,17 @@ class LGHorizonAuth:
         if not auth_response.ok:
             error = auth_json.get("error") if isinstance(auth_json, dict) else None
             if not isinstance(error, dict):
-                raise LGHorizonApiConnectionError(
-                    f"Unknown connection error (HTTP {auth_response.status})"
-                )
+                error = {}
             status_code = error.get("statusCode")
-            if status_code == 97401:
+            message = error.get("message")
+            if status_code == AUTH_ERROR_INVALID_CREDENTIALS:
                 raise LGHorizonApiUnauthorizedError("Invalid credentials")
-            if status_code == 97402:
+            if status_code == AUTH_ERROR_INVALID_TOKEN:
                 raise LGHorizonApiUnauthorizedError("Invalid token")
+            if auth_response.status == 401:
+                raise LGHorizonApiUnauthorizedError(message or "Unauthorized")
             raise LGHorizonApiConnectionError(
-                error.get("message") or "Unknown connection error"
+                message or f"Unknown connection error (HTTP {auth_response.status})"
             )
 
         try:
@@ -814,7 +827,12 @@ class LGHorizonAuth:
         )
         return json_response
 
-    @backoff.on_exception(backoff.expo, LGHorizonApiConnectionError, max_tries=3)
+    @backoff.on_exception(
+        backoff.expo,
+        LGHorizonApiConnectionError,
+        max_tries=3,
+        giveup=_is_permanent_client_error,
+    )
     async def request(self, host: str, path: str, params=None, **kwargs) -> Any:
         """Make a request."""
         if headers := kwargs.pop("headers", {}):

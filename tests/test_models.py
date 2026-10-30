@@ -9,6 +9,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from aiohttp import ClientResponseError, RequestInfo
 from yarl import URL
 
+from lghorizon.const import AUTH_ERROR_INVALID_CREDENTIALS, AUTH_ERROR_INVALID_TOKEN
 from lghorizon.exceptions import (
     LGHorizonApiConnectionError,
     LGHorizonApiUnauthorizedError,
@@ -2359,8 +2360,8 @@ class TestFetchAccessToken:
     @pytest.mark.parametrize(
         ("status_code", "expected"),
         [
-            pytest.param(97401, "Invalid credentials", id="invalid-credentials"),
-            pytest.param(97402, "Invalid token", id="invalid-token"),
+            pytest.param(AUTH_ERROR_INVALID_CREDENTIALS, "Invalid credentials", id="invalid-credentials"),
+            pytest.param(AUTH_ERROR_INVALID_TOKEN, "Invalid token", id="invalid-token"),
         ],
     )
     async def test_known_error_codes_raise_unauthorized(
@@ -2372,6 +2373,50 @@ class TestFetchAccessToken:
         )
 
         with pytest.raises(LGHorizonApiUnauthorizedError, match=expected):
+            await auth.fetch_access_token()
+
+    @pytest.mark.parametrize(
+        ("payload", "json_error", "expected"),
+        [
+            pytest.param({}, None, "Unauthorized", id="empty-body"),
+            pytest.param([], None, "Unauthorized", id="body-not-a-dict"),
+            pytest.param({"error": "plain"}, None, "Unauthorized", id="error-not-a-dict"),
+            pytest.param({"error": {}}, None, "Unauthorized", id="empty-error"),
+            pytest.param(
+                {"error": {"statusCode": 12345, "message": "Account is locked"}},
+                None,
+                "Account is locked",
+                id="unknown-code-uses-message",
+            ),
+            pytest.param(None, ValueError("not json"), "Unauthorized", id="non-json-body"),
+        ],
+    )
+    async def test_http_401_raises_unauthorized(self, payload, json_error, expected: str):
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(
+            False, payload, 401, json_error=json_error
+        )
+
+        with pytest.raises(LGHorizonApiUnauthorizedError, match=expected):
+            await auth.fetch_access_token()
+
+    @pytest.mark.parametrize("status", [400, 403, 404, 429, 500, 502, 503])
+    async def test_other_http_errors_without_known_code_stay_connection_errors(
+        self, status: int
+    ):
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(False, {}, status)
+
+        with pytest.raises(LGHorizonApiConnectionError, match=str(status)):
+            await auth.fetch_access_token()
+
+    async def test_known_code_wins_over_http_status(self):
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(
+            False, {"error": {"statusCode": AUTH_ERROR_INVALID_TOKEN, "message": "x"}}, 401
+        )
+
+        with pytest.raises(LGHorizonApiUnauthorizedError, match="Invalid token"):
             await auth.fetch_access_token()
 
     @pytest.mark.parametrize(
@@ -2486,6 +2531,57 @@ class TestRequestHardening:
             await auth.request("http://host", "/path")
 
         assert sleep.await_args_list[0].args == (expected,)
+
+    @pytest.mark.parametrize(
+        ("status", "expected_attempts"),
+        [
+            pytest.param(400, 1, id="400"),
+            pytest.param(403, 1, id="403"),
+            pytest.param(404, 1, id="404"),
+            pytest.param(408, 3, id="408"),
+            pytest.param(429, 3, id="429"),
+            pytest.param(500, 3, id="500"),
+            pytest.param(502, 3, id="502"),
+        ],
+    )
+    async def test_only_retryable_errors_are_retried(
+        self, status: int, expected_attempts: int
+    ):
+        auth = make_auth()
+        auth.websession.request = AsyncMock(return_value=make_error_response(status))
+
+        with (
+            patch("lghorizon.lghorizon_models.asyncio.sleep", new=AsyncMock()),
+            pytest.raises(LGHorizonApiConnectionError),
+        ):
+            await auth.request("http://host", "/path")
+
+        assert auth.websession.request.call_count == expected_attempts
+
+    async def test_401_after_token_refresh_is_not_retried_again(self):
+        auth = make_auth()
+        auth.websession.request = AsyncMock(return_value=make_error_response(401))
+
+        with (
+            patch("lghorizon.lghorizon_models.asyncio.sleep", new=AsyncMock()),
+            pytest.raises(LGHorizonApiConnectionError),
+        ):
+            await auth.request("http://host", "/path")
+
+        auth.fetch_access_token.assert_called_once()
+        assert auth.websession.request.call_count == 2
+
+    async def test_network_errors_are_retried(self):
+        auth = make_auth()
+        auth.websession.request = AsyncMock(side_effect=OSError("down"))
+
+        with (
+            patch("lghorizon.lghorizon_models.asyncio.sleep", new=AsyncMock()),
+            pytest.raises(LGHorizonApiConnectionError),
+        ):
+            await auth.request("http://host", "/path")
+
+        assert auth.websession.request.call_count == 3
 
     async def test_non_429_error_does_not_sleep(self):
         auth = make_auth()
