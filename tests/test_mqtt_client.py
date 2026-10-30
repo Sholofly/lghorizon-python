@@ -1,6 +1,7 @@
 """Unit tests for LGHorizonMqttClient."""
 
 import asyncio
+import paho.mqtt.client as mqtt
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch, PropertyMock
 
@@ -203,6 +204,8 @@ class TestConnect:
             loop, "run_in_executor", new=AsyncMock(return_value=None)
         ) as mock_exec:
             await client.connect()
+        client._message_worker_task.cancel()
+        client._publish_worker_task.cancel()
 
         # run_in_executor should have been called with connect, broker url, port 443
         call_args_list = mock_exec.call_args_list
@@ -222,6 +225,8 @@ class TestConnect:
 
         with patch.object(loop, "run_in_executor", new=AsyncMock(return_value=None)):
             await client.connect()
+        client._message_worker_task.cancel()
+        client._publish_worker_task.cancel()
 
         paho_mock.loop_start.assert_called_once()
 
@@ -405,19 +410,29 @@ class TestOnConnect:
 
         with patch("asyncio.run_coroutine_threadsafe"):
             client._on_connect(MagicMock(), None, {}, 0)
+        await asyncio.sleep(0)
 
         reconnect_task.cancel.assert_called_once()
         assert client._reconnect_task is None
 
-    async def test_result_code_5_triggers_token_refresh(self):
+    @pytest.mark.parametrize("code", [4, 5, 134, 135, 3, 136])
+    async def test_refused_connection_schedules_reconnect(self, code: int):
+        loop = asyncio.get_running_loop()
+        client, *_ = _make_direct_client(loop)
+
+        with patch.object(loop, "call_soon_threadsafe") as mock_cst:
+            client._on_connect(MagicMock(), None, {}, code)
+
+        mock_cst.assert_called_once_with(client._start_reconnect_task)
+
+    async def test_reason_code_object_is_supported(self):
         loop = asyncio.get_running_loop()
         client, *_ = _make_direct_client(loop)
 
         with patch("asyncio.run_coroutine_threadsafe") as mock_rct:
-            client._on_connect(MagicMock(), None, {}, 5)
+            client._on_connect(MagicMock(), None, MagicMock(), MagicMock(value=0), None)
 
         mock_rct.assert_called_once()
-        assert mock_rct.call_args.args[1] is loop
 
 
 # ===========================================================================
@@ -433,7 +448,7 @@ class TestOnDisconnect:
         client._reconnect_task = None
 
         with patch.object(loop, "call_soon_threadsafe") as mock_cst:
-            client._on_disconnect(MagicMock(), None, 1)
+            client._on_disconnect(MagicMock(), None, MagicMock(), 1, None)
 
         mock_cst.assert_called_once_with(client._start_reconnect_task)
 
@@ -443,7 +458,7 @@ class TestOnDisconnect:
         client._disconnect_requested = True
 
         with patch.object(loop, "call_soon_threadsafe") as mock_cst:
-            client._on_disconnect(MagicMock(), None, 0)
+            client._on_disconnect(MagicMock(), None, MagicMock(), 0, None)
 
         mock_cst.assert_not_called()
 
@@ -457,6 +472,156 @@ class TestOnDisconnect:
         client._reconnect_task = running_task
 
         with patch.object(loop, "call_soon_threadsafe") as mock_cst:
-            client._on_disconnect(MagicMock(), None, 1)
+            client._on_disconnect(MagicMock(), None, MagicMock(), 1, None)
 
         mock_cst.assert_not_called()
+
+
+# ===========================================================================
+# create() paho configuration
+# ===========================================================================
+
+
+class TestCreatePahoConfig:
+    async def test_uses_callback_api_v2_without_paho_auto_reconnect(self):
+        paho_mock = _make_paho_mock()
+        with patch(
+            "lghorizon.lghorizon_mqtt_client.mqtt.Client", return_value=paho_mock
+        ) as mock_cls:
+            with patch(
+                "asyncio.AbstractEventLoop.run_in_executor",
+                new=AsyncMock(return_value=None),
+            ):
+                await LGHorizonMqttClient.create(
+                    _make_mock_auth(), AsyncMock(), AsyncMock()
+                )
+
+        kwargs = mock_cls.call_args.kwargs
+        assert kwargs["callback_api_version"] == mqtt.CallbackAPIVersion.VERSION2
+        assert kwargs["reconnect_on_failure"] is False
+
+
+# ===========================================================================
+# reconnect loop tests
+# ===========================================================================
+
+
+def _make_reconnecting_client(loop):
+    client, auth, *_ = _make_direct_client(loop)
+    paho_mock = _make_paho_mock()
+    client._mqtt_client = paho_mock
+    client._mqtt_broker_url = BROKER_URL_STRIPPED
+    return client, auth, paho_mock
+
+
+@pytest.fixture
+def no_backoff():
+    with patch("lghorizon.lghorizon_mqtt_client.MAX_RECONNECT_DELAY", 0), patch(
+        "lghorizon.lghorizon_mqtt_client.CONNECT_TIMEOUT", 0.05
+    ):
+        yield
+
+
+@pytest.mark.usefixtures("no_backoff")
+class TestReconnectLoop:
+    async def test_manual_connect_in_loop_does_not_cancel_itself(self):
+        loop = asyncio.get_running_loop()
+        client, auth, paho_mock = _make_reconnecting_client(loop)
+        paho_mock.is_connected.side_effect = [False, False, True]
+
+        client._reconnect_task = asyncio.create_task(client._reconnect_loop())
+        task = client._reconnect_task
+        await asyncio.wait_for(task, timeout=2)
+
+        assert not task.cancelled()
+        paho_mock.loop_start.assert_called_once()
+        client._message_worker_task.cancel()
+        client._publish_worker_task.cancel()
+
+    async def test_uses_fresh_token_for_each_attempt(self):
+        loop = asyncio.get_running_loop()
+        client, auth, paho_mock = _make_reconnecting_client(loop)
+        auth.get_mqtt_token = AsyncMock(side_effect=["token-1", "token-2"])
+        paho_mock.connect.side_effect = [OSError("down"), None]
+        paho_mock.is_connected.side_effect = lambda: paho_mock.connect.call_count >= 2
+
+        await asyncio.wait_for(client._reconnect_loop(), timeout=2)
+
+        assert [c.args for c in paho_mock.username_pw_set.call_args_list] == [
+            (HOUSEHOLD_ID, "token-1"),
+            (HOUSEHOLD_ID, "token-2"),
+        ]
+        client._message_worker_task.cancel()
+        client._publish_worker_task.cancel()
+
+    async def test_retries_when_broker_never_accepts_connection(self):
+        loop = asyncio.get_running_loop()
+        client, auth, paho_mock = _make_reconnecting_client(loop)
+        paho_mock.is_connected.side_effect = lambda: paho_mock.connect.call_count >= 3
+
+        await asyncio.wait_for(client._reconnect_loop(), timeout=5)
+
+        assert paho_mock.connect.call_count == 3
+        client._message_worker_task.cancel()
+        client._publish_worker_task.cancel()
+
+    async def test_token_failure_keeps_retrying(self):
+        loop = asyncio.get_running_loop()
+        client, auth, paho_mock = _make_reconnecting_client(loop)
+        auth.get_mqtt_token = AsyncMock(side_effect=[Exception("boom"), "token"])
+        paho_mock.is_connected.side_effect = lambda: paho_mock.connect.call_count >= 1
+
+        await asyncio.wait_for(client._reconnect_loop(), timeout=2)
+
+        assert auth.get_mqtt_token.call_count == 2
+        client._message_worker_task.cancel()
+        client._publish_worker_task.cancel()
+
+    async def test_joins_previous_paho_thread_before_reconnecting(self):
+        loop = asyncio.get_running_loop()
+        client, auth, paho_mock = _make_reconnecting_client(loop)
+        order: list[str] = []
+        paho_mock.loop_stop.side_effect = lambda: order.append("loop_stop")
+        paho_mock.connect.side_effect = lambda *a: order.append("connect")
+        paho_mock.loop_start.side_effect = lambda: order.append("loop_start")
+        paho_mock.is_connected.side_effect = lambda: "loop_start" in order
+
+        await asyncio.wait_for(client._reconnect_loop(), timeout=2)
+
+        assert order == ["loop_stop", "connect", "loop_start"]
+        client._message_worker_task.cancel()
+        client._publish_worker_task.cancel()
+
+    async def test_clears_task_reference_when_finished(self):
+        loop = asyncio.get_running_loop()
+        client, auth, paho_mock = _make_reconnecting_client(loop)
+        paho_mock.is_connected.return_value = True
+
+        client._start_reconnect_task()
+        await asyncio.wait_for(client._reconnect_task, timeout=2)
+
+        assert client._reconnect_task is None
+
+    async def test_disconnect_stops_reconnect_loop(self):
+        loop = asyncio.get_running_loop()
+        client, auth, paho_mock = _make_reconnecting_client(loop)
+        with patch("lghorizon.lghorizon_mqtt_client.MAX_RECONNECT_DELAY", 60):
+            client._start_reconnect_task()
+            task = client._reconnect_task
+            await asyncio.sleep(0)
+
+            await client.disconnect()
+            await asyncio.sleep(0)
+
+        assert task.cancelled()
+        assert client._reconnect_task is None
+        paho_mock.connect.assert_not_called()
+
+    async def test_start_ignored_after_disconnect_requested(self):
+        loop = asyncio.get_running_loop()
+        client, *_ = _make_reconnecting_client(loop)
+        client._disconnect_requested = True
+
+        client._start_reconnect_task()
+
+        assert client._reconnect_task is None

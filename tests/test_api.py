@@ -699,6 +699,44 @@ class TestGetManagedRecordings:
 
 
 # ---------------------------------------------------------------------------
+# initialize() failure cleanup
+# ---------------------------------------------------------------------------
+
+
+class TestInitializeCleanup:
+    async def test_mqtt_connect_failure_disconnects_client(self, mock_auth):
+        api = make_api(mock_auth)
+        mqtt_client = MagicMock()
+        mqtt_client.connect = AsyncMock(side_effect=OSError("down"))
+        mqtt_client.disconnect = AsyncMock()
+        api._service_config = MagicMock()
+
+        with (
+            patch.object(api.auth, "get_service_config", AsyncMock()),
+            patch.object(api, "_get_customer_info", AsyncMock()),
+            patch.object(api, "_refresh_entitlements", AsyncMock()),
+            patch.object(api, "_refresh_channels", AsyncMock()),
+            patch.object(api, "_create_mqtt_client", AsyncMock(return_value=mqtt_client)),
+        ):
+            api._profile_id = "profile-1"
+            with pytest.raises(OSError):
+                await api.initialize()
+
+        mqtt_client.disconnect.assert_awaited_once()
+        assert api._initialized is False
+        assert api._token_refresh_task is None
+
+    async def test_disconnect_awaits_cancelled_refresh_task(self, mock_auth):
+        import asyncio
+
+        api = make_api(mock_auth)
+        api._token_refresh_task = asyncio.create_task(asyncio.sleep(60))
+
+        await api.disconnect()
+
+        assert api._token_refresh_task is None
+
+
 # Tolerant parsing of API payloads
 # ---------------------------------------------------------------------------
 
