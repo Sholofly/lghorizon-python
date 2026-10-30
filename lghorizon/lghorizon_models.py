@@ -22,6 +22,24 @@ from .exceptions import LGHorizonApiConnectionError, LGHorizonApiUnauthorizedErr
 
 _LOGGER = logging.getLogger(__name__)
 
+DEFAULT_LANGUAGE = "nl"
+
+_WARNED_UNKNOWN: set[tuple[str, str]] = set()
+
+
+def warn_unknown_once(kind: str, value: Any) -> None:
+    """Log an unrecognised API value once, as an early sign of API changes."""
+    key = (kind, str(value))
+    if key in _WARNED_UNKNOWN:
+        return
+    _WARNED_UNKNOWN.add(key)
+    _LOGGER.warning(
+        "Unknown %s '%s' received from the LG Horizon API; please report this "
+        "at https://github.com/Sholofly/lghorizon-python/issues",
+        kind,
+        value,
+    )
+
 
 def _redact_sensitive(data):
     """Redact sensitive fields from data before logging."""
@@ -162,6 +180,7 @@ class LGHorizonStatusMessage(LGHorizonMessage):
         try:
             return LGHorizonRunningState[state_str]
         except KeyError:
+            warn_unknown_once("running state", state_str)
             return LGHorizonRunningState.UNKNOWN
 
 
@@ -346,6 +365,7 @@ class LGHorizonPlayerState:
         try:
             return LGHorizonSourceType[type_str]
         except KeyError:
+            warn_unknown_once("source type", type_str)
             return LGHorizonSourceType.UNKNOWN
 
     @property
@@ -431,6 +451,7 @@ class LGHorizonUIState:
         try:
             return LGHorizonUIStateType[status_str]
         except KeyError:
+            warn_unknown_once("UI status", status_str)
             return LGHorizonUIStateType.UNKNOWN
 
     @property
@@ -514,7 +535,7 @@ class LGHorizonProfileOptions:
     @property
     def lang(self) -> str:
         """Return the language."""
-        return self._options_payload["lang"]
+        return self._options_payload.get("lang") or DEFAULT_LANGUAGE
 
 
 class LGHorizonProfile:
@@ -526,7 +547,9 @@ class LGHorizonProfile:
     def __init__(self, profile_payload: dict):
         """Initialize a profile."""
         self._profile_payload = profile_payload
-        self._options = LGHorizonProfileOptions(self._profile_payload["options"])
+        self._options = LGHorizonProfileOptions(
+            self._profile_payload.get("options") or {}
+        )
 
     @property
     def id(self) -> str:
@@ -536,7 +559,7 @@ class LGHorizonProfile:
     @property
     def name(self) -> str:
         """Return the profile name."""
-        return self._profile_payload["name"]
+        return self._profile_payload.get("name") or self.id
 
     @property
     def favorite_channels(self) -> list[str]:
@@ -848,7 +871,7 @@ class LGHorizonChannel:
     @property
     def stream_image(self) -> str:
         """Returns the stream image."""
-        image_stream = self.channel_json["imageStream"]
+        image_stream = self.channel_json.get("imageStream") or {}
         if "full" in image_stream:
             return image_stream["full"]
         if "small" in image_stream:
@@ -961,16 +984,18 @@ class LGHorizonCustomer:
     def profiles(self) -> Dict[str, LGHorizonProfile]:
         """Return the profiles."""
         if not self._profiles or self._profiles == {}:
-            self._profiles = {
-                p["profileId"]: LGHorizonProfile(p)
-                for p in self._json_payload.get("profiles", [])
-            }
+            self._profiles = {}
+            for profile in self._json_payload.get("profiles", []):
+                if "profileId" not in profile:
+                    _LOGGER.warning("Skipping profile without profileId")
+                    continue
+                self._profiles[profile["profileId"]] = LGHorizonProfile(profile)
         return self._profiles
 
     def get_profile_lang(self, profile_id: str) -> str:
         """Return the profile language."""
         if profile_id not in self.profiles:
-            return "nl"
+            return DEFAULT_LANGUAGE
         return self.profiles[profile_id].options.lang
 
 

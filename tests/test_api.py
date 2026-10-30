@@ -696,3 +696,59 @@ class TestGetManagedRecordings:
         path = call_args[0][1]
         assert "limit=10" in path
         assert "offset=20" in path
+
+
+# ---------------------------------------------------------------------------
+# Tolerant parsing of API payloads
+# ---------------------------------------------------------------------------
+
+
+class TestTolerantParsing:
+    async def test_refresh_channels_skips_malformed_channels(
+        self, mock_auth, sample_customer_json, sample_channel_json, sample_service_config
+    ):
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._channels = {}
+        api._service_config = sample_service_config
+        api._entitlements = LGHorizonEntitlements({"entitlements": [{"id": "product-1"}]})
+        no_number = {k: v for k, v in sample_channel_json.items() if k != "logicalChannelNumber"}
+        no_id = {k: v for k, v in sample_channel_json.items() if k != "id"}
+        mock_auth.request = AsyncMock(
+            return_value=[no_number, no_id, sample_channel_json]
+        )
+
+        await api._refresh_channels()
+
+        assert list(api._channels) == ["channel-1"]
+
+    @pytest.mark.parametrize(
+        "device_json",
+        [
+            pytest.param({"hashedCPEId": "h"}, id="no-device-id"),
+            pytest.param({"deviceId": "d"}, id="no-hashed-cpe-id"),
+        ],
+    )
+    async def test_register_devices_skips_malformed_devices(
+        self, mock_auth, sample_customer_json, sample_channel_json, device_json
+    ):
+        sample_customer_json["assignedDevices"].append(device_json)
+        api = make_initialized_api(mock_auth, sample_customer_json, sample_channel_json)
+        api._mqtt_client = MagicMock()
+
+        await api._register_devices()
+
+        assert list(api._devices) == ["device-1"]
+
+    async def test_initialize_without_profiles_raises_clear_error(
+        self, mock_auth, sample_customer_json
+    ):
+        from lghorizon.exceptions import LGHorizonApiError
+
+        sample_customer_json["profiles"] = []
+        api = LGHorizonApi(mock_auth, profile_id=None)
+        api._get_customer_info = AsyncMock(
+            return_value=LGHorizonCustomer(sample_customer_json)
+        )
+
+        with pytest.raises(LGHorizonApiError, match="No profiles"):
+            await api.initialize()

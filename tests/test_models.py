@@ -2226,3 +2226,98 @@ class TestAdBreaks:
         assert len(ds.ad_breaks) == 3
         ds.reset()
         assert ds.ad_breaks == []
+
+
+# ---------------------------------------------------------------------------
+# Tolerant parsing
+# ---------------------------------------------------------------------------
+
+from lghorizon.lghorizon_models import (
+    DEFAULT_LANGUAGE,
+    LGHorizonPlayerState,
+    LGHorizonProfile,
+    LGHorizonUIState,
+    _WARNED_UNKNOWN,
+)
+
+
+@pytest.fixture
+def clean_unknown_warnings():
+    _WARNED_UNKNOWN.clear()
+    yield
+    _WARNED_UNKNOWN.clear()
+
+
+class TestTolerantProfiles:
+    def test_profile_without_options_uses_default_language(self):
+        profile = LGHorizonProfile({"profileId": "p1", "name": "Main"})
+        assert profile.options.lang == DEFAULT_LANGUAGE
+
+    def test_profile_options_without_lang_uses_default(self):
+        profile = LGHorizonProfile({"profileId": "p1", "options": {}})
+        assert profile.options.lang == DEFAULT_LANGUAGE
+
+    def test_profile_without_name_falls_back_to_id(self):
+        assert LGHorizonProfile({"profileId": "p1"}).name == "p1"
+
+    def test_customer_skips_profiles_without_id(self, sample_customer_json):
+        sample_customer_json["profiles"].append({"name": "broken"})
+        customer = LGHorizonCustomer(sample_customer_json)
+        assert list(customer.profiles) == ["profile-1", "profile-2"]
+
+    def test_channel_without_image_stream_falls_back_to_logo(self, sample_channel_json):
+        del sample_channel_json["imageStream"]
+        channel = LGHorizonChannel(sample_channel_json)
+        assert channel.stream_image == "https://example.com/logo.png"
+
+    def test_channel_without_any_image_returns_empty(self, sample_channel_json):
+        del sample_channel_json["imageStream"]
+        del sample_channel_json["logo"]
+        assert LGHorizonChannel(sample_channel_json).stream_image == ""
+
+
+@pytest.mark.usefixtures("clean_unknown_warnings")
+class TestUnknownValueWarnings:
+    @pytest.mark.parametrize(
+        ("build", "attr", "expected_log"),
+        [
+            pytest.param(
+                lambda: LGHorizonStatusMessage({"state": "brand_new"}, "t"),
+                "running_state",
+                "running state 'BRAND_NEW'",
+                id="running-state",
+            ),
+            pytest.param(
+                lambda: LGHorizonPlayerState({"sourceType": "newSource"}),
+                "source_type",
+                "source type 'NEWSOURCE'",
+                id="source-type",
+            ),
+            pytest.param(
+                lambda: LGHorizonUIState({"uiStatus": "newUi"}),
+                "ui_status",
+                "UI status 'NEWUI'",
+                id="ui-status",
+            ),
+        ],
+    )
+    def test_unknown_value_is_logged_once(
+        self, caplog: pytest.LogCaptureFixture, build, attr: str, expected_log: str
+    ):
+        obj = build()
+
+        getattr(obj, attr)
+        getattr(obj, attr)
+
+        messages = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert len(messages) == 1
+        assert expected_log in messages[0]
+
+    def test_known_value_is_not_logged(self, caplog: pytest.LogCaptureFixture):
+        LGHorizonStatusMessage({"state": "ONLINE_RUNNING"}, "t").running_state
+        assert not caplog.records
+
+    def test_missing_value_defaults_to_unknown_without_crashing(self):
+        assert (
+            LGHorizonPlayerState({}).source_type.name == "UNKNOWN"
+        )

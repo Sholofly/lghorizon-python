@@ -5,6 +5,7 @@ import logging
 from typing import Any, Dict, cast, Callable, Optional
 from datetime import date as date_type
 
+from .exceptions import LGHorizonApiError
 from .lghorizon_device import LGHorizonDevice
 from .lghorizon_models import LGHorizonChannel
 from .lghorizon_models import LGHorizonAuth
@@ -70,7 +71,9 @@ class LGHorizonApi:
         self._service_config = await self.auth.get_service_config()
         self._customer = await self._get_customer_info()
         if not self._profile_id:
-            self._profile_id = list(self._customer.profiles.keys())[0]
+            if not self._customer.profiles:
+                raise LGHorizonApiError("No profiles found for this account")
+            self._profile_id = next(iter(self._customer.profiles))
         await self._refresh_entitlements()
         await self._refresh_channels()
         self._mqtt_client = await self._create_mqtt_client()
@@ -196,13 +199,19 @@ class LGHorizonApi:
                 self._device_state_processor = LGHorizonDeviceStateProcessor(
                     self.auth, self._channels, self._customer, self._profile_id
                 )
-            device = LGHorizonDevice(
-                raw_box,
-                self._mqtt_client,
-                self._device_state_processor,
-                self.auth,
-                channels,
-            )
+            try:
+                device = LGHorizonDevice(
+                    raw_box,
+                    self._mqtt_client,
+                    self._device_state_processor,
+                    self.auth,
+                    channels,
+                )
+            except (KeyError, TypeError):
+                _LOGGER.warning(
+                    "Skipping device without deviceId or hashedCPEId: %s", raw_box
+                )
+                continue
             self._devices[device.device_id] = device
 
     async def disconnect(self) -> None:
@@ -360,6 +369,13 @@ class LGHorizonApi:
         )
         for channel_json in channels_json:
             channel = LGHorizonChannel(channel_json)
+            try:
+                _ = (channel.id, channel.channel_number, channel.title)
+            except (KeyError, TypeError):
+                _LOGGER.warning(
+                    "Skipping channel without id, number or name: %s", channel_json
+                )
+                continue
             common_entitlements = list(
                 set(self._entitlements.entitlement_ids) & set(channel.linear_products)
             )

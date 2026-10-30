@@ -7,6 +7,7 @@ import logging
 import time
 from typing import Any, Callable, Coroutine, Dict, Optional
 from .lghorizon_models import (
+    warn_unknown_once,
     LGHorizonAdBreak,
     LGHorizonRunningState,
     LGHorizonStatusMessage,
@@ -64,8 +65,12 @@ class LGHorizonDevice:
         """Initialize the LG Horizon device."""
         self._device_id = device_json["deviceId"]
         self._hashed_cpe_id = device_json["hashedCPEId"]
-        self._device_friendly_name = device_json["settings"]["deviceFriendlyName"]
+        self._device_friendly_name = (device_json.get("settings") or {}).get(
+            "deviceFriendlyName"
+        ) or self._device_id
         self._platform_type = device_json.get("platformType")
+        if self._platform_type not in PLATFORM_TYPES:
+            warn_unknown_once("platform type", self._platform_type)
         self._mqtt_client = mqtt_client
         self._auth = auth
         self._channels = channels
