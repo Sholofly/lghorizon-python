@@ -5,7 +5,9 @@ import logging
 from typing import Any, Dict, cast, Callable, Optional
 from datetime import date as date_type
 
-from .exceptions import LGHorizonApiError
+from aiohttp import ClientResponseError
+
+from .exceptions import LGHorizonApiConnectionError, LGHorizonApiError
 from .lghorizon_device import LGHorizonDevice
 from .lghorizon_models import LGHorizonChannel
 from .lghorizon_models import LGHorizonAuth
@@ -33,6 +35,12 @@ from .lghorizon_device_state_processor import LGHorizonDeviceStateProcessor
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _is_not_found(error: LGHorizonApiConnectionError) -> bool:
+    """Return whether the connection error was caused by an HTTP 404."""
+    cause = error.__cause__
+    return isinstance(cause, ClientResponseError) and cause.status == 404
 
 
 class LGHorizonApi:
@@ -463,13 +471,24 @@ class LGHorizonApi:
             path = f"/{base_country_code}/{language}/events/segments/{date_str}{segment}0000"
             try:
                 result = await self.auth.request(epg_base, path)
-                for entry in result.get("entries", []):
-                    ch_id = entry.get("channelId", "")
-                    if ch_id not in all_entries:
-                        all_entries[ch_id] = []
-                    all_entries[ch_id].extend(entry.get("events", []))
-            except Exception:
-                _LOGGER.debug("EPG segment %s%s0000 not available", date_str, segment)
+            except LGHorizonApiConnectionError as ex:
+                if _is_not_found(ex):
+                    _LOGGER.debug(
+                        "EPG segment %s%s0000 not available", date_str, segment
+                    )
+                else:
+                    _LOGGER.warning(
+                        "Failed to fetch EPG segment %s%s0000: %s",
+                        date_str,
+                        segment,
+                        ex,
+                    )
+                continue
+            for entry in result.get("entries", []):
+                ch_id = entry.get("channelId", "")
+                if ch_id not in all_entries:
+                    all_entries[ch_id] = []
+                all_entries[ch_id].extend(entry.get("events", []))
 
         # Build merged EpgEntry objects
         entries = [
