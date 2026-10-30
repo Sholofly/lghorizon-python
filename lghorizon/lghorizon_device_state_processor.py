@@ -1,5 +1,6 @@
 """LG Horizon device (set-top box) model."""
 
+import logging
 import random
 import json
 import urllib.parse
@@ -32,6 +33,9 @@ from .lghorizon_models import (
     LGHorizonPlayerState,
 )
 from .lghorizon_models import LGHorizonCustomer
+from .exceptions import LGHorizonApiError
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class LGHorizonDeviceStateProcessor:
@@ -137,6 +141,24 @@ class LGHorizonDeviceStateProcessor:
         device_state.ui_state_type = LGHorizonUIStateType.APPS
         device_state.media_type = LGHorizonMediaType.APP
 
+    def _get_channel(self, channel_id: Optional[str]) -> Optional[LGHorizonChannel]:
+        """Look up a channel by id, tolerating unknown/stale channel ids.
+
+        The channel lineup cache is built once at startup/reload. A channel id
+        that is not (yet) in that cache must not abort processing of the rest
+        of the player state - only the channel-derived fields are skipped.
+        """
+        if not channel_id:
+            return None
+        channel = self._channels.get(channel_id)
+        if channel is None:
+            _LOGGER.warning(
+                "Unknown channel id '%s' - not in the cached channel lineup, "
+                "skipping channel-derived fields for this update",
+                channel_id,
+            )
+        return channel
+
     async def _process_linear_state(
         self,
         device_state: LGHorizonDeviceState,
@@ -156,13 +178,12 @@ class LGHorizonDeviceStateProcessor:
             service_path,
         )
         replay_event = LGHorizonReplayEvent(event_json)
-        channel = self._channels[replay_event.channel_id]
+        channel = self._get_channel(replay_event.channel_id)
 
         device_state.media_type = LGHorizonMediaType.CHANNEL
         device_state.id = replay_event.event_id
         device_state.source_type = source.source_type
-        device_state.channel_id = channel.id
-        device_state.channel_name = channel.title
+        device_state.channel_id = replay_event.channel_id
         device_state.episode_title = replay_event.episode_name
         device_state.season_number = replay_event.season_number
         device_state.episode_number = replay_event.episode_number
@@ -173,14 +194,16 @@ class LGHorizonDeviceStateProcessor:
         device_state.duration = replay_event.end_time - replay_event.start_time
         device_state.position = int(time.time()) - int(replay_event.start_time)
 
-        # Add random number to url to force refresh
-        join_param = "?"
-        if join_param in channel.stream_image:
-            join_param = "&"
-        image_url = (
-            f"{channel.stream_image}{join_param}{str(random.randrange(1000000))}"
-        )
-        device_state.image = image_url
+        if channel is not None:
+            device_state.channel_name = channel.title
+            # Add random number to url to force refresh
+            join_param = "?"
+            if join_param in channel.stream_image:
+                join_param = "&"
+            image_url = (
+                f"{channel.stream_image}{join_param}{str(random.randrange(1000000))}"
+            )
+            device_state.image = image_url
         device_state.cache_linear_metadata()
 
     async def _process_reviewbuffer_state(
@@ -202,13 +225,12 @@ class LGHorizonDeviceStateProcessor:
             service_path,
         )
         replay_event = LGHorizonReplayEvent(event_json)
-        channel = self._channels[replay_event.channel_id]
+        channel = self._get_channel(replay_event.channel_id)
 
         device_state.media_type = LGHorizonMediaType.CHANNEL
         device_state.id = replay_event.event_id
         device_state.source_type = source.source_type
-        device_state.channel_id = channel.id
-        device_state.channel_name = channel.title
+        device_state.channel_id = replay_event.channel_id
         device_state.episode_title = replay_event.episode_name
         device_state.season_number = replay_event.season_number
         device_state.episode_number = replay_event.episode_number
@@ -216,19 +238,21 @@ class LGHorizonDeviceStateProcessor:
         device_state.last_position_update = int(
             player_state.last_speed_change_time
         )
-        device_state.position = int(player_state.relative_position / 1000)
+        device_state.position = self._position_seconds(player_state)
         device_state.start_time = replay_event.start_time
         device_state.end_time = replay_event.end_time
         device_state.duration = replay_event.end_time - replay_event.start_time
 
-        # Add random number to url to force refresh
-        join_param = "?"
-        if join_param in channel.stream_image:
-            join_param = "&"
-        image_url = (
-            f"{channel.stream_image}{join_param}{str(random.randrange(1000000))}"
-        )
-        device_state.image = image_url
+        if channel is not None:
+            device_state.channel_name = channel.title
+            # Add random number to url to force refresh
+            join_param = "?"
+            if join_param in channel.stream_image:
+                join_param = "&"
+            image_url = (
+                f"{channel.stream_image}{join_param}{str(random.randrange(1000000))}"
+            )
+            device_state.image = image_url
         device_state.cache_linear_metadata()
 
     async def _process_replay_state(
@@ -251,12 +275,12 @@ class LGHorizonDeviceStateProcessor:
         )
         replay_event = LGHorizonReplayEvent(event_json)
         # Iets met buffer doen
-        channel = self._channels[replay_event.channel_id]
+        channel = self._get_channel(replay_event.channel_id)
 
         device_state.media_type = LGHorizonMediaType.CHANNEL
         device_state.id = replay_event.event_id
         device_state.source_type = source.source_type
-        device_state.channel_id = channel.id
+        device_state.channel_id = replay_event.channel_id
         device_state.episode_title = replay_event.episode_name
         device_state.season_number = replay_event.season_number
         device_state.episode_number = replay_event.episode_number
@@ -267,7 +291,7 @@ class LGHorizonDeviceStateProcessor:
         device_state.start_time = replay_event.start_time
         device_state.end_time = replay_event.end_time
         device_state.duration = replay_event.end_time - replay_event.start_time
-        device_state.position = int(player_state.relative_position / 1000)
+        device_state.position = self._position_seconds(player_state)
         # Add random number to url to force refresh
         device_state.image = await self._get_intent_image_url(replay_event.event_id)
         device_state.cache_linear_metadata()
@@ -304,7 +328,7 @@ class LGHorizonDeviceStateProcessor:
 
         device_state.duration = vod.duration
         device_state.last_position_update = int(time.time())
-        device_state.position = int(player_state.relative_position / 1000)
+        device_state.position = self._position_seconds(player_state)
 
         device_state.image = await self._get_intent_image_url(vod.id)
 
@@ -326,8 +350,8 @@ class LGHorizonDeviceStateProcessor:
         recording = LGHorizonRecordingSingle(recording_json)
         device_state.id = recording.id
         device_state.channel_id = recording.channel_id
-        if recording.channel_id:
-            channel = self._channels[recording.channel_id]
+        channel = self._get_channel(recording.channel_id)
+        if channel is not None:
             device_state.channel_name = channel.title
 
         device_state.episode_title = recording.episode_title
@@ -336,7 +360,7 @@ class LGHorizonDeviceStateProcessor:
         device_state.last_position_update = int(
             player_state.last_speed_change_time
         )
-        device_state.position = int(player_state.relative_position / 1000)
+        device_state.position = self._position_seconds(player_state)
         device_state.ad_breaks = source.ad_manifest
         parsed_start = self._parse_timestamp(recording.start_time)
         parsed_end = self._parse_timestamp(recording.end_time)
@@ -355,6 +379,17 @@ class LGHorizonDeviceStateProcessor:
 
         device_state.image = await self._get_intent_image_url(recording.id)
 
+    @staticmethod
+    def _position_seconds(player_state: LGHorizonPlayerState) -> Optional[int]:
+        """Return the playback position in seconds, or None when not reported.
+
+        A missing relativePosition must not be read as 0: recordings often
+        start with a pre-roll ad break at 0, which would flag a false ad break.
+        """
+        if player_state.relative_position is None:
+            return None
+        return int(player_state.relative_position / 1000)
+
     def _parse_timestamp(self, value) -> Optional[int]:
         """Parse a timestamp that may be numeric epoch seconds or an ISO-8601 string."""
         if value is None:
@@ -367,27 +402,41 @@ class LGHorizonDeviceStateProcessor:
             return None
 
     async def _get_intent_image_url(self, intent_id: str) -> Optional[str]:
-        """Get intent image url."""
-        service_config = await self._auth.get_service_config()
-        intents_url = service_config.get_service_url("imageService")
-        intents_path = "/intent"
-        body_json = [
-            {
-                "id": intent_id,
-                "intents": ["detailedBackground", "posterTile"],
-            }
-        ]
-        intents_body = urllib.parse.quote(
-            json.dumps(body_json, separators=(",", ":"), indent=None), safe="~"
-        )
+        """Get intent image url.
 
-        # Construct the full path with the URL-encoded JSON as a query parameter
-        full_intents_path = f"{intents_path}?jsonBody={intents_body}"
-        intents_result = await self._auth.request(intents_url, full_intents_path)
-        if (
-            "intents" in intents_result[0]
-            and len(intents_result[0]["intents"]) > 0
-            and intents_result[0]["intents"][0]["url"]
-        ):
-            return intents_result[0]["intents"][0]["url"]
-        return None
+        This is cosmetic metadata (poster/background artwork). A failure to
+        reach the image service (dead CDN hostname, transient network issue,
+        unexpected response shape) must not abort processing of the rest of
+        the player state - we just return no image for this update instead.
+        """
+        try:
+            service_config = await self._auth.get_service_config()
+            intents_url = service_config.get_service_url("imageService")
+            intents_path = "/intent"
+            body_json = [
+                {
+                    "id": intent_id,
+                    "intents": ["detailedBackground", "posterTile"],
+                }
+            ]
+            intents_body = urllib.parse.quote(
+                json.dumps(body_json, separators=(",", ":"), indent=None), safe="~"
+            )
+
+            # Construct the full path with the URL-encoded JSON as a query parameter
+            full_intents_path = f"{intents_path}?jsonBody={intents_body}"
+            intents_result = await self._auth.request(intents_url, full_intents_path)
+            if (
+                "intents" in intents_result[0]
+                and len(intents_result[0]["intents"]) > 0
+                and intents_result[0]["intents"][0]["url"]
+            ):
+                return intents_result[0]["intents"][0]["url"]
+            return None
+        except (LGHorizonApiError, KeyError, IndexError, TypeError) as ex:
+            _LOGGER.warning(
+                "Could not fetch intent image for '%s', continuing without image: %s",
+                intent_id,
+                ex,
+            )
+            return None

@@ -364,9 +364,9 @@ class LGHorizonPlayerState:
     @property
     def relative_position(
         self,
-    ) -> int:
-        """Return the relative position."""
-        return self._raw_json.get("relativePosition", 0.0)
+    ) -> Optional[int]:
+        """Return the relative position in ms, or None when not reported."""
+        return self._raw_json.get("relativePosition")
 
     @property
     def source(self) -> LGHorizonSource | None:  # Added None to the return type
