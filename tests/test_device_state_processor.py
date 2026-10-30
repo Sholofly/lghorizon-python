@@ -500,3 +500,147 @@ class TestProcessNdvrState:
         assert device_state.position is None
         assert len(device_state.ad_breaks) == 2
         assert device_state.is_in_ad_break is False
+
+
+# ---------------------------------------------------------------------------
+# Position timestamp
+# ---------------------------------------------------------------------------
+
+MESSAGE_TIMESTAMP_MS = 1793388873248
+# The box reports a lastSpeedChangeTime hours before the message was sent.
+STALE_SPEED_CHANGE_MS = 1793360373532
+
+
+class TestPositionTimestamp:
+    def _msg(self, source_type: str, source: dict, with_timestamp: bool = True):
+        payload = {
+            "source": "device-1",
+            "status": {
+                "uiStatus": "mainUI",
+                "playerState": {
+                    "sourceType": source_type,
+                    "speed": 1,
+                    "lastSpeedChangeTime": STALE_SPEED_CHANGE_MS,
+                    "relativePosition": 418800,
+                    "source": source,
+                },
+            },
+        }
+        if with_timestamp:
+            payload["messageTimeStamp"] = MESSAGE_TIMESTAMP_MS
+        return LGHorizonUIStatusMessage(payload, TOPIC)
+
+    async def _process(
+        self,
+        processor,
+        mock_auth,
+        mock_service_config,
+        msg,
+        sample_replay_event_json,
+        sample_recording_single_json,
+    ):
+        async def fake_request(host, path, *args, **kwargs):
+            if "details/single" in path:
+                return sample_recording_single_json
+            if "replayEvent" in path:
+                return sample_replay_event_json
+            return [{"intents": [{"url": "https://x/img.png"}]}]
+
+        mock_auth.get_service_config = AsyncMock(return_value=mock_service_config)
+        mock_auth.request = AsyncMock(side_effect=fake_request)
+        device_state = LGHorizonDeviceState()
+        device_state.state = LGHorizonRunningState.ONLINE_RUNNING
+        await processor.process_ui_state(device_state, msg)
+        return device_state
+
+    @pytest.mark.parametrize(
+        ("source_type", "source"),
+        [
+            pytest.param("nDVR", {"recordingId": "rec-1", "channelId": "channel-1"}, id="ndvr"),
+            pytest.param("replay", {"eventId": "event-1"}, id="replay"),
+            pytest.param(
+                "reviewBuffer",
+                {"eventId": "event-1", "channelId": "channel-1"},
+                id="review-buffer",
+            ),
+        ],
+    )
+    async def test_position_time_is_message_timestamp(
+        self,
+        processor,
+        mock_auth,
+        mock_service_config,
+        sample_replay_event_json,
+        sample_recording_single_json,
+        source_type: str,
+        source: dict,
+    ):
+        device_state = await self._process(
+            processor,
+            mock_auth,
+            mock_service_config,
+            self._msg(source_type, source),
+            sample_replay_event_json,
+            sample_recording_single_json,
+        )
+
+        assert device_state.position == 418
+        assert device_state.last_position_update == MESSAGE_TIMESTAMP_MS // 1000
+
+    @pytest.mark.parametrize(
+        ("source_type", "source"),
+        [
+            pytest.param("nDVR", {"recordingId": "rec-1", "channelId": "channel-1"}, id="ndvr"),
+            pytest.param("replay", {"eventId": "event-1"}, id="replay"),
+            pytest.param(
+                "reviewBuffer",
+                {"eventId": "event-1", "channelId": "channel-1"},
+                id="review-buffer",
+            ),
+        ],
+    )
+    async def test_position_time_falls_back_to_current_time(
+        self,
+        processor,
+        mock_auth,
+        mock_service_config,
+        sample_replay_event_json,
+        sample_recording_single_json,
+        source_type: str,
+        source: dict,
+    ):
+        with patch("lghorizon.lghorizon_device_state_processor.time") as mock_time:
+            mock_time.time.return_value = 1793390000.9
+            device_state = await self._process(
+                processor,
+                mock_auth,
+                mock_service_config,
+                self._msg(source_type, source, with_timestamp=False),
+                sample_replay_event_json,
+                sample_recording_single_json,
+            )
+
+        assert device_state.last_position_update == 1793390000
+
+    async def test_missing_speed_change_time_does_not_break_recording(
+        self,
+        processor,
+        mock_auth,
+        mock_service_config,
+        sample_replay_event_json,
+        sample_recording_single_json,
+    ):
+        msg = self._msg("nDVR", {"recordingId": "rec-1", "channelId": "channel-1"})
+        del msg.payload["status"]["playerState"]["lastSpeedChangeTime"]
+
+        device_state = await self._process(
+            processor,
+            mock_auth,
+            mock_service_config,
+            msg,
+            sample_replay_event_json,
+            sample_recording_single_json,
+        )
+
+        assert device_state.image == "https://x/img.png"
+        assert device_state.last_position_update == MESSAGE_TIMESTAMP_MS // 1000

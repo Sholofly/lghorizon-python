@@ -86,7 +86,9 @@ class LGHorizonDeviceStateProcessor:
                 if ui_status_message.ui_state.player_state is None:
                     return
                 await self._process_main_ui_state(
-                    device_state, ui_status_message.ui_state.player_state
+                    device_state,
+                    ui_status_message.ui_state.player_state,
+                    int(ui_status_message.message_timestamp or time.time()),
                 )
             case LGHorizonUIStateType.APPS:
                 if ui_status_message.ui_state.apps_state is None:
@@ -105,6 +107,7 @@ class LGHorizonDeviceStateProcessor:
         self,
         device_state: LGHorizonDeviceState,
         player_state: LGHorizonPlayerState,
+        position_time: int,
     ) -> None:
         if player_state is None:
             return
@@ -117,13 +120,19 @@ class LGHorizonDeviceStateProcessor:
             case LGHorizonSourceType.LINEAR:
                 await self._process_linear_state(device_state, player_state)
             case LGHorizonSourceType.REVIEWBUFFER:
-                await self._process_reviewbuffer_state(device_state, player_state)
+                await self._process_reviewbuffer_state(
+                    device_state, player_state, position_time
+                )
             case LGHorizonSourceType.REPLAY:
-                await self._process_replay_state(device_state, player_state)
+                await self._process_replay_state(
+                    device_state, player_state, position_time
+                )
             case LGHorizonSourceType.VOD:
                 await self._process_vod_state(device_state, player_state)
             case LGHorizonSourceType.NDVR:
-                await self._process_ndvr_state(device_state, player_state)
+                await self._process_ndvr_state(
+                    device_state, player_state, position_time
+                )
 
     async def _process_apps_state(
         self,
@@ -210,6 +219,7 @@ class LGHorizonDeviceStateProcessor:
         self,
         device_state: LGHorizonDeviceState,
         player_state: LGHorizonPlayerState,
+        position_time: int,
     ) -> None:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
@@ -235,9 +245,7 @@ class LGHorizonDeviceStateProcessor:
         device_state.season_number = replay_event.season_number
         device_state.episode_number = replay_event.episode_number
         device_state.show_title = replay_event.title
-        device_state.last_position_update = int(
-            player_state.last_speed_change_time
-        )
+        device_state.last_position_update = position_time
         device_state.position = self._position_seconds(player_state)
         device_state.start_time = replay_event.start_time
         device_state.end_time = replay_event.end_time
@@ -259,6 +267,7 @@ class LGHorizonDeviceStateProcessor:
         self,
         device_state: LGHorizonDeviceState,
         player_state: LGHorizonPlayerState,
+        position_time: int,
     ) -> None:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
@@ -285,9 +294,7 @@ class LGHorizonDeviceStateProcessor:
         device_state.season_number = replay_event.season_number
         device_state.episode_number = replay_event.episode_number
         device_state.show_title = replay_event.title
-        device_state.last_position_update = int(
-            player_state.last_speed_change_time
-        )
+        device_state.last_position_update = position_time
         device_state.start_time = replay_event.start_time
         device_state.end_time = replay_event.end_time
         device_state.duration = replay_event.end_time - replay_event.start_time
@@ -333,7 +340,10 @@ class LGHorizonDeviceStateProcessor:
         device_state.image = await self._get_intent_image_url(vod.id)
 
     async def _process_ndvr_state(
-        self, device_state: LGHorizonDeviceState, player_state: LGHorizonPlayerState
+        self,
+        device_state: LGHorizonDeviceState,
+        player_state: LGHorizonPlayerState,
+        position_time: int,
     ) -> None:
         """Process the device state based on the UI status message."""
         if player_state.source is None:
@@ -357,9 +367,7 @@ class LGHorizonDeviceStateProcessor:
         device_state.episode_title = recording.episode_title
         device_state.season_number = recording.season_number
         device_state.episode_number = recording.episode_number
-        device_state.last_position_update = int(
-            player_state.last_speed_change_time
-        )
+        device_state.last_position_update = position_time
         device_state.position = self._position_seconds(player_state)
         device_state.ad_breaks = source.ad_manifest
         parsed_start = self._parse_timestamp(recording.start_time)
