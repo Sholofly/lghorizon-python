@@ -77,7 +77,7 @@ def _make_direct_client(loop=None):
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
-            # Als er geen loop draait (zoals in jouw synchrone test), maak er een aan
+            # No running loop (e.g. in a synchronous test), so create one
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
     auth = _make_mock_auth()

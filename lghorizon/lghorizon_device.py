@@ -338,8 +338,6 @@ class LGHorizonDevice:
     async def display_message(self, sourceType: str, message: str) -> None:
         """Display a message on the set-top box and repeat it for longer visibility.
 
-        # We sturen de payload 3 keer met een kortere tussentijd
-
         This method sends the message payload multiple times to ensure it stays
         visible on the screen for a longer duration, as the display time for
         such messages is typically short.
@@ -369,8 +367,8 @@ class LGHorizonDevice:
                 f"{self._auth.household_id}/{self.device_id}", json.dumps(payload)
             )
 
-            # Omdat de melding 3 seconden blijft staan, wachten we 3 seconden
-            # voor de volgende 'refresh'.
+            # The message stays on screen for 3 seconds, so wait that long
+            # before sending the next refresh.
             if i < 2:
                 await asyncio.sleep(3)
 
@@ -439,7 +437,7 @@ class LGHorizonDevice:
         payload_dict = {
             "type": "CPE.KeyEvent",
             "runtimeType": "key",
-            "id": "ha",
+            "id": make_id(8),
             "source": self.device_id.lower(),
             "status": {"w3cKey": key, "eventType": "keyDownUp"},
         }

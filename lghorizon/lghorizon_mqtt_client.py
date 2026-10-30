@@ -77,7 +77,7 @@ class LGHorizonMqttClient:
         loop = asyncio.get_running_loop()
         instance = cls(auth, on_connected_callback, on_message_callback, loop)
 
-        # Service config ophalen
+        # Fetch the service config
         service_config = await auth.get_service_config()
         mqtt_broker_url = service_config.get_service_url("mqttBroker")
         instance._mqtt_broker_url = mqtt_broker_url.replace("wss://", "").replace(
@@ -99,14 +99,14 @@ class LGHorizonMqttClient:
             headers={"Sec-WebSocket-Protocol": "mqtt, mqttv3.1, mqttv3.11"}
         )
 
-        # Token ophalen
+        # Fetch the MQTT token
         instance._mqtt_token = await auth.get_mqtt_token()
         instance._mqtt_client.username_pw_set(
             auth.household_id,
             instance._mqtt_token,
         )
 
-        # TLS instellen (blocking → executor)
+        # Set up TLS (blocking → executor)
         await loop.run_in_executor(None, instance._mqtt_client.tls_set)
 
         instance._mqtt_client.enable_logger(_logger)
@@ -365,7 +365,7 @@ class LGHorizonMqttClient:
             topic, payload = await self._publish_queue.get()
 
             try:
-                # Wacht tot MQTT echt connected is
+                # Wait until MQTT is really connected
                 while not self.is_connected:
                     await asyncio.sleep(0.1)
 
