@@ -644,3 +644,56 @@ class TestPositionTimestamp:
 
         assert device_state.image == "https://x/img.png"
         assert device_state.last_position_update == MESSAGE_TIMESTAMP_MS // 1000
+
+
+class TestProcessReplayState:
+    def _replay_ui_msg(self):
+        payload = {
+            "source": "device-1",
+            "messageTimeStamp": 1700000000,
+            "status": {
+                "uiStatus": "mainUI",
+                "playerState": {
+                    "sourceType": "replay",
+                    "speed": 1,
+                    "lastSpeedChangeTime": 1700000000000,
+                    "relativePosition": 60000,
+                    "source": {"eventId": "event-1"},
+                },
+            },
+        }
+        return LGHorizonUIStatusMessage(payload, TOPIC)
+
+    async def _process(self, processor, mock_auth, event_json):
+        async def fake_request(host, path, *args, **kwargs):
+            if "replayEvent" in path:
+                return event_json
+            return [{"intents": [{"url": "https://x/img.png"}]}]
+
+        mock_auth.request = AsyncMock(side_effect=fake_request)
+        device_state = LGHorizonDeviceState()
+        device_state.state = LGHorizonRunningState.ONLINE_RUNNING
+        await processor.process_ui_state(device_state, self._replay_ui_msg())
+        return device_state
+
+    async def test_sets_channel_name_from_channel_lineup(
+        self, processor, mock_auth, sample_replay_event_json
+    ):
+        device_state = await self._process(
+            processor, mock_auth, sample_replay_event_json
+        )
+
+        assert device_state.channel_id == "channel-1"
+        assert device_state.channel_name == "NPO 1"
+        assert device_state.image == "https://x/img.png"
+
+    async def test_unknown_channel_keeps_other_fields(
+        self, processor, mock_auth, sample_replay_event_json
+    ):
+        event_json = {**sample_replay_event_json, "channelId": "not-in-lineup"}
+
+        device_state = await self._process(processor, mock_auth, event_json)
+
+        assert device_state.channel_id == "not-in-lineup"
+        assert device_state.channel_name is None
+        assert device_state.image == "https://x/img.png"
