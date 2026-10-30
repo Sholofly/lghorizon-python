@@ -27,6 +27,13 @@ DEFAULT_LANGUAGE = "nl"
 REQUEST_TIMEOUT = ClientTimeout(total=30)
 MAX_RETRY_AFTER = 30
 
+# Hosts advertised by the Ziggo NL service config that no longer resolve,
+# mapped to the host that serves the same paths.
+_HOST_OVERRIDES = {
+    "static.spark.ziggogo.tv": "staticqbr-prod-nl.gnp.cloud.ziggogo.tv",
+    "staticqbr-nl-prod.prod.cdn.dmdsdp.com": "staticqbr-prod-nl.gnp.cloud.ziggogo.tv",
+}
+
 
 def _retry_after_seconds(error: ClientResponseError) -> float:
     """Return the Retry-After delay of a 429 response, capped."""
@@ -963,11 +970,8 @@ class LGHorizonServicesConfig:
         if service_name in self._config and "URL" in self._config[service_name]:
             url = self._config[service_name]["URL"]
 
-            # Temporary override for broken Ziggo NL EPG server
-            if "static.spark.ziggogo.tv" in url:
-                url = url.replace(
-                    "static.spark.ziggogo.tv", "staticqbr-prod-nl.gnp.cloud.ziggogo.tv"
-                )
+            for broken_host, working_host in _HOST_OVERRIDES.items():
+                url = url.replace(broken_host, working_host)
 
             return url
 
