@@ -2377,6 +2377,50 @@ class TestFetchAccessToken:
             await auth.fetch_access_token()
 
     @pytest.mark.parametrize(
+        ("payload", "json_error", "expected"),
+        [
+            pytest.param({}, None, "Unauthorized", id="empty-body"),
+            pytest.param([], None, "Unauthorized", id="body-not-a-dict"),
+            pytest.param({"error": "plain"}, None, "Unauthorized", id="error-not-a-dict"),
+            pytest.param({"error": {}}, None, "Unauthorized", id="empty-error"),
+            pytest.param(
+                {"error": {"statusCode": 12345, "message": "Account is locked"}},
+                None,
+                "Account is locked",
+                id="unknown-code-uses-message",
+            ),
+            pytest.param(None, ValueError("not json"), "Unauthorized", id="non-json-body"),
+        ],
+    )
+    async def test_http_401_raises_unauthorized(self, payload, json_error, expected: str):
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(
+            False, payload, 401, json_error=json_error
+        )
+
+        with pytest.raises(LGHorizonApiUnauthorizedError, match=expected):
+            await auth.fetch_access_token()
+
+    @pytest.mark.parametrize("status", [400, 403, 404, 429, 500, 502, 503])
+    async def test_other_http_errors_without_known_code_stay_connection_errors(
+        self, status: int
+    ):
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(False, {}, status)
+
+        with pytest.raises(LGHorizonApiConnectionError, match=str(status)):
+            await auth.fetch_access_token()
+
+    async def test_known_code_wins_over_http_status(self):
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(
+            False, {"error": {"statusCode": 97402, "message": "x"}}, 401
+        )
+
+        with pytest.raises(LGHorizonApiUnauthorizedError, match="Invalid token"):
+            await auth.fetch_access_token()
+
+    @pytest.mark.parametrize(
         "payload",
         [
             pytest.param({"error": {"statusCode": 500, "message": "boom"}}, id="other-code"),
