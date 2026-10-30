@@ -179,15 +179,33 @@ if api.has_cloud_recording:
         print(f"  S{ep.season_number}E{ep.episode_number}: {ep.episode_title}")
 ```
 
-### Token refresh callback
+### Authentication callbacks
+
+Both callbacks are plain functions (not coroutines) and are called from the event loop.
+Pass them to `LGHorizonAuth`, or set them later on `auth` / through the API.
 
 ```python
-async def on_token_refresh(new_token: str):
+def on_token_refresh(new_token: str) -> None:
     # Persist the new refresh token for next session
     save_to_storage(new_token)
 
-await api.set_token_refresh_callback(on_token_refresh)
+def on_auth_failure() -> None:
+    # The provider no longer accepts the credentials or refresh token,
+    # for example because it was revoked while the client was running.
+    ask_the_user_to_log_in_again()
+
+auth = LGHorizonAuth(
+    session,
+    "nl",
+    username=username,
+    password=password,
+    token_refresh_callback=on_token_refresh,
+    auth_failure_callback=on_auth_failure,
+)
 ```
+
+`auth_failure_callback` is called once per failure streak, and again after a token request
+has succeeded in between. Connection problems do not call it.
 
 ## Device State Properties
 
