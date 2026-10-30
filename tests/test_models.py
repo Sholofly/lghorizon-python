@@ -2226,3 +2226,253 @@ class TestAdBreaks:
         assert len(ds.ad_breaks) == 3
         ds.reset()
         assert ds.ad_breaks == []
+
+
+# ---------------------------------------------------------------------------
+# Token refresh hardening
+# ---------------------------------------------------------------------------
+
+import asyncio
+
+from lghorizon.exceptions import LGHorizonApiUnauthorizedError
+
+
+def make_real_auth(use_refresh_token: bool = True) -> LGHorizonAuth:
+    session = MagicMock()
+    session.post = AsyncMock()
+    session.request = AsyncMock()
+    return LGHorizonAuth(
+        websession=session,
+        country_code="be-nl" if use_refresh_token else "nl",
+        refresh_token="old-refresh" if use_refresh_token else "",
+        username="user",
+        password="pass",
+    )
+
+
+def make_auth_response(ok: bool, payload=None, status: int = 200, json_error=None):
+    resp = MagicMock()
+    resp.ok = ok
+    resp.status = status
+    if json_error is not None:
+        resp.json = AsyncMock(side_effect=json_error)
+    else:
+        resp.json = AsyncMock(return_value=payload)
+    return resp
+
+
+TOKEN_PAYLOAD = {
+    "householdId": "hh",
+    "accessToken": "access",
+    "refreshToken": "new-refresh",
+    "username": "user",
+    "refreshTokenExpiry": 4102444800,
+}
+
+
+@pytest.mark.asyncio
+class TestFetchAccessToken:
+    async def test_success_stores_tokens_and_calls_callback(self):
+        auth = make_real_auth()
+        callback = MagicMock()
+        auth._token_refresh_callback = callback
+        auth.websession.post.return_value = make_auth_response(True, TOKEN_PAYLOAD)
+
+        await auth.fetch_access_token()
+
+        assert auth.access_token == "access"
+        assert auth.household_id == "hh"
+        callback.assert_called_once_with("new-refresh")
+
+    async def test_post_uses_timeout(self):
+        from lghorizon.lghorizon_models import REQUEST_TIMEOUT
+
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(True, TOKEN_PAYLOAD)
+
+        await auth.fetch_access_token()
+
+        assert auth.websession.post.call_args.kwargs["timeout"] is REQUEST_TIMEOUT
+
+    async def test_concurrent_callers_refresh_only_once(self):
+        auth = make_real_auth()
+        gate = asyncio.Event()
+
+        async def slow_post(*args, **kwargs):
+            await gate.wait()
+            return make_auth_response(True, TOKEN_PAYLOAD)
+
+        auth.websession.post.side_effect = slow_post
+
+        tasks = [asyncio.create_task(auth.fetch_access_token()) for _ in range(3)]
+        await asyncio.sleep(0)
+        gate.set()
+        await asyncio.gather(*tasks)
+
+        assert auth.websession.post.call_count == 1
+
+    async def test_sequential_calls_each_refresh(self):
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(True, TOKEN_PAYLOAD)
+
+        await auth.fetch_access_token()
+        await auth.fetch_access_token()
+
+        assert auth.websession.post.call_count == 2
+
+    async def test_failed_refresh_lets_next_caller_retry(self):
+        auth = make_real_auth()
+        auth.websession.post.side_effect = [
+            OSError("down"),
+            make_auth_response(True, TOKEN_PAYLOAD),
+        ]
+
+        with pytest.raises(LGHorizonApiConnectionError):
+            await auth.fetch_access_token()
+        await auth.fetch_access_token()
+
+        assert auth.access_token == "access"
+
+    @pytest.mark.parametrize(
+        ("status_code", "expected"),
+        [
+            pytest.param(97401, "Invalid credentials", id="invalid-credentials"),
+            pytest.param(97402, "Invalid token", id="invalid-token"),
+        ],
+    )
+    async def test_known_error_codes_raise_unauthorized(
+        self, status_code: int, expected: str
+    ):
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(
+            False, {"error": {"statusCode": status_code, "message": "x"}}, 401
+        )
+
+        with pytest.raises(LGHorizonApiUnauthorizedError, match=expected):
+            await auth.fetch_access_token()
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            pytest.param({"error": {"statusCode": 500, "message": "boom"}}, id="other-code"),
+            pytest.param({"error": {"message": "no code"}}, id="no-status-code"),
+            pytest.param({"error": {}}, id="empty-error"),
+            pytest.param({"error": "plain string"}, id="error-not-a-dict"),
+            pytest.param({}, id="no-error"),
+            pytest.param([], id="not-a-dict"),
+        ],
+    )
+    async def test_other_error_shapes_raise_connection_error(self, payload):
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(False, payload, 500)
+
+        with pytest.raises(LGHorizonApiConnectionError):
+            await auth.fetch_access_token()
+
+    async def test_non_json_error_body_raises_connection_error(self):
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(
+            False, json_error=ValueError("not json"), status=502
+        )
+
+        with pytest.raises(LGHorizonApiConnectionError, match="502"):
+            await auth.fetch_access_token()
+
+    async def test_non_json_success_body_raises_connection_error(self):
+        auth = make_real_auth()
+        auth.websession.post.return_value = make_auth_response(
+            True, json_error=ValueError("not json")
+        )
+
+        with pytest.raises(LGHorizonApiConnectionError):
+            await auth.fetch_access_token()
+
+    @pytest.mark.parametrize("missing", list(TOKEN_PAYLOAD))
+    async def test_missing_field_in_success_response(self, missing: str):
+        auth = make_real_auth()
+        payload = {k: v for k, v in TOKEN_PAYLOAD.items() if k != missing}
+        auth.websession.post.return_value = make_auth_response(True, payload)
+
+        with pytest.raises(LGHorizonApiConnectionError, match="Unexpected"):
+            await auth.fetch_access_token()
+
+        assert auth.access_token is None
+
+    async def test_concurrent_401s_refresh_token_once(self):
+        auth = make_real_auth()
+        auth.is_token_expiring = MagicMock(return_value=False)
+        auth.websession.post.return_value = make_auth_response(True, TOKEN_PAYLOAD)
+        responses = [make_error_response(401), make_error_response(401)]
+        ok = make_ok_response({"ok": True})
+
+        async def fake_request(*args, **kwargs):
+            await asyncio.sleep(0)
+            return responses.pop(0) if responses else ok
+
+        auth.websession.request = fake_request
+
+        results = await asyncio.gather(
+            auth.request("http://h", "/a"), auth.request("http://h", "/b")
+        )
+
+        assert results == [{"ok": True}] * 2
+        assert auth.websession.post.call_count == 1
+
+
+@pytest.mark.asyncio
+class TestRequestHardening:
+    async def test_request_passes_timeout(self):
+        from lghorizon.lghorizon_models import REQUEST_TIMEOUT
+
+        auth = make_auth()
+        auth.websession.request = AsyncMock(return_value=make_ok_response())
+
+        await auth.request("http://host", "/path")
+
+        assert auth.websession.request.call_args.kwargs["timeout"] is REQUEST_TIMEOUT
+
+    async def test_caller_timeout_is_respected(self):
+        auth = make_auth()
+        auth.websession.request = AsyncMock(return_value=make_ok_response())
+
+        await auth.request("http://host", "/path", timeout=5)
+
+        assert auth.websession.request.call_args.kwargs["timeout"] == 5
+
+    @pytest.mark.parametrize(
+        ("header", "expected"),
+        [
+            pytest.param("2", 2, id="seconds"),
+            pytest.param("999", 30, id="capped"),
+            pytest.param("soon", 1, id="not-a-number"),
+            pytest.param(None, 1, id="missing"),
+        ],
+    )
+    async def test_429_waits_retry_after(self, header, expected):
+        auth = make_auth()
+        error = make_response_error(429)
+        error.headers = {"Retry-After": header} if header else None
+        resp = make_error_response(429)
+        resp.raise_for_status = MagicMock(side_effect=error)
+        auth.websession.request = AsyncMock(return_value=resp)
+
+        with (
+            patch("lghorizon.lghorizon_models.asyncio.sleep", new=AsyncMock()) as sleep,
+            pytest.raises(LGHorizonApiConnectionError),
+        ):
+            await auth.request("http://host", "/path")
+
+        assert sleep.await_args_list[0].args == (expected,)
+
+    async def test_non_429_error_does_not_sleep(self):
+        auth = make_auth()
+        auth.websession.request = AsyncMock(return_value=make_error_response(500))
+
+        with (
+            patch("lghorizon.lghorizon_models.asyncio.sleep", new=AsyncMock()),
+            patch("lghorizon.lghorizon_models._retry_after_seconds") as retry_after,
+            pytest.raises(LGHorizonApiConnectionError),
+        ):
+            await auth.request("http://host", "/path")
+
+        retry_after.assert_not_called()

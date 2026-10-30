@@ -10,6 +10,18 @@ from .lghorizon_models import LGHorizonAuth
 
 _logger = logging.getLogger(__name__)
 
+CONNECT_TIMEOUT = 10.0
+MAX_RECONNECT_DELAY = 60
+
+# CONNACK refusals caused by an expired or rejected token. Paho 1.x reports the
+# MQTT 3.1.1 return codes, paho 2.x the equivalent MQTT 5 reason codes.
+_AUTH_FAILURE_CODES = (4, 5, 134, 135)
+
+
+def _reason_code_value(reason_code: Any) -> int:
+    """Return the numeric value of a paho reason code or a plain int."""
+    return getattr(reason_code, "value", reason_code)
+
 
 class LGHorizonMqttClient:
     """Asynchronous-friendly wrapper around Paho MQTT."""
@@ -75,9 +87,13 @@ class LGHorizonMqttClient:
         instance.client_id = make_id()
 
         # Paho client
+        # Reconnects are handled by _reconnect_loop so that each attempt uses
+        # a fresh token instead of the credentials paho captured at connect.
         instance._mqtt_client = mqtt.Client(
+            callback_api_version=mqtt.CallbackAPIVersion.VERSION2,
             client_id=instance.client_id,
             transport="websockets",
+            reconnect_on_failure=False,
         )
         instance._mqtt_client.ws_set_options(
             headers={"Sec-WebSocket-Protocol": "mqtt, mqttv3.1, mqttv3.11"}
@@ -118,6 +134,10 @@ class LGHorizonMqttClient:
             self._reconnect_task = None
 
         _logger.debug("Attempting initial MQTT connection...")
+        await self._connect()
+
+    async def _connect(self) -> None:
+        """Open the connection and (re)start the Paho thread and workers."""
         # Blocking connect → executor
         await self._loop.run_in_executor(
             None,
@@ -145,6 +165,10 @@ class LGHorizonMqttClient:
             return
 
         self._disconnect_requested = True
+
+        if self._reconnect_task:
+            self._reconnect_task.cancel()
+            self._reconnect_task = None
 
         # Stop workers
         if self._message_worker_task:
@@ -183,63 +207,31 @@ class LGHorizonMqttClient:
     # INTERNAL CALLBACKS
     # -------------------------
 
-    def _on_connect(self, client, userdata, flags, result_code):
+    def _on_connect(self, client, userdata, flags, reason_code, properties=None):
         """Callback for when the MQTT client connects to the broker.
 
         Args:
             client: The Paho MQTT client instance.
             userdata: User data passed to the client.
             flags: Response flags from the broker.
-            result_code: The connection result code.
+            reason_code: The connection result.
+            properties: MQTT 5 properties (unused).
         """
-        if result_code == 0:
+        code = _reason_code_value(reason_code)
+        if code == 0:
             _logger.debug("MQTT client connected successfully.")
-            # If a reconnect task was running, it means we successfully reconnected.
-            # Cancel it as we are now connected.
-            if self._reconnect_task:
-                self._reconnect_task.cancel()
-                self._reconnect_task = None  # Clear the reference
+            self._loop.call_soon_threadsafe(self._cancel_reconnect_task)
             asyncio.run_coroutine_threadsafe(
                 self._on_connected_callback(),
                 self._loop,
             )
-        elif result_code == 5:
-            _logger.debug(
-                "MQTT connection failed: Token expired. Attempting to refresh token and reconnect."
-            )
-            # Schedule the token refresh and reconnect in the main event loop
-            asyncio.run_coroutine_threadsafe(
-                self._handle_token_refresh_and_reconnect(), self._loop
-            )
-        else:
-            _logger.error("MQTT connect error: %s", result_code)
-            # For other errors, Paho's _on_disconnect will typically be called,
-            # which will then trigger the general reconnect loop.
+            return
 
-    async def _handle_token_refresh_and_reconnect(self):
-        """Refreshes the MQTT token and attempts to reconnect the client."""
-        try:
-            # Get new token
-            self._mqtt_token = await self._auth.get_mqtt_token()
-            self._mqtt_client.username_pw_set(
-                self._auth.household_id,
-                self._mqtt_token,
-            )
-            _logger.debug("MQTT token refreshed. Attempting to reconnect.")
-            # Call connect. If it fails, _on_disconnect will be triggered,
-            # and the _reconnect_loop will take over.
-            await self.connect()
-        except Exception as e:
-            _logger.error("Failed to refresh MQTT token or initiate reconnect: %s", e)
-            # If token refresh itself fails, or connect() raises an exception
-            # before _on_disconnect can be called, ensure reconnect loop starts.
-            if not self._disconnect_requested and (
-                not self._reconnect_task or self._reconnect_task.done()
-            ):
-                _logger.debug(
-                    "Scheduling MQTT reconnect after token refresh/connect failure."
-                )
-                self._reconnect_task = asyncio.create_task(self._reconnect_loop())
+        if code in _AUTH_FAILURE_CODES:
+            _logger.debug("MQTT connection refused: token rejected or expired.")
+        else:
+            _logger.error("MQTT connect error: %s", reason_code)
+        self._schedule_reconnect()
 
     def _on_message(self, client, userdata, message):
         """Callback for when an MQTT message is received.
@@ -254,56 +246,97 @@ class LGHorizonMqttClient:
             self._loop,
         )
 
-    def _on_disconnect(self, client, userdata, result_code):
+    def _on_disconnect(
+        self, client, userdata, disconnect_flags, reason_code=None, properties=None
+    ):
         """Callback for when the MQTT client disconnects from the broker.
 
         Args:
             client: The Paho MQTT client instance.
             userdata: User data passed to the client.
-            result_code: The disconnection result code.
+            disconnect_flags: Disconnect flags from the broker.
+            reason_code: The disconnection result.
+            properties: MQTT 5 properties (unused).
         """
-        _logger.warning("MQTT disconnected with result code: %s", result_code)
+        _logger.warning("MQTT disconnected with result code: %s", reason_code)
         if not self._disconnect_requested:
             _logger.debug("Unexpected MQTT disconnection. Initiating reconnect loop.")
-            if not self._reconnect_task or self._reconnect_task.done():
-                self._loop.call_soon_threadsafe(self._start_reconnect_task)
-            else:
-                _logger.debug("Reconnect loop already active.")
+            self._schedule_reconnect()
         else:
             _logger.debug("MQTT disconnected as requested.")
 
+    def _schedule_reconnect(self):
+        """Start the reconnect loop from any thread unless one is active."""
+        if not self._reconnect_task or self._reconnect_task.done():
+            self._loop.call_soon_threadsafe(self._start_reconnect_task)
+        else:
+            _logger.debug("Reconnect loop already active.")
+
+    def _cancel_reconnect_task(self):
+        """Cancel a running reconnect loop (event loop thread only)."""
+        if self._reconnect_task:
+            self._reconnect_task.cancel()
+            self._reconnect_task = None
+
     def _start_reconnect_task(self):
         """Start the reconnect loop as an asyncio.Task (must be called from the event loop thread)."""
+        if self._disconnect_requested:
+            return
+        if self._reconnect_task and not self._reconnect_task.done():
+            return
         self._reconnect_task = asyncio.create_task(self._reconnect_loop())
+
+    async def _refresh_mqtt_token(self) -> None:
+        """Fetch a new MQTT token and use it for the next connection attempt."""
+        self._mqtt_token = await self._auth.get_mqtt_token()
+        self._mqtt_client.username_pw_set(self._auth.household_id, self._mqtt_token)
+
+    async def _wait_until_connected(self) -> bool:
+        """Wait for the broker to accept the connection."""
+        deadline = self._loop.time() + CONNECT_TIMEOUT
+        while self._loop.time() < deadline:
+            if self.is_connected:
+                return True
+            await asyncio.sleep(0.1)
+        return self.is_connected
 
     async def _reconnect_loop(self):
         """Manages the MQTT reconnection process with exponential backoff."""
         retries = 0
-        while not self._disconnect_requested:
-            if self.is_connected:
+        try:
+            while not self._disconnect_requested:
+                if self.is_connected:
+                    _logger.debug(
+                        "MQTT client reconnected within loop, stopping reconnect attempts."
+                    )
+                    break
+
+                delay = min(2**retries, MAX_RECONNECT_DELAY)
                 _logger.debug(
-                    "MQTT client reconnected within loop, stopping reconnect attempts."
+                    "Waiting %s seconds before MQTT reconnect attempt %s",
+                    delay,
+                    retries + 1,
                 )
-                break  # Already connected, stop trying
+                await asyncio.sleep(delay)
+                if self._disconnect_requested:
+                    break
 
-            delay = min(2**retries, 60)  # Exponential backoff, max 60 seconds
-            _logger.debug(
-                "Waiting %s seconds before MQTT reconnect attempt %s",
-                delay,
-                retries + 1,
-            )
-            await asyncio.sleep(delay)
-
-            try:
-                _logger.debug("Attempting MQTT reconnect...")
-                await self.connect()
-                # If connect() succeeds, _on_connect will be called, which will cancel this task.
-                # If connect() fails, _on_disconnect will be called again, and this loop continues.
-                break  # If connect() doesn't raise, assume it's handled by _on_connect
-            except Exception as e:
-                _logger.error("MQTT reconnect attempt failed: %s", e)
+                try:
+                    _logger.debug("Attempting MQTT reconnect...")
+                    await self._refresh_mqtt_token()
+                    # Paho's thread ends after a disconnect; join it before
+                    # loop_start() so the new thread is not silently skipped.
+                    await self._loop.run_in_executor(None, self._mqtt_client.loop_stop)
+                    await self._connect()
+                    if await self._wait_until_connected():
+                        break
+                    _logger.warning("MQTT broker did not accept the connection in time")
+                except Exception as e:
+                    _logger.error("MQTT reconnect attempt failed: %s", e)
                 retries += 1
-        self._reconnect_task = None  # Clear task when loop finishes or is cancelled.
+        finally:
+            if self._reconnect_task is asyncio.current_task():
+                self._reconnect_task = None
 
     # -------------------------
     # MESSAGE WORKER (FIFO)

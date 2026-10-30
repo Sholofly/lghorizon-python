@@ -67,6 +67,13 @@ class LGHorizonApi:
 
     async def initialize(self) -> None:
         """Initialize the API client."""
+        try:
+            await self._initialize()
+        except Exception:
+            await self.disconnect()
+            raise
+
+    async def _initialize(self) -> None:
         self._service_config = await self.auth.get_service_config()
         self._customer = await self._get_customer_info()
         if not self._profile_id:
@@ -209,6 +216,7 @@ class LGHorizonApi:
         """Disconnect the client."""
         if self._token_refresh_task:
             self._token_refresh_task.cancel()
+            await asyncio.gather(self._token_refresh_task, return_exceptions=True)
             self._token_refresh_task = None
         if self._mqtt_client:
             await self._mqtt_client.disconnect()
