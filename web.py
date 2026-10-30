@@ -4,12 +4,8 @@ Run with:  python web.py
 Then open: http://localhost:8080
 """
 
-import asyncio
 import json
 import logging
-import os
-import time
-from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 

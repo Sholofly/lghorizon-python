@@ -2,7 +2,7 @@
 
 import json
 import pytest
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import AsyncMock, MagicMock
 
 from lghorizon.lghorizon_device import LGHorizonDevice
 from lghorizon.lghorizon_models import (

@@ -4,13 +4,22 @@ from __future__ import annotations
 
 import pytest
 import asyncio
-from unittest.mock import AsyncMock, MagicMock, patch, call
+from unittest.mock import AsyncMock, MagicMock, patch
+
+from aiohttp import ClientResponseError, RequestInfo
+from yarl import URL
 
 from lghorizon.const import AUTH_ERROR_INVALID_CREDENTIALS, AUTH_ERROR_INVALID_TOKEN
-
+from lghorizon.exceptions import (
+    LGHorizonApiConnectionError,
+    LGHorizonApiUnauthorizedError,
+)
 from lghorizon.lghorizon_models import (
+    DEFAULT_LANGUAGE,
+    _WARNED_UNKNOWN,
     LGHorizonAdBreak,
     LGHorizonAppsState,
+    LGHorizonAuth,
     LGHorizonChannel,
     LGHorizonCustomer,
     LGHorizonDeviceState,
@@ -1901,13 +1910,6 @@ class TestLGHorizonManagedRecordingList:
 # Helpers for TestAuthRequest
 # ---------------------------------------------------------------------------
 
-from aiohttp import ClientResponseError, RequestInfo
-from yarl import URL
-
-from lghorizon.lghorizon_models import LGHorizonAuth
-from lghorizon.exceptions import LGHorizonApiConnectionError
-
-
 def make_response_error(status: int) -> ClientResponseError:
     request_info = RequestInfo(
         url=URL("http://test"),
@@ -2259,11 +2261,6 @@ class TestAdBreaks:
 # Token refresh hardening
 # ---------------------------------------------------------------------------
 
-import asyncio
-
-from lghorizon.exceptions import LGHorizonApiUnauthorizedError
-
-
 def make_real_auth(use_refresh_token: bool = True) -> LGHorizonAuth:
     session = MagicMock()
     session.post = AsyncMock()
@@ -2602,15 +2599,6 @@ class TestRequestHardening:
 
 # Tolerant parsing
 # ---------------------------------------------------------------------------
-
-from lghorizon.lghorizon_models import (
-    DEFAULT_LANGUAGE,
-    LGHorizonPlayerState,
-    LGHorizonProfile,
-    LGHorizonUIState,
-    _WARNED_UNKNOWN,
-)
-
 
 @pytest.fixture
 def clean_unknown_warnings():

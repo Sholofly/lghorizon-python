@@ -65,7 +65,7 @@ A Python library to interact with and control LG Horizon set-top boxes (Ziggo, T
 pip install lghorizon
 ```
 
-**Requirements**: Python 3.10+, aiohttp, paho-mqtt, backoff
+**Requirements**: Python 3.14+, aiohttp, paho-mqtt (2.1 or newer, below 3), backoff
 
 ## Quick Start
 
@@ -218,23 +218,26 @@ When monitoring a device, `device.device_state` exposes:
 
 ```python
 from lghorizon import (
-    LGHorizonApiError,              # Base exception
+    LGHorizonApiError,              # Base for connection errors
     LGHorizonApiConnectionError,    # Network/connection issues
-    LGHorizonApiUnauthorizedError,  # Invalid credentials
-    LGHorizonApiLockedError,        # Account locked
+    LGHorizonApiUnauthorizedError,  # Invalid credentials or token (not a LGHorizonApiError)
+    LGHorizonApiLockedError,        # Subclass of the unauthorized error
 )
 
 try:
     await api.initialize()
-except LGHorizonApiLockedError:
-    print("Account is locked, try again later")
 except LGHorizonApiUnauthorizedError:
-    print("Invalid credentials")
+    print("Invalid credentials or token")
 except LGHorizonApiConnectionError:
     print("Could not connect to the API")
 except LGHorizonApiError as e:
     print(f"API error: {e}")
 ```
+
+`LGHorizonApiUnauthorizedError` is raised when the provider reports invalid credentials or
+an invalid token. Other failed calls raise `LGHorizonApiConnectionError`. It does not derive from `LGHorizonApiError`, so catch it
+separately. `LGHorizonApiLockedError` exists for locked accounts, but the library does not
+raise it yet.
 
 ## Development
 
@@ -243,15 +246,24 @@ except LGHorizonApiError as e:
 ```bash
 git clone https://github.com/Sholofly/lghorizon-python.git
 cd lghorizon-python
-pip install -e .
-pip install pytest pytest-asyncio
+pip install -e ".[test,lint]"
 ```
+
+The version is taken from the git tags (`setuptools_scm`), so keep the tags when cloning.
 
 ### Running tests
 
 ```bash
 python -m pytest tests/ -v
 ```
+
+### Linting
+
+```bash
+ruff check .
+```
+
+CI runs the same lint check, the tests and a package build on every pull request.
 
 ### Running the demo script
 

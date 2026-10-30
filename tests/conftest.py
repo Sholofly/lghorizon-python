@@ -1,13 +1,10 @@
 """Shared fixtures for LG Horizon tests."""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from aiohttp import ClientSession
+from unittest.mock import AsyncMock, MagicMock
 
 from lghorizon.lghorizon_models import (
     LGHorizonAuth,
-    LGHorizonChannel,
-    LGHorizonCustomer,
     LGHorizonServicesConfig,
 )
 

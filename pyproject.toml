@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=77", "setuptools_scm>=8"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lghorizon"
+dynamic = ["version"]
+description = "Python client for Liberty Global Horizon settop boxes"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Rudolf Offereins", email = "r.offereins@gmail.com" }]
+keywords = ["LG", "Horizon", "API", "Settop box"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.14",
+    "Operating System :: OS Independent",
+    "Natural Language :: English",
+    "Intended Audience :: Developers",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+requires-python = ">=3.14"
+dependencies = ["paho-mqtt>=2.1,<3", "aiohttp>=3.8.0", "backoff>=1.9.0"]
+
+[project.urls]
+Homepage = "https://github.com/sholofly/LGHorizon-python"
+Issues = "https://github.com/Sholofly/lghorizon-python/issues"
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-asyncio"]
+lint = ["ruff"]
+
+[tool.setuptools.packages.find]
+include = ["lghorizon*"]
+
+[tool.setuptools_scm]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+asyncio_default_fixture_loop_scope = "function"
+
+[tool.ruff]
+target-version = "py314"
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]

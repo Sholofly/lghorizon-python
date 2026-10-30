@@ -10,11 +10,13 @@ jobs:
     permissions:
       id-token: write
     steps:
-    - uses: actions/checkout@master
-    - name: Set up Python 3.10
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+    - name: Set up Python 3.14
       uses: actions/setup-python@v7
       with:
-        python-version: '3.13'
+        python-version: '3.14'
 
     - name: Install pypa/build
       run: >-

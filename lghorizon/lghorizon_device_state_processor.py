@@ -4,7 +4,7 @@ import logging
 import random
 import json
 import urllib.parse
-from datetime import datetime as dt, timezone
+from datetime import datetime as dt
 
 import time
 

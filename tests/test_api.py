@@ -13,7 +13,6 @@ from lghorizon.exceptions import (
 from lghorizon.lghorizon_api import LGHorizonApi
 from lghorizon.lghorizon_device import LGHorizonDevice
 from lghorizon.lghorizon_models import (
-    LGHorizonAuth,
     LGHorizonChannel,
     LGHorizonEntitlements,
     LGHorizonCustomer,
@@ -672,7 +671,6 @@ class TestGetEpg:
         api = self._make_api(mock_auth, sample_customer_json, sample_channel_json)
         mock_auth.request = AsyncMock(return_value={"entries": []})
 
-        from datetime import date
         with patch("lghorizon.lghorizon_api.date_type") as _mock_date:
             # Just verify it runs without raising and returns LGHorizonEpg
             result = await api.get_epg()
