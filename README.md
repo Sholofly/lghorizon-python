@@ -257,6 +257,24 @@ an invalid token. Other failed calls raise `LGHorizonApiConnectionError`. It doe
 separately. `LGHorizonApiLockedError` exists for locked accounts, but the library does not
 raise it yet.
 
+## Debugging
+
+Set the `lghorizon` logger to `debug` to see what the library sends and receives. With Home Assistant:
+
+```yaml
+logger:
+  logs:
+    lghorizon: debug
+```
+
+At debug level the MQTT client logs every message it publishes (topic and payload, for example a key press or a
+channel change) and every message it receives (shortened to 1000 characters). A command that does nothing on the
+box shows up as a `Publishing to ...` line without a matching reaction in the `Received message on ...` lines.
+Publishing errors are always logged as warnings.
+
+Tokens are redacted in the logs, but messages contain your household id and the MAC and IP addresses of your
+boxes. Remove those before posting a log in an issue.
+
 ## Development
 
 ### Setup
