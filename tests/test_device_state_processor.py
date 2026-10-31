@@ -697,3 +697,84 @@ class TestProcessReplayState:
         assert device_state.channel_id == "not-in-lineup"
         assert device_state.channel_name is None
         assert device_state.image == "https://x/img.png"
+
+
+# ---------------------------------------------------------------------------
+# Launcher overlays versus real apps
+# ---------------------------------------------------------------------------
+
+APPSTORE_LOGO = "https://images.example.com/appstore/2735b990.png"
+
+
+class TestIsLauncherApp:
+    @pytest.mark.parametrize(
+        ("app_name", "logo_path", "expected"),
+        [
+            pytest.param("BBC Launcher", "", True, id="launcher-name"),
+            pytest.param("bbc launcher", APPSTORE_LOGO, True, id="launcher-name-lowercase"),
+            pytest.param("YouTube", APPSTORE_LOGO, False, id="app-with-appstore-logo"),
+            pytest.param("Netflix", "https://example.com/netflix.png", False, id="plain-app"),
+            pytest.param("", APPSTORE_LOGO, False, id="empty-name"),
+            pytest.param(None, APPSTORE_LOGO, False, id="missing-name"),
+            pytest.param("YouTube", None, False, id="missing-logo"),
+        ],
+    )
+    async def test_detection(self, app_name, logo_path, expected: bool):
+        assert LGHorizonDeviceState.is_launcher_app(app_name, logo_path) is expected
+
+
+class TestAppsWithCachedChannel:
+    """After watching TV the cached channel must only come back for a launcher."""
+
+    def _apps_msg(self, app_id: str, app_name: str, logo: str):
+        payload = {
+            "source": "device-1",
+            "messageTimeStamp": 1700000000,
+            "status": {
+                "uiStatus": "apps",
+                "appsState": {"id": app_id, "appName": app_name, "logoPath": logo},
+            },
+        }
+        return LGHorizonUIStatusMessage(payload, TOPIC)
+
+    def _state_with_cached_channel(self) -> LGHorizonDeviceState:
+        device_state = LGHorizonDeviceState()
+        device_state.state = LGHorizonRunningState.ONLINE_RUNNING
+        device_state.channel_name = "NPO 1"
+        device_state.show_title = "NOS Journaal"
+        device_state.cache_linear_metadata()
+        return device_state
+
+    async def test_real_app_is_shown_instead_of_the_cached_channel(self, processor):
+        device_state = self._state_with_cached_channel()
+
+        await processor.process_ui_state(
+            device_state, self._apps_msg("youtube", "YouTube", APPSTORE_LOGO)
+        )
+
+        assert device_state.ui_state_type == LGHorizonUIStateType.APPS
+        assert device_state.media_type == LGHorizonMediaType.APP
+        assert device_state.show_title == "YouTube"
+        assert device_state.image == APPSTORE_LOGO
+
+    async def test_launcher_overlay_restores_the_cached_channel(self, processor):
+        device_state = self._state_with_cached_channel()
+
+        await processor.process_ui_state(
+            device_state, self._apps_msg("bbc", "BBC Launcher", APPSTORE_LOGO)
+        )
+
+        assert device_state.ui_state_type == LGHorizonUIStateType.MAINUI
+        assert device_state.show_title == "NOS Journaal"
+        assert device_state.channel_name == "NPO 1"
+
+    async def test_launcher_without_cached_channel_is_shown_as_an_app(self, processor):
+        device_state = LGHorizonDeviceState()
+        device_state.state = LGHorizonRunningState.ONLINE_RUNNING
+
+        await processor.process_ui_state(
+            device_state, self._apps_msg("bbc", "BBC Launcher", APPSTORE_LOGO)
+        )
+
+        assert device_state.ui_state_type == LGHorizonUIStateType.APPS
+        assert device_state.show_title == "BBC Launcher"
