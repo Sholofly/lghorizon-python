@@ -1120,8 +1120,6 @@ class LGHorizonDeviceState:
         logo_lower = (logo_path or "").lower()
         if "launcher" in name_lower:
             return True
-        # if "appstore" in logo_lower:
-            # return True
         return False
 
 
