@@ -1,6 +1,7 @@
 """Unit tests for LGHorizonMqttClient."""
 
 import asyncio
+import logging
 import paho.mqtt.client as mqtt
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -649,3 +650,106 @@ class TestReconnectLoop:
         client._start_reconnect_task()
 
         assert client._reconnect_task is None
+
+
+# ===========================================================================
+# MQTT traffic logging
+# ===========================================================================
+
+
+async def _run_publish_worker(client: LGHorizonMqttClient, topic: str, payload: str):
+    task = asyncio.create_task(client._publish_worker())
+    await client.publish_message(topic, payload)
+    await asyncio.wait_for(client._publish_queue.join(), timeout=2)
+    task.cancel()
+
+
+async def _run_message_worker(client: LGHorizonMqttClient, topic: str, payload: bytes):
+    task = asyncio.create_task(client._message_worker())
+    await client._message_queue.put((topic, payload))
+    await asyncio.wait_for(client._message_queue.join(), timeout=2)
+    task.cancel()
+
+
+class TestPublishLogging:
+    def _client(self, rc: int = mqtt.MQTT_ERR_SUCCESS):
+        client, *_ = _make_direct_client(asyncio.get_running_loop())
+        paho_mock = _make_paho_mock()
+        paho_mock.is_connected.return_value = True
+        paho_mock.publish.return_value = MagicMock(rc=rc)
+        client._mqtt_client = paho_mock
+        return client, paho_mock
+
+    async def test_topic_and_payload_are_logged_at_debug(
+        self, caplog: pytest.LogCaptureFixture
+    ):
+        client, paho_mock = self._client()
+
+        with caplog.at_level(logging.DEBUG, logger="lghorizon.lghorizon_mqtt_client"):
+            await _run_publish_worker(client, "hh/box-1", '{"type": "CPE.KeyEvent"}')
+
+        paho_mock.publish.assert_called_once_with("hh/box-1", '{"type": "CPE.KeyEvent"}', qos=2)
+        assert 'Publishing to hh/box-1: {"type": "CPE.KeyEvent"}' in caplog.text
+        assert not [r for r in caplog.records if r.levelname == "WARNING"]
+
+    async def test_failed_publish_is_a_warning(self, caplog: pytest.LogCaptureFixture):
+        client, _ = self._client(rc=mqtt.MQTT_ERR_NO_CONN)
+
+        with caplog.at_level(logging.WARNING, logger="lghorizon.lghorizon_mqtt_client"):
+            await _run_publish_worker(client, "hh/box-1", "{}")
+
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert warnings == [
+            f"Publishing to hh/box-1 failed: {mqtt.error_string(mqtt.MQTT_ERR_NO_CONN)}"
+        ]
+
+
+class TestReceiveLogging:
+    def _client(self):
+        client, _, _, on_message = _make_direct_client(asyncio.get_running_loop())
+        return client, on_message
+
+    async def test_incoming_message_is_logged_at_debug(
+        self, caplog: pytest.LogCaptureFixture
+    ):
+        client, on_message = self._client()
+
+        with caplog.at_level(logging.DEBUG, logger="lghorizon.lghorizon_mqtt_client"):
+            await _run_message_worker(client, "hh/box-1/status", b'{"state": "ONLINE"}')
+
+        on_message.assert_awaited_once_with({"state": "ONLINE"}, "hh/box-1/status")
+        assert 'Received message on hh/box-1/status: {"state": "ONLINE"}' in caplog.text
+
+    async def test_long_message_is_shortened(self, caplog: pytest.LogCaptureFixture):
+        client, _ = self._client()
+        payload = b'{"data": "' + b"x" * 5000 + b'"}'
+
+        with caplog.at_level(logging.DEBUG, logger="lghorizon.lghorizon_mqtt_client"):
+            await _run_message_worker(client, "hh/box-1", payload)
+
+        line = next(r.getMessage() for r in caplog.records if "Received message" in r.getMessage())
+        assert len(line) < 1200
+        assert line.endswith("... (5012 characters)")
+
+    async def test_invalid_payload_is_still_reported(self, caplog: pytest.LogCaptureFixture):
+        client, on_message = self._client()
+
+        with caplog.at_level(logging.DEBUG, logger="lghorizon.lghorizon_mqtt_client"):
+            await _run_message_worker(client, "hh/box-1", b"\xff not json")
+
+        on_message.assert_not_awaited()
+        assert "Error processing MQTT message" in caplog.text
+
+    async def test_payload_is_not_decoded_when_debug_is_off(
+        self, caplog: pytest.LogCaptureFixture
+    ):
+        client, on_message = self._client()
+
+        with caplog.at_level(logging.INFO, logger="lghorizon.lghorizon_mqtt_client"):
+            with patch(
+                "lghorizon.lghorizon_mqtt_client._payload_for_log"
+            ) as for_log:
+                await _run_message_worker(client, "hh/box-1", b"{}")
+
+        for_log.assert_not_called()
+        on_message.assert_awaited_once()

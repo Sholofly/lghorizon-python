@@ -11,11 +11,20 @@ from .lghorizon_models import LGHorizonAuth
 _logger = logging.getLogger(__name__)
 
 CONNECT_TIMEOUT = 10.0
+MAX_LOGGED_PAYLOAD = 1000
 MAX_RECONNECT_DELAY = 60
 
 # CONNACK refusals caused by an expired or rejected token. Paho 1.x reports the
 # MQTT 3.1.1 return codes, paho 2.x the equivalent MQTT 5 reason codes.
 _AUTH_FAILURE_CODES = (4, 5, 134, 135)
+
+
+def _payload_for_log(payload: bytes) -> str:
+    """Return an incoming payload as text, shortened for the debug log."""
+    text = payload.decode("utf-8", errors="replace")
+    if len(text) > MAX_LOGGED_PAYLOAD:
+        return f"{text[:MAX_LOGGED_PAYLOAD]}... ({len(text)} characters)"
+    return text
 
 
 def _reason_code_value(reason_code: Any) -> int:
@@ -349,6 +358,10 @@ class LGHorizonMqttClient:
             topic, payload = await self._message_queue.get()
 
             try:
+                if _logger.isEnabledFor(logging.DEBUG):
+                    _logger.debug(
+                        "Received message on %s: %s", topic, _payload_for_log(payload)
+                    )
                 json_payload = json.loads(payload)
                 await self._on_message_callback(json_payload, topic)
             except Exception:
@@ -370,8 +383,13 @@ class LGHorizonMqttClient:
                 while not self.is_connected:
                     await asyncio.sleep(0.1)
 
+                _logger.debug("Publishing to %s: %s", topic, payload)
                 # Publish is non-blocking
-                self._mqtt_client.publish(topic, payload, qos=2)
+                info = self._mqtt_client.publish(topic, payload, qos=2)
+                if info.rc != mqtt.MQTT_ERR_SUCCESS:
+                    _logger.warning(
+                        "Publishing to %s failed: %s", topic, mqtt.error_string(info.rc)
+                    )
 
             except Exception:
                 _logger.exception("Error publishing MQTT message")
