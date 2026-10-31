@@ -1263,16 +1263,13 @@ class LGHorizonDeviceState:
 
     @staticmethod
     def is_launcher_app(app_name: str, logo_path: str) -> bool:
-        """Check if app state looks like a launcher overlay (e.g., BBC Launcher)."""
-        if not app_name:
-            return False
-        name_lower = app_name.lower()
-        logo_lower = (logo_path or "").lower()
-        if "launcher" in name_lower:
-            return True
-        if "appstore" in logo_lower:
-            return True
-        return False
+        """Check if app state looks like a launcher overlay (e.g., BBC Launcher).
+
+        Only the app name is used: the logo of every app is served from an
+        ``appstore`` path, so it cannot tell a launcher from a real app.
+        ``logo_path`` is kept so existing callers keep working.
+        """
+        return bool(app_name) and "launcher" in app_name.lower()
 
 
 class LGHorizonEntitlements:
