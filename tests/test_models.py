@@ -2681,6 +2681,15 @@ class TestUnknownValueWarnings:
             LGHorizonPlayerState({}).source_type.name == "UNKNOWN"
         )
 
+    @pytest.mark.parametrize("value", ["", None], ids=["empty", "null"])
+    def test_empty_source_type_is_unknown_without_warning(
+        self, caplog: pytest.LogCaptureFixture, value
+    ):
+        ps = LGHorizonPlayerState({"sourceType": value, "source": {}})
+        assert ps.source_type == LGHorizonSourceType.UNKNOWN
+        assert ps.source is None
+        assert not caplog.records
+
 
 @pytest.mark.asyncio
 class TestAuthFailureCallback:

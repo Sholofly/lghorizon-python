@@ -393,7 +393,11 @@ class LGHorizonPlayerState:
     @property
     def source_type(self) -> LGHorizonSourceType:
         """Return the source type."""
-        type_str = self._raw_json.get("sourceType", "unknown").upper()
+        raw = self._raw_json.get("sourceType")
+        # The box sends "" or null while it is between states.
+        if not raw:
+            return LGHorizonSourceType.UNKNOWN
+        type_str = str(raw).upper()
         try:
             return LGHorizonSourceType[type_str]
         except KeyError:
